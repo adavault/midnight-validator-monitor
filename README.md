@@ -1,13 +1,13 @@
-# Midnight Validator Monitor
+# Midnight Validator Monitor (MVM)
 
-A Rust CLI tool for monitoring Midnight blockchain validator nodes.
+A Rust CLI tool for monitoring and managing Midnight blockchain validator nodes.
 
 ## Features
 
-- **Node Health**: Sync status, peer count, block height
-- **Block Production**: Track blocks produced via Prometheus metrics
-- **Key Status**: Auto-detect keys from Substrate keystore
-- **Registration Check**: Verify validator registration status (permissioned, valid, invalid)
+- **Status Monitoring**: Node health, sync status, peer count, block production
+- **Block Sync**: Synchronize blocks to local SQLite database with real-time polling
+- **Data Queries**: Query synced blocks, statistics, and detect gaps
+- **Key Management**: Verify keystore loading and registration status
 
 ## Installation
 
@@ -17,68 +17,153 @@ Requires Rust 1.70+
 cargo build --release
 ```
 
-## Usage
+## Commands
+
+### status - Monitor validator node
+
+Display current validator node status with health checks and key verification.
 
 ```bash
 # Basic monitoring (runs every 60s)
-cargo run -- --keystore /path/to/keystore
+mvm status --keystore /path/to/keystore
 
 # Single check
-cargo run -- --once --keystore /path/to/keystore
+mvm status --once --keystore /path/to/keystore
 
 # Custom endpoints
-cargo run -- \
+mvm status \
   --rpc-url http://localhost:9944 \
   --metrics-url http://localhost:9615/metrics \
   --keystore /path/to/keystore \
   --interval 30
 ```
 
-### CLI Options
-
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
 | `--rpc-url` | `-r` | Node RPC endpoint | `http://localhost:9944` |
 | `--metrics-url` | `-M` | Prometheus metrics endpoint | `http://localhost:9615/metrics` |
 | `--keystore` | `-K` | Path to Substrate keystore directory | - |
-| `--keys-file` | `-k` | Path to keys JSON file (alternative to keystore) | - |
+| `--keys-file` | `-k` | Path to keys JSON file (alternative) | - |
 | `--interval` | `-i` | Monitoring interval in seconds | `60` |
-| `--verbose` | `-v` | Enable debug logging | `false` |
 | `--once` | - | Run once and exit | `false` |
 
-### Keys File Format
+### sync - Synchronize blocks to database
 
-If using `--keys-file` instead of `--keystore`:
+Fetch blocks from the node and store in a local SQLite database.
 
-```json
-{
-  "sidechain_pub_key": "0x...",
-  "aura_pub_key": "0x...",
-  "grandpa_pub_key": "0x..."
-}
+```bash
+# Sync blocks to database
+mvm sync --db-path ./mvm.db
+
+# Sync from specific block
+mvm sync --db-path ./mvm.db --start-block 1000000
+
+# Custom batch size and poll interval
+mvm sync --db-path ./mvm.db --batch-size 50 --poll-interval 10
+
+# Only sync finalized blocks
+mvm sync --db-path ./mvm.db --finalized-only
 ```
 
-## Output Example
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--rpc-url` | `-r` | Node RPC endpoint | `http://localhost:9944` |
+| `--db-path` | `-d` | SQLite database path | `./mvm.db` |
+| `--start-block` | `-s` | Block number to start from | auto |
+| `--batch-size` | `-b` | Blocks per batch | `100` |
+| `--finalized-only` | - | Only sync finalized blocks | `false` |
+| `--poll-interval` | - | Seconds between new block checks | `6` |
+
+### query - Query stored block data
+
+Query the synced database for statistics, blocks, and gaps.
+
+```bash
+# Show database statistics
+mvm query --db-path ./mvm.db stats
+
+# List recent blocks
+mvm query --db-path ./mvm.db blocks --limit 20
+
+# List blocks in range
+mvm query --db-path ./mvm.db blocks --from 1000000 --to 1000100
+
+# Find gaps in synced data
+mvm query --db-path ./mvm.db gaps
+```
+
+| Subcommand | Description |
+|------------|-------------|
+| `stats` | Show database statistics (total blocks, finalized, gaps) |
+| `blocks` | List blocks with slot, epoch, extrinsics count |
+| `gaps` | Find missing blocks in the synced range |
+
+### keys - Verify session keys
+
+Display and verify validator session keys from the keystore.
+
+```bash
+# Show keys from keystore
+mvm keys --keystore /path/to/keystore show
+
+# Verify keys are loaded and registered
+mvm keys --keystore /path/to/keystore verify
+```
+
+| Subcommand | Description |
+|------------|-------------|
+| `show` | Display sidechain, aura, and grandpa public keys |
+| `verify` | Check keys are loaded in node and registration status |
+
+## Output Examples
+
+### status command
 
 ```
-INFO Starting Midnight Validator Monitor
-INFO RPC endpoint: http://localhost:9944
-INFO Metrics endpoint: http://localhost:9615/metrics
-INFO Loaded validator keys from keystore
-INFO   Sidechain: 0x037764d2d83c269030fef6df5aeb4419c48762ada2cf20b0e4e6ede596809f4700
-INFO   Aura: 0xe05be3c28c72864efc49f4f12cb04f3bd6f20fdbc297501aa71f8590273b3e1e
-INFO   Grandpa: 0xf5a39df9227f630754f78bbae43bd66a693612eeffa9ceec5681f6c05f48d0e8
-INFO Node version: 0.12.0-29935d2f
-INFO ─────────────────────────────────────────
 INFO Health: ✓ | Syncing: ✓ | Peers: 12
 INFO Block: 3349667 | Finalized: 3349665 | Sync: 100.00%
 INFO Blocks produced: 1
 INFO Sidechain: epoch 245624 slot 294749055 | Mainchain: epoch 1178 slot 101838307
-INFO Keys: sidechain ? | aura ? | grandpa ?
+INFO Keys: sidechain ✓ | aura ✓ | grandpa ✓
 INFO Registration: ✓ Registered (valid)
 ```
 
-### Registration Status Types
+### sync command
+
+```
+INFO Starting block synchronization
+INFO Chain tip: 3352077, finalized: 3352075
+INFO Starting sync from block 3351077
+INFO Synced blocks 3351077-3351176 (100 blocks)
+INFO Initial sync complete. 1001 blocks in database
+INFO Watching for new blocks (poll interval: 6s)
+INFO New block: 3352078-3352078 (1 synced)
+```
+
+### query stats
+
+```
+INFO Database Statistics
+INFO Total blocks:     1003
+INFO Finalized blocks: 1001
+INFO Unfinalized:      2
+INFO Block range:      3351077 - 3352079
+INFO Gaps:             None (continuous)
+```
+
+### keys verify
+
+```
+INFO Key Status:
+INFO   Sidechain: ✓ Loaded in keystore
+INFO   Aura:      ✓ Loaded in keystore
+INFO   Grandpa:   ✓ Loaded in keystore
+INFO Registration Status:
+INFO   ✓ Registered (valid)
+INFO Summary: ✓ All keys loaded and registered
+```
+
+## Registration Status Types
 
 | Status | Meaning |
 |--------|---------|
@@ -86,23 +171,37 @@ INFO Registration: ✓ Registered (valid)
 | `✓ Registered (valid)` | Dynamically registered with valid stake |
 | `⚠ Registered but INVALID` | Registered but stake/signature validation failed |
 | `✗ Not registered` | Not found in any registration list |
-| `?` | Unable to check (RPC restricted) |
-
-### Key Status
-
-The `author_hasKey` RPC method is restricted on external connections, so key loading status shows `?`. Registration status is checked via `sidechain_getAriadneParameters`.
 
 ## Architecture
 
 ```
 src/
-├── main.rs      # CLI entry point and argument parsing
-├── rpc.rs       # JSON-RPC 2.0 client
-├── types.rs     # Response data structures
-├── metrics.rs   # Prometheus metrics parser
-├── monitor.rs   # Polling logic and display
-└── keys.rs      # Keystore loading and registration checks
+├── main.rs              # CLI entry point with subcommands
+├── commands/
+│   ├── status.rs        # Status monitoring command
+│   ├── sync.rs          # Block synchronization command
+│   ├── query.rs         # Database query command
+│   └── keys.rs          # Key verification command
+├── rpc/
+│   ├── client.rs        # JSON-RPC 2.0 client
+│   └── types.rs         # Response data structures
+├── db/
+│   ├── schema.rs        # SQLite schema definitions
+│   └── blocks.rs        # Block CRUD operations
+├── midnight/
+│   ├── digest.rs        # AURA slot extraction from block digest
+│   ├── keystore.rs      # Substrate keystore loading
+│   └── registration.rs  # Validator registration checks
+└── metrics.rs           # Prometheus metrics parser
 ```
+
+## Database Schema
+
+The sync command creates a SQLite database with:
+
+- **blocks**: Block number, hash, slot, epoch, extrinsics count, finalization status
+- **validators**: Validator public keys and metadata (future use)
+- **sync_status**: Current sync progress and chain state
 
 ## RPC Methods Used
 
@@ -110,15 +209,12 @@ src/
 - `system_version` - Node version
 - `system_syncState` - Sync progress
 - `chain_getHeader` - Current block header
+- `chain_getBlock` - Full block with extrinsics
+- `chain_getBlockHash` - Block hash by number
 - `chain_getFinalizedHead` - Finalized block hash
 - `sidechain_getStatus` - Epoch/slot info
 - `sidechain_getAriadneParameters` - Validator registration data
-
-## Prometheus Metrics
-
-- `substrate_proposer_block_constructed_count` - Blocks produced by this validator
-- `substrate_block_height{status="best"}` - Current block height
-- `substrate_block_height{status="finalized"}` - Finalized block height
+- `author_hasKey` - Check if key is in keystore
 
 ## License
 
