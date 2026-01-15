@@ -1,59 +1,49 @@
-mod keys;
+mod commands;
+mod db;
 mod metrics;
-mod monitor;
+mod midnight;
 mod rpc;
-mod types;
 
 use anyhow::Result;
-use clap::Parser;
-use keys::ValidatorKeys;
-use monitor::ValidatorMonitor;
-use std::path::PathBuf;
-use std::time::Duration;
-use tokio::time;
-use tracing::{error, info, warn, Level};
+use clap::{Parser, Subcommand};
+use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
-/// Midnight Validator Monitor - Monitor validator status and performance
+/// Midnight Validator Monitor - Monitor and manage Midnight blockchain validators
 #[derive(Parser, Debug)]
-#[command(name = "midnight-validator-monitor")]
+#[command(name = "mvm")]
 #[command(about = "A monitoring tool for Midnight blockchain validators")]
-struct Args {
-    /// Validator node RPC endpoint URL
-    #[arg(short, long, default_value = "http://localhost:9944")]
-    rpc_url: String,
-
-    /// Prometheus metrics endpoint URL
-    #[arg(short = 'M', long, default_value = "http://localhost:9615/metrics")]
-    metrics_url: String,
-
-    /// Path to validator keys JSON file (for key status monitoring)
-    #[arg(short, long, conflicts_with = "keystore")]
-    keys_file: Option<PathBuf>,
-
-    /// Path to Substrate keystore directory (auto-detect keys)
-    #[arg(short = 'K', long, conflicts_with = "keys_file")]
-    keystore: Option<PathBuf>,
-
-    /// Monitoring interval in seconds
-    #[arg(short, long, default_value_t = 60)]
-    interval: u64,
-
+#[command(version)]
+struct Cli {
     /// Enable verbose logging
-    #[arg(short, long)]
+    #[arg(short, long, global = true)]
     verbose: bool,
 
-    /// Run once and exit (don't loop)
-    #[arg(long)]
-    once: bool,
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Display current validator node status
+    Status(commands::StatusArgs),
+
+    /// Synchronize blocks to local database
+    Sync(commands::SyncArgs),
+
+    /// Query stored block data
+    Query(commands::QueryArgs),
+
+    /// Verify and manage session keys
+    Keys(commands::KeysArgs),
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::parse();
+    let cli = Cli::parse();
 
     // Initialize logging
-    let log_level = if args.verbose {
+    let log_level = if cli.verbose {
         Level::DEBUG
     } else {
         Level::INFO
@@ -64,73 +54,35 @@ async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(subscriber)?;
 
     info!("Starting Midnight Validator Monitor");
-    info!("RPC endpoint: {}", args.rpc_url);
-    info!("Metrics endpoint: {}", args.metrics_url);
 
-    // Load validator keys if specified
-    let keys = if let Some(ref keys_path) = args.keys_file {
-        match ValidatorKeys::from_file(keys_path) {
-            Ok(k) => {
-                info!("Loaded validator keys from {}", keys_path.display());
-                Some(k)
-            }
-            Err(e) => {
-                error!("Failed to load keys file: {}", e);
-                None
-            }
+    // Handle commands - default to status if no command given
+    match cli.command {
+        Some(Commands::Status(args)) => {
+            commands::status::run(args).await?;
         }
-    } else if let Some(ref keystore_path) = args.keystore {
-        match ValidatorKeys::from_keystore(keystore_path) {
-            Ok(k) => {
-                info!("Loaded validator keys from keystore: {}", keystore_path.display());
-                info!("  Sidechain: {}", k.sidechain_pub_key);
-                info!("  Aura: {}", k.aura_pub_key);
-                info!("  Grandpa: {}", k.grandpa_pub_key);
-                Some(k)
-            }
-            Err(e) => {
-                error!("Failed to load keys from keystore: {}", e);
-                None
-            }
+        Some(Commands::Sync(args)) => {
+            commands::sync::run(args).await?;
         }
-    } else {
-        info!("No keys specified - key status monitoring disabled");
-        info!("  Use --keystore <path> or --keys-file <path> to enable");
-        None
-    };
-
-    let monitor = ValidatorMonitor::new(&args.rpc_url, &args.metrics_url, keys);
-
-    // Try to get version on startup
-    match monitor.get_version().await {
-        Ok(version) => info!("Node version: {}", version),
-        Err(e) => warn!("Could not fetch node version: {}", e),
-    }
-
-    if args.once {
-        // Single run mode
-        run_check(&monitor).await;
-    } else {
-        // Continuous monitoring loop
-        info!("Monitoring interval: {}s", args.interval);
-        let mut interval = time::interval(Duration::from_secs(args.interval));
-
-        loop {
-            interval.tick().await;
-            run_check(&monitor).await;
+        Some(Commands::Query(args)) => {
+            commands::query::run(args).await?;
+        }
+        Some(Commands::Keys(args)) => {
+            commands::keys::run(args).await?;
+        }
+        None => {
+            // Default behavior: run status command with defaults
+            // This maintains backward compatibility
+            let args = commands::StatusArgs {
+                rpc_url: "http://localhost:9944".to_string(),
+                metrics_url: "http://localhost:9615/metrics".to_string(),
+                keys_file: None,
+                keystore: None,
+                interval: 60,
+                once: false,
+            };
+            commands::status::run(args).await?;
         }
     }
 
     Ok(())
-}
-
-async fn run_check(monitor: &ValidatorMonitor) {
-    match monitor.get_status().await {
-        Ok(status) => {
-            monitor.display_status(&status);
-        }
-        Err(e) => {
-            error!("Failed to fetch validator status: {}", e);
-        }
-    }
 }

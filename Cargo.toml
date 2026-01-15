@@ -16,6 +16,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1.0"
 thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
+rusqlite = { version = "0.30", features = ["bundled"] }
+hex = "0.4"
 
 [profile.release]
 opt-level = 3

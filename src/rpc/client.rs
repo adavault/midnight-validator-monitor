@@ -43,6 +43,10 @@ impl RpcClient {
         }
     }
 
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
+    }
+
     pub async fn call<P, R>(&self, method: &str, params: P) -> Result<R>
     where
         P: Serialize,
