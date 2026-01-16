@@ -1,0 +1,42 @@
+[Unit]
+Description=Midnight Validator Monitor - Block Sync Daemon
+Documentation=https://github.com/adavault/midnight-validator-monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mvm
+Group=mvm
+WorkingDirectory=/var/lib/mvm
+
+# Run sync in daemon mode
+ExecStart=/usr/local/bin/mvm sync \
+    --daemon \
+    --pid-file /var/run/mvm/mvm-sync.pid \
+    --rpc-url http://localhost:9944 \
+    --db-path /var/lib/mvm/mvm.db \
+    --batch-size 100 \
+    --poll-interval 6
+
+# Restart on failure
+Restart=on-failure
+RestartSec=10s
+
+# Resource limits
+LimitNOFILE=8192
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/mvm /var/run/mvm
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mvm-sync
+
+[Install]
+WantedBy=multi-user.target

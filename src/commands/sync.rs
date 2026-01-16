@@ -5,9 +5,13 @@ use crate::midnight::{extract_slot_from_digest, ValidatorSet};
 use crate::rpc::{RpcClient, SignedBlock, SidechainStatus};
 use anyhow::{Context, Result};
 use clap::Args;
+use signal_hook::consts::signal::*;
+use signal_hook_tokio::Signals;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::time;
+use tokio::select;
+use tokio_stream::StreamExt;
 use tracing::{debug, info, warn};
 
 /// Sync command arguments
@@ -36,6 +40,14 @@ pub struct SyncArgs {
     /// Seconds between new block checks
     #[arg(long, default_value_t = 6)]
     pub poll_interval: u64,
+
+    /// Run in daemon mode (continuous sync)
+    #[arg(long)]
+    pub daemon: bool,
+
+    /// PID file path for daemon mode
+    #[arg(long)]
+    pub pid_file: Option<PathBuf>,
 }
 
 /// Run the sync command
@@ -43,6 +55,22 @@ pub async fn run(args: SyncArgs) -> Result<()> {
     info!("Starting block synchronization");
     info!("RPC endpoint: {}", args.rpc_url);
     info!("Database: {}", args.db_path.display());
+
+    // Create PID file if specified
+    let _pid_file = if let Some(ref pid_path) = args.pid_file {
+        Some(crate::daemon::PidFile::create(pid_path)?)
+    } else {
+        None
+    };
+
+    // Set up signal handling for graceful shutdown
+    let signals = Signals::new(&[SIGTERM, SIGINT, SIGQUIT])
+        .context("Failed to register signal handlers")?;
+    let mut signals = signals.fuse();
+
+    if args.daemon {
+        info!("Running in daemon mode");
+    }
 
     // Open database
     let db = Database::open(&args.db_path)?;
@@ -124,54 +152,96 @@ pub async fn run(args: SyncArgs) -> Result<()> {
     let mut last_synced = target;
 
     loop {
-        interval.tick().await;
+        select! {
+            _ = interval.tick() => {
+                // Get current state
+                let new_tip = match get_chain_tip(&rpc).await {
+                    Ok(tip) => tip,
+                    Err(e) => {
+                        warn!("Failed to get chain tip: {}", e);
+                        continue;
+                    }
+                };
 
-        // Get current state
-        let new_tip = get_chain_tip(&rpc).await?;
-        let new_finalized = get_finalized_block(&rpc).await?;
+                let new_finalized = match get_finalized_block(&rpc).await {
+                    Ok(fin) => fin,
+                    Err(e) => {
+                        warn!("Failed to get finalized block: {}", e);
+                        continue;
+                    }
+                };
 
-        // Get current epoch (may have changed since start)
-        let current_mainchain_epoch = get_sidechain_status(&rpc)
-            .await
-            .ok()
-            .map(|s| s.mainchain.epoch)
-            .unwrap_or(mainchain_epoch);
+                // Get current epoch (may have changed since start)
+                let current_mainchain_epoch = get_sidechain_status(&rpc)
+                    .await
+                    .ok()
+                    .map(|s| s.mainchain.epoch)
+                    .unwrap_or(mainchain_epoch);
 
-        // Update finalized status
-        if new_finalized > finalized {
-            let marked = db.mark_finalized(new_finalized)?;
-            if marked > 0 {
-                debug!("Marked {} blocks as finalized", marked);
+                // Update finalized status
+                if new_finalized > finalized {
+                    match db.mark_finalized(new_finalized) {
+                        Ok(marked) => {
+                            if marked > 0 {
+                                debug!("Marked {} blocks as finalized", marked);
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Failed to mark blocks as finalized: {}", e);
+                        }
+                    }
+                }
+
+                // Sync new blocks
+                if new_tip > last_synced {
+                    let target = if args.finalized_only {
+                        new_finalized
+                    } else {
+                        new_tip
+                    };
+
+                    if target > last_synced {
+                        match sync_block_range(&rpc, &db, last_synced + 1, target, current_mainchain_epoch).await {
+                            Ok(synced) => {
+                                if synced > 0 {
+                                    info!(
+                                        "New block{}: {}-{} ({} synced)",
+                                        if synced > 1 { "s" } else { "" },
+                                        last_synced + 1,
+                                        target,
+                                        synced
+                                    );
+                                    last_synced = target;
+
+                                    if let Err(e) = db.update_sync_status(target, new_finalized, new_tip, current_mainchain_epoch, false) {
+                                        warn!("Failed to update sync status: {}", e);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                warn!("Failed to sync block range {}-{}: {}", last_synced + 1, target, e);
+                            }
+                        }
+                    }
+                }
             }
-        }
-
-        // Sync new blocks
-        if new_tip > last_synced {
-            let target = if args.finalized_only {
-                new_finalized
-            } else {
-                new_tip
-            };
-
-            if target > last_synced {
-                let synced =
-                    sync_block_range(&rpc, &db, last_synced + 1, target, current_mainchain_epoch).await?;
-
-                if synced > 0 {
-                    info!(
-                        "New block{}: {}-{} ({} synced)",
-                        if synced > 1 { "s" } else { "" },
-                        last_synced + 1,
-                        target,
-                        synced
-                    );
-                    last_synced = target;
-
-                    db.update_sync_status(target, new_finalized, new_tip, current_mainchain_epoch, false)?;
+            Some(signal) = signals.next() => {
+                match signal {
+                    SIGTERM | SIGINT | SIGQUIT => {
+                        info!("Received signal {}, initiating graceful shutdown...", signal);
+                        break;
+                    }
+                    _ => {
+                        debug!("Received unexpected signal {}", signal);
+                    }
                 }
             }
         }
     }
+
+    info!("Shutting down gracefully...");
+    info!("Final sync status: {} blocks synced", last_synced);
+    Ok(())
 }
 
 async fn get_chain_tip(rpc: &RpcClient) -> Result<u64> {

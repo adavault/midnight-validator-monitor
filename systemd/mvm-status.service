@@ -1,0 +1,26 @@
+[Unit]
+Description=Midnight Validator Monitor - Status Check
+Documentation=https://github.com/adavault/midnight-validator-monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=mvm
+Group=mvm
+WorkingDirectory=/var/lib/mvm
+
+# Run status check once
+ExecStart=/usr/local/bin/mvm status \
+    --once \
+    --rpc-url http://localhost:9944 \
+    --metrics-url http://localhost:9615/metrics \
+    --keystore /var/lib/mvm/keystore
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mvm-status
+
+[Install]
+WantedBy=multi-user.target

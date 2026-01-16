@@ -1,4 +1,5 @@
 mod commands;
+mod daemon;
 mod db;
 mod metrics;
 mod midnight;

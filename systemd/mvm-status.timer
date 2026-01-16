@@ -1,0 +1,15 @@
+[Unit]
+Description=Midnight Validator Monitor - Periodic Status Check Timer
+Documentation=https://github.com/adavault/midnight-validator-monitor
+Requires=mvm-status.service
+
+[Timer]
+# Run status check every 5 minutes
+OnBootSec=1min
+OnUnitActiveSec=5min
+
+# Allow persistent timers (run missed timers on boot)
+Persistent=true
+
+[Install]
+WantedBy=timers.target
