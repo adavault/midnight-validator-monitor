@@ -1,7 +1,7 @@
 //! Sync command - synchronize blocks to local database
 
-use crate::db::{BlockRecord, Database};
-use crate::midnight::extract_slot_from_digest;
+use crate::db::{BlockRecord, Database, ValidatorRecord};
+use crate::midnight::{extract_slot_from_digest, ValidatorSet};
 use crate::rpc::{RpcClient, SignedBlock, SidechainStatus};
 use anyhow::{Context, Result};
 use clap::Args;
@@ -55,12 +55,17 @@ pub async fn run(args: SyncArgs) -> Result<()> {
     let chain_tip = get_chain_tip(&rpc).await?;
     let finalized = get_finalized_block(&rpc).await?;
     let sidechain_status = get_sidechain_status(&rpc).await.ok();
-    let current_epoch = sidechain_status
+    let mainchain_epoch = sidechain_status
+        .as_ref()
+        .map(|s| s.mainchain.epoch)
+        .unwrap_or(0);
+    let sidechain_epoch = sidechain_status
         .as_ref()
         .map(|s| s.sidechain.epoch)
         .unwrap_or(0);
 
     info!("Chain tip: {}, finalized: {}", chain_tip, finalized);
+    info!("Mainchain epoch: {}, Sidechain epoch: {}", mainchain_epoch, sidechain_epoch);
 
     // Determine start block
     let sync_status = db.get_sync_status()?;
