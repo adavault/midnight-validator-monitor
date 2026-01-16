@@ -1,11 +1,13 @@
 //! MVM commands
 
+pub mod config;
 pub mod keys;
 pub mod query;
 pub mod status;
 pub mod sync;
 pub mod view;
 
+pub use config::ConfigArgs;
 pub use keys::KeysArgs;
 pub use query::QueryArgs;
 pub use status::StatusArgs;

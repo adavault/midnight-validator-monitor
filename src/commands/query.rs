@@ -10,8 +10,8 @@ use tracing::info;
 #[derive(Args, Debug)]
 pub struct QueryArgs {
     /// SQLite database path
-    #[arg(short, long, default_value = "./mvm.db")]
-    pub db_path: PathBuf,
+    #[arg(short, long)]
+    pub db_path: Option<PathBuf>,
 
     #[command(subcommand)]
     pub command: QueryCommands,
@@ -71,7 +71,13 @@ pub enum QueryCommands {
 
 /// Run the query command
 pub async fn run(args: QueryArgs) -> Result<()> {
-    let db = Database::open(&args.db_path)?;
+    // Load configuration
+    let config = crate::config::Config::load()?;
+
+    // Use args or fall back to config
+    let db_path = args.db_path.unwrap_or_else(|| std::path::PathBuf::from(&config.database.path));
+
+    let db = Database::open(&db_path)?;
 
     match args.command {
         QueryCommands::Stats => run_stats(&db)?,

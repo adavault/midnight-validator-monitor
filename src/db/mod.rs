@@ -18,6 +18,12 @@ pub struct Database {
 impl Database {
     /// Open or create database at the specified path
     pub fn open(path: &Path) -> Result<Self> {
+        // Create parent directory if it doesn't exist
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory {}", parent.display()))?;
+        }
+
         let conn = Connection::open(path)
             .with_context(|| format!("Failed to open database at {}", path.display()))?;
 
@@ -78,6 +84,10 @@ impl Database {
 
     pub fn find_gaps(&self) -> Result<Vec<(u64, u64)>> {
         blocks::find_gaps(&self.conn)
+    }
+
+    pub fn count_blocks_by_author_in_epoch(&self, author_key: &str, epoch: u64) -> Result<u64> {
+        blocks::count_blocks_by_author_in_epoch(&self.conn, author_key, epoch)
     }
 
     // Sync status operations

@@ -1,4 +1,5 @@
 mod commands;
+mod config;
 mod daemon;
 mod db;
 mod metrics;
@@ -41,6 +42,9 @@ enum Commands {
 
     /// Interactive TUI for real-time monitoring
     View(commands::ViewArgs),
+
+    /// Manage configuration
+    Config(commands::ConfigArgs),
 }
 
 #[tokio::main]
@@ -77,15 +81,18 @@ async fn main() -> Result<()> {
         Some(Commands::View(args)) => {
             commands::view::run(args).await?;
         }
+        Some(Commands::Config(args)) => {
+            commands::config::run(args).await?;
+        }
         None => {
             // Default behavior: run status command with defaults
             // This maintains backward compatibility
             let args = commands::StatusArgs {
-                rpc_url: "http://localhost:9944".to_string(),
-                metrics_url: "http://localhost:9615/metrics".to_string(),
+                rpc_url: None,
+                metrics_url: None,
                 keys_file: None,
                 keystore: None,
-                interval: 60,
+                interval: None,
                 once: false,
             };
             commands::status::run(args).await?;

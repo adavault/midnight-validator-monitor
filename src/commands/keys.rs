@@ -13,15 +13,15 @@ use tracing::{debug, error, info, warn};
 pub struct KeysArgs {
     /// Path to Substrate keystore directory
     #[arg(short = 'K', long)]
-    pub keystore: PathBuf,
+    pub keystore: Option<PathBuf>,
 
     /// Validator node RPC endpoint URL (for verification)
-    #[arg(short, long, default_value = "http://localhost:9944")]
-    pub rpc_url: String,
+    #[arg(short, long)]
+    pub rpc_url: Option<String>,
 
     /// SQLite database path (for marking validators and showing stats)
-    #[arg(short, long, default_value = "./mvm.db")]
-    pub db_path: PathBuf,
+    #[arg(short, long)]
+    pub db_path: Option<PathBuf>,
 
     #[command(subcommand)]
     pub command: KeysCommands,
@@ -38,19 +38,40 @@ pub enum KeysCommands {
 
 /// Run the keys command
 pub async fn run(args: KeysArgs) -> Result<()> {
+    // Load configuration
+    let config = crate::config::Config::load()?;
+
+    info!("Config database.path = {}", config.database.path);
+
+    // Get keystore path from args or config
+    let keystore_path = match args.keystore.or_else(|| config.validator.keystore_path.map(PathBuf::from)) {
+        Some(path) => path,
+        None => {
+            error!("No keystore path provided");
+            error!("Use --keystore flag or set validator.keystore_path in config");
+            anyhow::bail!("Keystore path required");
+        }
+    };
+
+    // Get RPC URL and database path from args or config
+    let rpc_url = args.rpc_url.unwrap_or(config.rpc.url);
+    let db_path = args.db_path.unwrap_or_else(|| std::path::PathBuf::from(&config.database.path));
+
+    info!("db_path resolved to: {}", db_path.display());
+
     // Load keys from keystore
-    let keys = match ValidatorKeys::from_keystore(&args.keystore) {
+    let keys = match ValidatorKeys::from_keystore(&keystore_path) {
         Ok(k) => k,
         Err(e) => {
             error!("Failed to load keys from keystore: {}", e);
-            error!("Path: {}", args.keystore.display());
+            error!("Path: {}", keystore_path.display());
             return Err(e);
         }
     };
 
     match args.command {
         KeysCommands::Show => run_show(&keys),
-        KeysCommands::Verify => run_verify(&keys, &args.rpc_url, &args.db_path).await,
+        KeysCommands::Verify => run_verify(&keys, &rpc_url, &db_path).await,
     }
 }
 
@@ -98,7 +119,18 @@ async fn run_verify(keys: &ValidatorKeys, rpc_url: &str, db_path: &PathBuf) -> R
     let key_status = get_key_status(&rpc, keys, current_epoch).await;
 
     // Try to open database for marking validator and showing stats
-    let db = Database::open(db_path).ok();
+    info!("Opening database: {}", db_path.display());
+    let db = match Database::open(&db_path) {
+        Ok(db) => {
+            info!("Database opened successfully");
+            Some(db)
+        }
+        Err(e) => {
+            warn!("Could not open database at {}: {}", db_path.display(), e);
+            warn!("Block production statistics will not be available");
+            None
+        }
+    };
 
     info!("");
     info!("Key Status:");

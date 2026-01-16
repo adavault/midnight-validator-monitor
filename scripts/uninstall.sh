@@ -3,117 +3,117 @@
 
 set -e
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
 # Configuration
 BINARY_NAME="mvm"
-INSTALL_DIR="/usr/local/bin"
-DATA_DIR="/var/lib/mvm"
-RUN_DIR="/var/run/mvm"
-LOG_DIR="/var/log/mvm"
-CONFIG_DIR="/etc/mvm"
+INSTALL_BASE="/opt/midnight/mvm"
 SYSTEMD_DIR="/etc/systemd/system"
-USER="mvm"
+SYMLINK="/usr/local/bin/$BINARY_NAME"
 
-# Functions
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
+# Check if running with sudo/root
 check_root() {
     if [ "$EUID" -ne 0 ]; then
-        log_error "This script must be run as root (use sudo)"
+        echo "ERROR: This script must be run with sudo"
+        echo "Usage: sudo ./scripts/uninstall.sh"
         exit 1
     fi
 }
 
+# Stop and disable services
 stop_services() {
-    log_info "Stopping and disabling services"
+    echo "==> Stopping and disabling services"
 
-    if systemctl is-active --quiet mvm-sync; then
+    if systemctl is-active --quiet mvm-sync 2>/dev/null; then
         systemctl stop mvm-sync
+        echo "    Stopped mvm-sync"
     fi
 
     if systemctl is-enabled --quiet mvm-sync 2>/dev/null; then
         systemctl disable mvm-sync
+        echo "    Disabled mvm-sync"
     fi
 
-    if systemctl is-active --quiet mvm-status.timer; then
+    if systemctl is-active --quiet mvm-status.timer 2>/dev/null; then
         systemctl stop mvm-status.timer
+        echo "    Stopped mvm-status.timer"
     fi
 
     if systemctl is-enabled --quiet mvm-status.timer 2>/dev/null; then
         systemctl disable mvm-status.timer
+        echo "    Disabled mvm-status.timer"
     fi
 }
 
+# Remove systemd services
 remove_systemd_services() {
-    log_info "Removing systemd service files"
+    echo "==> Removing systemd services"
 
     rm -f "$SYSTEMD_DIR/mvm-sync.service"
     rm -f "$SYSTEMD_DIR/mvm-status.service"
     rm -f "$SYSTEMD_DIR/mvm-status.timer"
 
     systemctl daemon-reload
+    echo "    Systemd services removed"
 }
 
-remove_binary() {
-    log_info "Removing binary"
-    rm -f "$INSTALL_DIR/$BINARY_NAME"
-}
-
-remove_user() {
-    if id "$USER" &>/dev/null; then
-        log_info "Removing system user $USER"
-        userdel "$USER" 2>/dev/null || true
+# Remove symlink
+remove_symlink() {
+    if [ -L "$SYMLINK" ]; then
+        echo "==> Removing symlink"
+        rm -f "$SYMLINK"
+        echo "    Removed $SYMLINK"
     fi
 }
 
+# Prompt to remove data
 prompt_remove_data() {
     echo ""
-    read -p "Do you want to remove data directories? This will delete your database and logs. (y/N) " -n 1 -r
+    echo "=========================================="
     echo ""
+    read -p "Remove data directory $INSTALL_BASE? This will delete your database. (y/N) " -n 1 -r
+    echo ""
+
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        log_warn "Removing data directories"
-        rm -rf "$DATA_DIR"
-        rm -rf "$RUN_DIR"
-        rm -rf "$LOG_DIR"
-        rm -rf "$CONFIG_DIR"
+        echo "==> Removing data"
+        rm -rf "$INSTALL_BASE"
+        echo "    Removed $INSTALL_BASE"
     else
-        log_info "Data directories preserved:"
-        echo "  - $DATA_DIR"
-        echo "  - $LOG_DIR"
-        echo "  - $CONFIG_DIR"
+        echo "==> Data preserved at:"
+        echo "    $INSTALL_BASE"
+        echo ""
+        echo "    To manually remove later:"
+        echo "      sudo rm -rf $INSTALL_BASE"
     fi
+}
+
+# Show completion message
+show_completion() {
+    echo ""
+    echo "========================================"
+    echo "Uninstallation Complete!"
+    echo "========================================"
+    echo ""
+    echo "Removed:"
+    echo "  - Systemd services"
+    echo "  - Binary symlink"
+    if [[ ! -d "$INSTALL_BASE" ]]; then
+        echo "  - Data directory"
+    fi
+    echo ""
 }
 
 # Main uninstallation
 main() {
-    log_info "Starting Midnight Validator Monitor uninstallation"
+    echo ""
+    echo "Midnight Validator Monitor - Uninstallation"
+    echo "============================================"
+    echo ""
 
     check_root
-
     stop_services
     remove_systemd_services
-    remove_binary
-    remove_user
+    remove_symlink
     prompt_remove_data
-
-    echo ""
-    log_info "Uninstallation complete!"
-    echo ""
+    show_completion
 }
 
 main "$@"

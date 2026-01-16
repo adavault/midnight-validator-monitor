@@ -20,20 +20,39 @@ use tracing::error;
 #[derive(Args, Debug)]
 pub struct ViewArgs {
     /// Validator node RPC endpoint URL
-    #[arg(short, long, default_value = "http://localhost:9944")]
-    pub rpc_url: String,
+    #[arg(short, long)]
+    pub rpc_url: Option<String>,
 
     /// SQLite database path
-    #[arg(short, long, default_value = "./mvm.db")]
-    pub db_path: PathBuf,
+    #[arg(short, long)]
+    pub db_path: Option<PathBuf>,
 
     /// Refresh interval in milliseconds
-    #[arg(long, default_value_t = 2000)]
-    pub refresh_interval: u64,
+    #[arg(long)]
+    pub refresh_interval: Option<u64>,
 }
 
 /// Run the view command
 pub async fn run(args: ViewArgs) -> Result<()> {
+    // Load configuration
+    let config = crate::config::Config::load()?;
+
+    // Use args or fall back to config
+    let rpc_url = args.rpc_url.unwrap_or(config.rpc.url);
+    let db_path = args.db_path.unwrap_or_else(|| std::path::PathBuf::from(&config.database.path));
+    let refresh_interval = args.refresh_interval.unwrap_or(config.view.refresh_interval_ms);
+
+    // Connect to RPC and database BEFORE initializing terminal
+    let rpc = RpcClient::new(&rpc_url);
+    let db = Database::open(&db_path)
+        .context(format!("Failed to open database at {}.
+
+Tip: If you installed MVM, the database should be at /opt/midnight/mvm/data/mvm.db
+     Try: mvm view --db-path /opt/midnight/mvm/data/mvm.db
+     Or set MVM_DB_PATH=/opt/midnight/mvm/data/mvm.db in your environment
+
+     If running locally without install, use: mvm view --db-path ./mvm.db", db_path.display()))?;
+
     // Initialize terminal
     enable_raw_mode().context("Failed to enable raw mode")?;
     let mut stdout = io::stdout();
@@ -45,34 +64,29 @@ pub async fn run(args: ViewArgs) -> Result<()> {
     // Initialize app
     let mut app = App::new();
 
-    // Connect to RPC and database
-    let rpc = RpcClient::new(&args.rpc_url);
-    let db = Database::open(&args.db_path)?;
-
     // Do initial update
     if let Err(e) = app.update(&rpc, &db).await {
         error!("Initial update failed: {}", e);
     }
 
     // Create event handler
-    let event_handler = EventHandler::new(Duration::from_millis(args.refresh_interval));
+    let event_handler = EventHandler::new(Duration::from_millis(refresh_interval));
 
     // Run the TUI loop
     let res = run_tui(&mut terminal, &mut app, &rpc, &db, &event_handler).await;
 
-    // Restore terminal
-    disable_raw_mode().context("Failed to disable raw mode")?;
-    execute!(
+    // Restore terminal (always, even on error)
+    let _ = disable_raw_mode();
+    let _ = execute!(
         terminal.backend_mut(),
         LeaveAlternateScreen,
         DisableMouseCapture
-    )
-    .context("Failed to leave alternate screen")?;
-    terminal.show_cursor().context("Failed to show cursor")?;
+    );
+    let _ = terminal.show_cursor();
 
     // Check for errors
     if let Err(err) = res {
-        error!("Error in TUI: {}", err);
+        eprintln!("Error in TUI: {}", err);
         return Err(err);
     }
 

@@ -1,0 +1,61 @@
+# Midnight Validator Monitor Configuration File
+#
+# This file can be placed in one of these locations (in order of priority):
+# 1. ./mvm.toml (current directory)
+# 2. ~/.config/mvm/config.toml (user config directory)
+# 3. /etc/mvm/config.toml (system config directory)
+#
+# Configuration priority: CLI flags > Environment variables > Config file > Defaults
+#
+# Environment variables can override any setting using the MVM_ prefix:
+# - MVM_RPC_URL, MVM_METRICS_URL, MVM_DB_PATH, MVM_KEYSTORE_PATH, etc.
+
+[rpc]
+# Midnight node RPC endpoint
+url = "http://localhost:9944"
+
+# Prometheus metrics endpoint
+metrics_url = "http://localhost:9615/metrics"
+
+# RPC timeout in milliseconds
+timeout_ms = 30000
+
+[database]
+# Path to SQLite database file
+# Default: /opt/midnight/mvm/data/mvm.db (if installed)
+# Otherwise: ./mvm.db (current directory)
+path = "/opt/midnight/mvm/data/mvm.db"
+
+[validator]
+# Path to validator keystore directory (optional)
+# keystore_path = "/path/to/keystore"
+
+# Human-readable label for your validator (optional)
+# label = "My Validator"
+
+[sync]
+# Number of blocks to fetch per batch during synchronization
+batch_size = 100
+
+# Polling interval in seconds when waiting for new blocks
+poll_interval_secs = 6
+
+# Only sync finalized blocks (slower but safer)
+finalized_only = false
+
+# Starting block number for synchronization (0 = from beginning)
+start_block = 0
+
+[view]
+# TUI refresh interval in milliseconds
+refresh_interval_ms = 2000
+
+[daemon]
+# PID file path for daemon mode (optional)
+# pid_file = "/var/run/mvm/mvm-sync.pid"
+
+# Log file path for daemon mode (optional)
+# log_file = "/var/log/mvm/mvm.log"
+
+# Enable syslog logging for daemon mode
+enable_syslog = false

@@ -230,6 +230,20 @@ pub fn find_gaps(conn: &Connection) -> Result<Vec<(u64, u64)>> {
         .map_err(Into::into)
 }
 
+/// Count blocks by author in a specific epoch
+pub fn count_blocks_by_author_in_epoch(
+    conn: &Connection,
+    author_key: &str,
+    epoch: u64,
+) -> Result<u64> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM blocks WHERE author_key = ?1 AND epoch = ?2",
+        params![author_key, epoch as i64],
+        |row| row.get(0),
+    )?;
+    Ok(count as u64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

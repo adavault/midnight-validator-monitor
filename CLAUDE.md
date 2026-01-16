@@ -46,6 +46,7 @@ mvm status --rpc-url http://localhost:9944 --metrics-url http://localhost:9615/m
 mvm sync --db-path ./mvm.db
 mvm sync --db-path ./mvm.db --start-block 1000000
 mvm sync --db-path ./mvm.db --finalized-only
+mvm sync --daemon --pid-file /opt/midnight/mvm/data/mvm-sync.pid
 ```
 
 ### query - Query stored block data
@@ -59,6 +60,20 @@ mvm query --db-path ./mvm.db gaps
 ```bash
 mvm keys --keystore /path/to/keystore show
 mvm keys --keystore /path/to/keystore verify
+mvm keys --keystore /path/to/keystore --db-path ./mvm.db verify
+```
+
+### view - Interactive TUI monitoring
+```bash
+mvm view --db-path ./mvm.db --rpc-url http://localhost:9944
+```
+
+### config - Configuration management
+```bash
+mvm config show      # Show current configuration
+mvm config validate  # Validate configuration file
+mvm config example   # Print example configuration
+mvm config paths     # Show config file search paths
 ```
 
 ## Architecture Overview
@@ -68,9 +83,11 @@ mvm keys --keystore /path/to/keystore verify
 The application uses a modular command-based architecture where each major feature is implemented as a separate command module:
 
 - `src/commands/status.rs` - Real-time validator monitoring with periodic health checks
-- `src/commands/sync.rs` - Block synchronization engine with batch processing and polling
-- `src/commands/query.rs` - Database query interface for blocks, stats, and gap detection
-- `src/commands/keys.rs` - Session key verification and keystore management
+- `src/commands/sync.rs` - Block synchronization engine with batch processing, polling, and daemon mode
+- `src/commands/query.rs` - Database query interface for blocks, validators, stats, and performance metrics
+- `src/commands/keys.rs` - Session key verification, keystore management, and validator registration
+- `src/commands/view.rs` - Interactive TUI for real-time monitoring with multiple views
+- `src/commands/config.rs` - Configuration management and validation
 
 ### Core Systems
 
@@ -89,14 +106,36 @@ The application uses a modular command-based architecture where each major featu
 - `digest.rs` - Extracts AURA slot numbers from block digest logs (PreRuntime format: 0x06 + "aura" + slot_le_bytes)
 - `keystore.rs` - Loads Substrate keystore files and validator keys (supports both keystore directories and JSON files)
 - `registration.rs` - Checks validator registration status via `sidechain_getAriadneParameters` RPC call
+- `validators.rs` - Validator set management and registration data structures
+
+**Configuration System (`src/config.rs`)**
+- TOML-based configuration with three-tier priority: CLI flags > Environment variables > Config file > Defaults
+- Multiple config file locations searched in order: `./mvm.toml`, `~/.config/mvm/config.toml`, `/opt/midnight/mvm/config/config.toml`, `/etc/mvm/config.toml`
+- Environment variable overrides using `MVM_` prefix (e.g., `MVM_RPC_URL`, `MVM_DB_PATH`)
+- Validation and example generation via `config` command
+- Sections: rpc, database, validator, sync, view, daemon
+
+**Daemon Mode (`src/daemon.rs`)**
+- PID file management with Drop trait for automatic cleanup
+- Signal handling (SIGTERM, SIGINT, SIGQUIT) for graceful shutdown
+- Systemd service files for sync and status commands
+- Installation scripts for system deployment
+
+**TUI System (`src/tui/`)**
+- Event-driven architecture with ratatui and crossterm
+- Five views: Dashboard, Blocks, Validators, Performance, Help
+- Keyboard navigation (1-4 for views, j/k for scrolling, f for filtering, q to quit)
+- Components: `app.rs` (state), `event.rs` (input handling), `ui.rs` (rendering)
 
 ### Key Data Flow
 
 1. **Status Monitoring**: Polls RPC endpoints → Fetches health, sync state, block info, sidechain status → Verifies keys via `author_hasKey` → Checks registration via `sidechain_getAriadneParameters` → Displays formatted output
 
-2. **Block Sync**: Determines sync start point → Fetches blocks in batches via `chain_getBlock` → Extracts slot from digest logs → Calculates epoch from slot → Stores in SQLite → Polls for new blocks at intervals
+2. **Block Sync**: Determines sync start point → Fetches blocks in batches via `chain_getBlock` → Extracts slot from digest logs → Calculates epoch from slot → Attributes block to author → Stores in SQLite → Polls for new blocks at intervals → Handles signals for graceful shutdown in daemon mode
 
-3. **Key Verification**: Loads keys from keystore directory (filenames: `<key_type_hex><public_key_hex>`) → Checks each key loaded via `author_hasKey` RPC → Checks registration in permissioned candidates or dynamic registrations
+3. **Key Verification**: Loads keys from keystore directory (filenames: `<key_type_hex><public_key_hex>`) → Checks each key loaded via `author_hasKey` RPC → Checks registration in permissioned candidates or dynamic registrations → Marks validators as "ours" in database
+
+4. **Interactive TUI**: Loads config → Connects to RPC and database → Enters event loop → Handles keyboard input → Fetches fresh data on intervals → Renders views (Dashboard/Blocks/Validators/Performance/Help) → Updates display → Repeats until quit
 
 ## Midnight Blockchain Specifics
 
@@ -166,6 +205,33 @@ The sync command maintains a singleton row in `sync_status` (id=1) to track:
 - `current_epoch` - latest epoch seen
 
 Initial sync processes batches of blocks, then enters polling mode for new blocks.
+
+### Daemon Mode and Systemd
+The sync command supports daemon mode with:
+- `--daemon` flag enables background operation
+- `--pid-file` creates a PID file for process management
+- Signal handling (SIGTERM, SIGINT, SIGQUIT) for graceful shutdown using tokio select! macro
+- PidFile struct with Drop trait ensures automatic cleanup
+
+Systemd integration:
+- `systemd/mvm-sync.service` - Continuous sync daemon (Type=simple, Restart=on-failure)
+- `systemd/mvm-status.service` - One-shot health check (Type=oneshot)
+- `systemd/mvm-status.timer` - Periodic health checks every 5 minutes
+- `scripts/install.sh` - Automated installation and user/directory setup
+- `scripts/uninstall.sh` - Clean removal of services and files
+
+### Configuration File Support
+Configuration priority (highest to lowest):
+1. **CLI flags** - Explicitly provided command-line arguments
+2. **Environment variables** - Variables prefixed with `MVM_` (e.g., `MVM_RPC_URL`)
+3. **Config file** - First found in search path: `./mvm.toml`, `~/.config/mvm/config.toml`, `/opt/midnight/mvm/config/config.toml`, `/etc/mvm/config.toml`
+4. **Defaults** - Built-in default values
+
+The `config` command provides:
+- `show` - Display current effective configuration
+- `validate` - Check configuration file syntax and values
+- `example` - Generate example configuration with comments
+- `paths` - List config file search locations with existence status
 
 ### Metrics Parsing
 The `metrics.rs` module parses Prometheus-format metrics from the node's `/metrics` endpoint. This is used for additional monitoring data like block production counts.

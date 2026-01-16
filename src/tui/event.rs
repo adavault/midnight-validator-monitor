@@ -97,6 +97,11 @@ pub fn handle_key_event(key: KeyEvent, app: &mut crate::tui::App) -> bool {
             app.toggle_ours_filter();
             true
         }
+        // Toggle theme
+        KeyCode::Char('t') | KeyCode::Char('T') => {
+            app.toggle_theme();
+            true
+        }
         _ => true,
     }
 }

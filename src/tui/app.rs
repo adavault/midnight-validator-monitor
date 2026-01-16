@@ -2,6 +2,7 @@
 
 use crate::db::{BlockRecord, Database, ValidatorRecord};
 use crate::rpc::{RpcClient, SidechainStatus};
+use crate::tui::Theme;
 use anyhow::Result;
 use std::time::{Duration, Instant};
 
@@ -29,6 +30,8 @@ pub struct App {
     pub state: AppState,
     /// Last update timestamp
     pub last_update: Instant,
+    /// Color theme
+    pub theme: Theme,
 }
 
 /// Application state data
@@ -89,6 +92,7 @@ impl App {
             selected_index: 0,
             state: AppState::default(),
             last_update: Instant::now(),
+            theme: Theme::default(),
         }
     }
 
@@ -170,6 +174,9 @@ impl App {
         self.state.validators = db.get_all_validators()?;
         self.state.our_validators = db.get_our_validators()?;
 
+        // Note: Epoch-specific block counts could be calculated here if needed
+        // For now, we show all-time blocks in the dashboard
+
         Ok(())
     }
 
@@ -234,6 +241,11 @@ impl App {
     pub fn toggle_ours_filter(&mut self) {
         self.show_ours_only = !self.show_ours_only;
         self.selected_index = 0;
+    }
+
+    /// Toggle theme
+    pub fn toggle_theme(&mut self) {
+        self.theme = self.theme.toggle();
     }
 
     /// Quit the application

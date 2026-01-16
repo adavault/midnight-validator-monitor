@@ -14,12 +14,12 @@ use tracing::{debug, error, info, warn};
 #[derive(Args, Debug)]
 pub struct StatusArgs {
     /// Validator node RPC endpoint URL
-    #[arg(short, long, default_value = "http://localhost:9944")]
-    pub rpc_url: String,
+    #[arg(short, long)]
+    pub rpc_url: Option<String>,
 
     /// Prometheus metrics endpoint URL
-    #[arg(short = 'M', long, default_value = "http://localhost:9615/metrics")]
-    pub metrics_url: String,
+    #[arg(short = 'M', long)]
+    pub metrics_url: Option<String>,
 
     /// Path to validator keys JSON file
     #[arg(short, long, conflicts_with = "keystore")]
@@ -30,8 +30,8 @@ pub struct StatusArgs {
     pub keystore: Option<PathBuf>,
 
     /// Monitoring interval in seconds
-    #[arg(short, long, default_value_t = 60)]
-    pub interval: u64,
+    #[arg(short, long)]
+    pub interval: Option<u64>,
 
     /// Run once and exit (don't loop)
     #[arg(long)]
@@ -259,8 +259,16 @@ fn key_status_icon(status: Option<bool>) -> &'static str {
 
 /// Run the status command
 pub async fn run(args: StatusArgs) -> Result<()> {
-    info!("RPC endpoint: {}", args.rpc_url);
-    info!("Metrics endpoint: {}", args.metrics_url);
+    // Load configuration
+    let config = crate::config::Config::load()?;
+
+    // Use args or fall back to config
+    let rpc_url = args.rpc_url.unwrap_or(config.rpc.url);
+    let metrics_url = args.metrics_url.unwrap_or(config.rpc.metrics_url);
+    let interval = args.interval.unwrap_or(60);
+
+    info!("RPC endpoint: {}", rpc_url);
+    info!("Metrics endpoint: {}", metrics_url);
 
     // Load validator keys if specified
     let keys = if let Some(ref keys_path) = args.keys_file {
@@ -274,30 +282,35 @@ pub async fn run(args: StatusArgs) -> Result<()> {
                 None
             }
         }
-    } else if let Some(ref keystore_path) = args.keystore {
-        match ValidatorKeys::from_keystore(keystore_path) {
-            Ok(k) => {
-                info!(
-                    "Loaded validator keys from keystore: {}",
-                    keystore_path.display()
-                );
-                info!("  Sidechain: {}", k.sidechain_pub_key);
-                info!("  Aura: {}", k.aura_pub_key);
-                info!("  Grandpa: {}", k.grandpa_pub_key);
-                Some(k)
-            }
-            Err(e) => {
-                error!("Failed to load keys from keystore: {}", e);
-                None
-            }
-        }
     } else {
-        info!("No keys specified - key status monitoring disabled");
-        info!("  Use --keystore <path> or --keys-file <path> to enable");
-        None
+        // Try keystore from args or config
+        let keystore_path = args.keystore.or_else(|| config.validator.keystore_path.map(PathBuf::from));
+
+        if let Some(ref keystore_path) = keystore_path {
+            match ValidatorKeys::from_keystore(keystore_path) {
+                Ok(k) => {
+                    info!(
+                        "Loaded validator keys from keystore: {}",
+                        keystore_path.display()
+                    );
+                    info!("  Sidechain: {}", k.sidechain_pub_key);
+                    info!("  Aura: {}", k.aura_pub_key);
+                    info!("  Grandpa: {}", k.grandpa_pub_key);
+                    Some(k)
+                }
+                Err(e) => {
+                    error!("Failed to load keys from keystore: {}", e);
+                    None
+                }
+            }
+        } else {
+            info!("No keys specified - key status monitoring disabled");
+            info!("  Use --keystore <path> or set validator.keystore_path in config");
+            None
+        }
     };
 
-    let monitor = StatusMonitor::new(&args.rpc_url, &args.metrics_url, keys);
+    let monitor = StatusMonitor::new(&rpc_url, &metrics_url, keys);
 
     // Try to get version on startup
     match monitor.get_version().await {
@@ -308,11 +321,11 @@ pub async fn run(args: StatusArgs) -> Result<()> {
     if args.once {
         run_check(&monitor).await;
     } else {
-        info!("Monitoring interval: {}s", args.interval);
-        let mut interval = time::interval(Duration::from_secs(args.interval));
+        info!("Monitoring interval: {}s", interval);
+        let mut interval_timer = time::interval(Duration::from_secs(interval));
 
         loop {
-            interval.tick().await;
+            interval_timer.tick().await;
             run_check(&monitor).await;
         }
     }

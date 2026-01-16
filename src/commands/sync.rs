@@ -18,28 +18,28 @@ use tracing::{debug, info, warn};
 #[derive(Args, Debug)]
 pub struct SyncArgs {
     /// Validator node RPC endpoint URL
-    #[arg(short, long, default_value = "http://localhost:9944")]
-    pub rpc_url: String,
+    #[arg(short, long)]
+    pub rpc_url: Option<String>,
 
     /// SQLite database path
-    #[arg(short, long, default_value = "./mvm.db")]
-    pub db_path: PathBuf,
+    #[arg(short, long)]
+    pub db_path: Option<PathBuf>,
 
     /// Block number to start sync from (0 = from last synced or genesis)
-    #[arg(short, long, default_value_t = 0)]
-    pub start_block: u64,
+    #[arg(short, long)]
+    pub start_block: Option<u64>,
 
     /// Blocks to fetch per batch
-    #[arg(short, long, default_value_t = 100)]
-    pub batch_size: u32,
+    #[arg(short, long)]
+    pub batch_size: Option<u32>,
 
     /// Only sync finalized blocks
     #[arg(long)]
-    pub finalized_only: bool,
+    pub finalized_only: Option<bool>,
 
     /// Seconds between new block checks
-    #[arg(long, default_value_t = 6)]
-    pub poll_interval: u64,
+    #[arg(long)]
+    pub poll_interval: Option<u64>,
 
     /// Run in daemon mode (continuous sync)
     #[arg(long)]
@@ -52,9 +52,20 @@ pub struct SyncArgs {
 
 /// Run the sync command
 pub async fn run(args: SyncArgs) -> Result<()> {
+    // Load configuration
+    let config = crate::config::Config::load()?;
+
+    // Use args or fall back to config
+    let rpc_url = args.rpc_url.unwrap_or(config.rpc.url);
+    let db_path = args.db_path.unwrap_or_else(|| std::path::PathBuf::from(&config.database.path));
+    let batch_size = args.batch_size.unwrap_or(config.sync.batch_size);
+    let poll_interval = args.poll_interval.unwrap_or(config.sync.poll_interval_secs);
+    let finalized_only = args.finalized_only.unwrap_or(config.sync.finalized_only);
+    let start_block = args.start_block.unwrap_or(config.sync.start_block);
+
     info!("Starting block synchronization");
-    info!("RPC endpoint: {}", args.rpc_url);
-    info!("Database: {}", args.db_path.display());
+    info!("RPC endpoint: {}", rpc_url);
+    info!("Database: {}", db_path.display());
 
     // Create PID file if specified
     let _pid_file = if let Some(ref pid_path) = args.pid_file {
@@ -73,11 +84,11 @@ pub async fn run(args: SyncArgs) -> Result<()> {
     }
 
     // Open database
-    let db = Database::open(&args.db_path)?;
+    let db = Database::open(&db_path)?;
     info!("Database opened successfully");
 
     // Connect to RPC
-    let rpc = RpcClient::new(&args.rpc_url);
+    let rpc = RpcClient::new(&rpc_url);
 
     // Get current chain state
     let chain_tip = get_chain_tip(&rpc).await?;
@@ -97,8 +108,8 @@ pub async fn run(args: SyncArgs) -> Result<()> {
 
     // Determine start block
     let sync_status = db.get_sync_status()?;
-    let start_from = if args.start_block > 0 {
-        args.start_block
+    let start_from = if start_block > 0 {
+        start_block
     } else if sync_status.last_synced_block > 0 {
         sync_status.last_synced_block + 1
     } else {
@@ -110,14 +121,14 @@ pub async fn run(args: SyncArgs) -> Result<()> {
 
     // Initial sync: catch up to chain tip
     let mut current_block = start_from;
-    let target = if args.finalized_only {
+    let target = if finalized_only {
         finalized
     } else {
         chain_tip
     };
 
     while current_block <= target {
-        let batch_end = std::cmp::min(current_block + args.batch_size as u64 - 1, target);
+        let batch_end = std::cmp::min(current_block + batch_size as u64 - 1, target);
 
         let synced = sync_block_range(&rpc, &db, current_block, batch_end, mainchain_epoch).await?;
 
@@ -146,9 +157,9 @@ pub async fn run(args: SyncArgs) -> Result<()> {
     // Continuous sync: poll for new blocks
     info!(
         "Watching for new blocks (poll interval: {}s)",
-        args.poll_interval
+        poll_interval
     );
-    let mut interval = time::interval(Duration::from_secs(args.poll_interval));
+    let mut interval = time::interval(Duration::from_secs(poll_interval));
     let mut last_synced = target;
 
     loop {
@@ -194,7 +205,7 @@ pub async fn run(args: SyncArgs) -> Result<()> {
 
                 // Sync new blocks
                 if new_tip > last_synced {
-                    let target = if args.finalized_only {
+                    let target = if finalized_only {
                         new_finalized
                     } else {
                         new_tip

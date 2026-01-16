@@ -2,8 +2,10 @@
 
 mod app;
 pub mod event;
+mod theme;
 mod ui;
 
 pub use app::{App, ViewMode};
 pub use event::{Event, EventHandler};
+pub use theme::Theme;
 pub use ui::render;
