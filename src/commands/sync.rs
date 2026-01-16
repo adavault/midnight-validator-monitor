@@ -91,7 +91,7 @@ pub async fn run(args: SyncArgs) -> Result<()> {
     while current_block <= target {
         let batch_end = std::cmp::min(current_block + args.batch_size as u64 - 1, target);
 
-        let synced = sync_block_range(&rpc, &db, current_block, batch_end, current_epoch).await?;
+        let synced = sync_block_range(&rpc, &db, current_block, batch_end, mainchain_epoch).await?;
 
         if synced > 0 {
             info!(
@@ -100,14 +100,14 @@ pub async fn run(args: SyncArgs) -> Result<()> {
             );
 
             // Update sync status
-            db.update_sync_status(batch_end, finalized, chain_tip, current_epoch, true)?;
+            db.update_sync_status(batch_end, finalized, chain_tip, mainchain_epoch, true)?;
         }
 
         current_block = batch_end + 1;
     }
 
     // Mark syncing complete
-    db.update_sync_status(target, finalized, chain_tip, current_epoch, false)?;
+    db.update_sync_status(target, finalized, chain_tip, mainchain_epoch, false)?;
 
     let total_blocks = db.count_blocks()?;
     info!(
@@ -130,6 +130,13 @@ pub async fn run(args: SyncArgs) -> Result<()> {
         let new_tip = get_chain_tip(&rpc).await?;
         let new_finalized = get_finalized_block(&rpc).await?;
 
+        // Get current epoch (may have changed since start)
+        let current_mainchain_epoch = get_sidechain_status(&rpc)
+            .await
+            .ok()
+            .map(|s| s.mainchain.epoch)
+            .unwrap_or(mainchain_epoch);
+
         // Update finalized status
         if new_finalized > finalized {
             let marked = db.mark_finalized(new_finalized)?;
@@ -148,7 +155,7 @@ pub async fn run(args: SyncArgs) -> Result<()> {
 
             if target > last_synced {
                 let synced =
-                    sync_block_range(&rpc, &db, last_synced + 1, target, current_epoch).await?;
+                    sync_block_range(&rpc, &db, last_synced + 1, target, current_mainchain_epoch).await?;
 
                 if synced > 0 {
                     info!(
@@ -160,7 +167,7 @@ pub async fn run(args: SyncArgs) -> Result<()> {
                     );
                     last_synced = target;
 
-                    db.update_sync_status(target, new_finalized, new_tip, current_epoch, false)?;
+                    db.update_sync_status(target, new_finalized, new_tip, current_mainchain_epoch, false)?;
                 }
             }
         }
@@ -197,12 +204,31 @@ async fn sync_block_range(
     db: &Database,
     from: u64,
     to: u64,
-    epoch: u64,
+    mainchain_epoch: u64,
 ) -> Result<u64> {
     let mut synced = 0;
 
+    // Fetch validator set for this epoch (cached for the batch)
+    let validator_set = match ValidatorSet::fetch(rpc, mainchain_epoch).await {
+        Ok(vs) => {
+            debug!(
+                "Fetched validator set for epoch {} ({} validators)",
+                mainchain_epoch,
+                vs.validators.len()
+            );
+            Some(vs)
+        }
+        Err(e) => {
+            warn!(
+                "Failed to fetch validator set for epoch {}: {}. Author attribution will be skipped.",
+                mainchain_epoch, e
+            );
+            None
+        }
+    };
+
     for block_num in from..=to {
-        match sync_single_block(rpc, db, block_num, epoch).await {
+        match sync_single_block(rpc, db, block_num, mainchain_epoch, validator_set.as_ref()).await {
             Ok(true) => synced += 1,
             Ok(false) => {
                 debug!("Block {} already exists, skipping", block_num);
@@ -221,7 +247,8 @@ async fn sync_single_block(
     rpc: &RpcClient,
     db: &Database,
     block_number: u64,
-    epoch: u64,
+    mainchain_epoch: u64,
+    validator_set: Option<&ValidatorSet>,
 ) -> Result<bool> {
     // Check if already synced
     if db.get_block(block_number)?.is_some() {
@@ -246,6 +273,69 @@ async fn sync_single_block(
         .and_then(|d| extract_slot_from_digest(&d.logs))
         .unwrap_or(0);
 
+    // Calculate block author from slot and validator set
+    let author_key = if let Some(vset) = validator_set {
+        if slot > 0 {
+            if let Some(validator) = vset.get_author(slot) {
+                // Determine registration status
+                let registration_status = if validator.is_permissioned {
+                    Some("permissioned".to_string())
+                } else {
+                    Some("registered".to_string())
+                };
+
+                // Upsert validator record and increment block count
+                let validator_record = ValidatorRecord {
+                    sidechain_key: validator.sidechain_key.clone(),
+                    aura_key: Some(validator.aura_key.clone()),
+                    grandpa_key: Some(validator.grandpa_key.clone()),
+                    label: None,
+                    is_ours: false, // Will be set by keys command
+                    registration_status,
+                    first_seen_epoch: Some(mainchain_epoch),
+                    total_blocks: 0, // Will be incremented by database
+                };
+
+                // Upsert validator (insert or update)
+                if let Err(e) = db.upsert_validator(&validator_record) {
+                    warn!(
+                        "Failed to upsert validator {}: {}",
+                        validator.sidechain_key, e
+                    );
+                }
+
+                // Increment block count
+                if let Err(e) = db.increment_block_count(&validator.sidechain_key) {
+                    warn!(
+                        "Failed to increment block count for validator {}: {}",
+                        validator.sidechain_key, e
+                    );
+                }
+
+                debug!(
+                    "Block {} authored by validator {} (slot {} % {} validators)",
+                    block_number,
+                    validator.sidechain_key,
+                    slot,
+                    vset.validators.len()
+                );
+
+                Some(validator.sidechain_key.clone())
+            } else {
+                warn!(
+                    "Failed to get author for block {} (slot {}): validator set is empty or invalid",
+                    block_number, slot
+                );
+                None
+            }
+        } else {
+            debug!("Block {} has no slot number, cannot determine author", block_number);
+            None
+        }
+    } else {
+        None
+    };
+
     // Create block record
     let record = BlockRecord {
         block_number,
@@ -254,10 +344,10 @@ async fn sync_single_block(
         state_root: header.state_root.clone(),
         extrinsics_root: header.extrinsics_root.clone(),
         slot_number: slot,
-        epoch,
+        epoch: mainchain_epoch,
         timestamp: chrono::Utc::now().timestamp(), // TODO: extract from extrinsics
         is_finalized: false,
-        author_key: None, // TODO: calculate from slot % validator_count
+        author_key,
         extrinsics_count: signed_block.block.extrinsics.len() as u32,
     };
 
