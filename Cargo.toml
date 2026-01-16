@@ -31,6 +31,10 @@ signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
 # PID file management
 nix = { version = "0.27", features = ["fs", "signal", "process"] }
 
+# TUI (Text User Interface)
+ratatui = "0.26"
+crossterm = "0.27"
+
 [profile.release]
 opt-level = 3
 lto = true

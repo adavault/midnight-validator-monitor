@@ -4,6 +4,7 @@ mod db;
 mod metrics;
 mod midnight;
 mod rpc;
+mod tui;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -37,6 +38,9 @@ enum Commands {
 
     /// Verify and manage session keys
     Keys(commands::KeysArgs),
+
+    /// Interactive TUI for real-time monitoring
+    View(commands::ViewArgs),
 }
 
 #[tokio::main]
@@ -69,6 +73,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Keys(args)) => {
             commands::keys::run(args).await?;
+        }
+        Some(Commands::View(args)) => {
+            commands::view::run(args).await?;
         }
         None => {
             // Default behavior: run status command with defaults
