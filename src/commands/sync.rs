@@ -8,7 +8,7 @@ use clap::Args;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::time;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 /// Sync command arguments
 #[derive(Args, Debug)]

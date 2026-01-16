@@ -140,7 +140,7 @@ impl StatusMonitor {
         let key_status = if let Some(ref keys) = self.keys {
             let current_epoch = sidechain_status
                 .as_ref()
-                .map(|s| s.sidechain.epoch)
+                .map(|s| s.mainchain.epoch)
                 .unwrap_or(0);
             Some(get_key_status(&self.rpc, keys, current_epoch).await)
         } else {

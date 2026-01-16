@@ -80,8 +80,8 @@ async fn run_verify(keys: &ValidatorKeys, rpc_url: &str) -> Result<()> {
         .await
     {
         Ok(status) => {
-            info!("Current epoch: {}", status.sidechain.epoch);
-            status.sidechain.epoch
+            info!("Current mainchain epoch: {}", status.mainchain.epoch);
+            status.mainchain.epoch
         }
         Err(e) => {
             warn!("Could not get sidechain status: {}", e);

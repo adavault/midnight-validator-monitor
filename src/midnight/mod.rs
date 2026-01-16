@@ -10,5 +10,5 @@ pub mod keystore;
 pub mod registration;
 
 pub use digest::extract_slot_from_digest;
-pub use keystore::{normalize_hex, KeyStatus, ValidatorKeys};
-pub use registration::{check_key_loaded, check_registration, get_key_status, RegistrationStatus};
+pub use keystore::{KeyStatus, ValidatorKeys};
+pub use registration::{get_key_status, RegistrationStatus};
