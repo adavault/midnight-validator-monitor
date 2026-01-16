@@ -17,6 +17,17 @@ Requires Rust 1.70+
 cargo build --release
 ```
 
+## Requirements for Key Verification
+
+To verify that keys are loaded in the node's keystore, the node must allow `author_*` RPC methods. By default, these are blocked for security. To enable:
+
+```bash
+# Start your node with unsafe RPC methods enabled
+midnight-node --rpc-methods=unsafe ...
+```
+
+Without this, key status will show `?` (unable to verify) but registration checks will still work.
+
 ## Commands
 
 ### status - Monitor validator node

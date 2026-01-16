@@ -32,6 +32,8 @@ The binary name is `mvm`.
 
 ## Command Usage
 
+**Note:** Key verification via `author_hasKey` RPC requires the node to be started with `--rpc-methods=unsafe`. Without this, key status will show `?` (unable to verify) but registration checks will still work.
+
 ### status - Monitor validator node
 ```bash
 mvm status --keystore /path/to/keystore

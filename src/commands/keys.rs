@@ -141,6 +141,15 @@ async fn run_verify(keys: &ValidatorKeys, rpc_url: &str) -> Result<()> {
         &keys.grandpa_pub_key[keys.grandpa_pub_key.len()-8..]
     );
 
+    // Show note if keys can't be verified
+    if key_status.sidechain_loaded.is_none()
+        && key_status.aura_loaded.is_none()
+        && key_status.grandpa_loaded.is_none() {
+        info!("");
+        warn!("  Note: Key verification requires node started with --rpc-methods=unsafe");
+        warn!("        Keys shown above are from your keystore file only");
+    }
+
     info!("");
     info!("Registration Status:");
     info!("─────────────────────────────────────────────────────────────────────────────");

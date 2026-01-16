@@ -214,6 +214,11 @@ impl StatusMonitor {
             sc_icon, aura_icon, gran_icon
         );
 
+        // Show note if keys can't be verified
+        if ks.sidechain_loaded.is_none() && ks.aura_loaded.is_none() && ks.grandpa_loaded.is_none() {
+            info!("Note: Key verification requires node started with --rpc-methods=unsafe");
+        }
+
         match &ks.registration {
             Some(RegistrationStatus::Permissioned) => {
                 info!("Registration: ✓ Permissioned candidate");
