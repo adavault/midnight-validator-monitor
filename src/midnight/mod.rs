@@ -4,11 +4,14 @@
 //! - Block digest parsing (slot extraction)
 //! - Substrate keystore loading
 //! - Validator registration checking
+//! - Validator set management and block author attribution
 
 pub mod digest;
 pub mod keystore;
 pub mod registration;
+pub mod validators;
 
 pub use digest::extract_slot_from_digest;
 pub use keystore::{KeyStatus, ValidatorKeys};
 pub use registration::{get_key_status, RegistrationStatus};
+pub use validators::{Validator, ValidatorSet};

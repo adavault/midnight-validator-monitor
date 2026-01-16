@@ -1,8 +1,10 @@
 mod blocks;
 mod schema;
+mod validators;
 
 pub use blocks::*;
 pub use schema::init_schema;
+pub use validators::*;
 
 use anyhow::{Context, Result};
 use rusqlite::Connection;
@@ -92,6 +94,35 @@ impl Database {
         is_syncing: bool,
     ) -> Result<()> {
         blocks::update_sync_status(&self.conn, last_synced, finalized, tip, epoch, is_syncing)
+    }
+
+    // Validator operations
+    pub fn upsert_validator(&self, validator: &ValidatorRecord) -> Result<()> {
+        validators::upsert_validator(&self.conn, validator)
+    }
+
+    pub fn get_validator(&self, sidechain_key: &str) -> Result<Option<ValidatorRecord>> {
+        validators::get_validator(&self.conn, sidechain_key)
+    }
+
+    pub fn get_all_validators(&self) -> Result<Vec<ValidatorRecord>> {
+        validators::get_all_validators(&self.conn)
+    }
+
+    pub fn get_our_validators(&self) -> Result<Vec<ValidatorRecord>> {
+        validators::get_our_validators(&self.conn)
+    }
+
+    pub fn increment_block_count(&self, sidechain_key: &str) -> Result<()> {
+        validators::increment_block_count(&self.conn, sidechain_key)
+    }
+
+    pub fn count_validators(&self) -> Result<u64> {
+        validators::count_validators(&self.conn)
+    }
+
+    pub fn count_our_validators(&self) -> Result<u64> {
+        validators::count_our_validators(&self.conn)
     }
 }
 
