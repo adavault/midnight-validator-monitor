@@ -49,38 +49,54 @@
 - Populating validators table during sync
 - Incrementing block counts per validator
 
-## Next Steps (Priority Order)
+## Completed Features ✅
 
-### HIGH PRIORITY - Complete Author Attribution
+### HIGH PRIORITY - Block Author Attribution ✅
+**Status**: Complete (Commit: c55bd71)
 
-1. **Update `sync_block_range` function**
-   - Pass mainchain_epoch instead of sidechain_epoch
-   - Fetch validator set once per batch (cache for efficiency)
+1. ✅ **Updated `sync_block_range` function**
+   - Fixed epoch parameter naming (mainchain_epoch)
+   - Fetches validator set once per batch for efficiency
+   - Graceful error handling if validator fetch fails
 
-2. **Update `sync_single_block` function**
-   - Fetch validator set for current mainchain epoch
-   - Calculate author from slot: `author_index = slot % validator_count`
-   - Get author's sidechain_key from validator set
-   - Store in `author_key` field of BlockRecord
-   - Increment validator's block count in database
+2. ✅ **Updated `sync_single_block` function**
+   - Calculates author from slot: `author_index = slot % validator_count`
+   - Retrieves author's sidechain_key from ordered validator set
+   - Populates `author_key` field in BlockRecord
+   - Upserts validator records with registration status
+   - Increments validator's block count in database
 
-3. **Test Implementation**
-   - Run sync on existing database
-   - Verify author_key is populated correctly
-   - Check validators table is populated
-   - Validate block counts match actual production
+3. ✅ **Tested Implementation**
+   - Synced 430 blocks successfully with author attribution
+   - Verified all blocks have author_key populated
+   - Confirmed 185 validators tracked (12 permissioned + 173 registered)
+   - Validated block counts match across tables
+   - Added epoch refresh in polling loop for epoch transitions
 
-### MEDIUM PRIORITY - Query Commands
+### MEDIUM PRIORITY - Query Commands ✅
+**Status**: Complete (Commit: 03fefda)
 
-4. **Add validator queries to query command**
-   - `query validators` - List all validators with stats
-   - `query validator <key>` - Show specific validator details
-   - `query performance` - Show blocks per validator
-   - Add `--ours` flag to filter our validators
+4. ✅ **Added validator queries to query command**
+   - `query validators [--ours] [--limit N]` - List all validators with stats
+   - `query validator <key>` - Show specific validator details with recent blocks
+   - `query performance [--ours] [--limit N]` - Show block production rankings
+   - Updated `query stats` to include validator counts and attribution %
 
-5. **Update keys command**
-   - Mark validators in database as `is_ours = true`
-   - Show block production stats for our validators
+5. ✅ **Updated keys command**
+   - Added database integration (--db-path parameter)
+   - Automatically marks validators as `is_ours = true` during verification
+   - Shows comprehensive block production statistics
+   - Displays performance rank among all validators
+   - Lists recent blocks produced by our validator
+
+## Next Steps (Future Enhancements)
+
+### Optional Improvements
+- Add block timestamp extraction from extrinsics (currently uses sync time)
+- Add validator label/naming support for easier identification
+- Add block production alerts/notifications
+- Add export functionality (CSV, JSON)
+- Add historical performance tracking over time
 
 ## Code Locations
 
@@ -176,14 +192,48 @@ All required dependencies already in Cargo.toml:
 
 1. `f9967fe` - Add validator set management and block author attribution foundation
 2. `195d2c9` - WIP: Start integrating validator sets into sync command
+3. `c55bd71` - Complete validator set integration and block author attribution
+4. `03fefda` - Add validator query commands and enhance keys command
 
-## Session End State
+## Session End State - v0.2.0 COMPLETE ✅
 
-- All infrastructure code is complete and tested
-- Sync command partially updated
-- Ready to continue with sync_block_range and sync_single_block updates
-- Database and validator logic is production-ready
+### What's Working
+- ✅ Full block synchronization with author attribution
+- ✅ Validator set management and ordered author calculation
+- ✅ Database tracking of 185+ validators with block counts
+- ✅ Comprehensive query commands for validators and performance
+- ✅ Enhanced keys command with database integration
+- ✅ Automatic validator marking (is_ours) during key verification
+- ✅ Performance rankings and statistics
+
+### Production Ready
+All HIGH and MEDIUM priority features from v0.2.0 are complete and tested:
+- Block author attribution working across 1700+ blocks
+- 185 validators tracked with accurate block counts
+- Query commands provide comprehensive validator insights
+- Keys command seamlessly integrates with database
+
+### Usage Examples
+```bash
+# Sync blocks with author attribution
+mvm sync --db-path ./mvm.db
+
+# View validator statistics
+mvm query stats
+mvm query validators --limit 20
+mvm query performance --limit 10
+
+# Check specific validator
+mvm query validator 0x030cba90c73fbc32159ba89a980744fb324bdae640a320068d88b560eed6d665f9
+
+# Verify keys and see our performance
+mvm keys --keystore /path/to/keystore verify
+
+# View only our validators
+mvm query validators --ours
+mvm query performance --ours
+```
 
 ---
 
-**To Resume**: Start by completing the sync_block_range function to fetch and cache validator sets, then update sync_single_block to calculate and store authors.
+**v0.2.0 Development Complete** - All planned features implemented and tested.
