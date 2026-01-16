@@ -1,7 +1,7 @@
 //! Query command - query stored block data
 
-use crate::db::Database;
-use anyhow::Result;
+use crate::db::{Database, ValidatorRecord};
+use anyhow::{bail, Result};
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
 use tracing::info;
@@ -39,6 +39,34 @@ pub enum QueryCommands {
 
     /// Find gaps in synced blocks
     Gaps,
+
+    /// List all validators with statistics
+    Validators {
+        /// Only show our validators
+        #[arg(long)]
+        ours: bool,
+
+        /// Number of validators to show (default: 20)
+        #[arg(short, long, default_value_t = 20)]
+        limit: u64,
+    },
+
+    /// Show details for a specific validator
+    Validator {
+        /// Validator sidechain public key
+        key: String,
+    },
+
+    /// Show block production performance statistics
+    Performance {
+        /// Only show our validators
+        #[arg(long)]
+        ours: bool,
+
+        /// Number of validators to show (default: 10)
+        #[arg(short, long, default_value_t = 10)]
+        limit: u64,
+    },
 }
 
 /// Run the query command
@@ -49,6 +77,9 @@ pub async fn run(args: QueryArgs) -> Result<()> {
         QueryCommands::Stats => run_stats(&db)?,
         QueryCommands::Blocks { from, to, limit } => run_blocks(&db, from, to, limit)?,
         QueryCommands::Gaps => run_gaps(&db)?,
+        QueryCommands::Validators { ours, limit } => run_validators(&db, ours, limit)?,
+        QueryCommands::Validator { key } => run_validator(&db, &key)?,
+        QueryCommands::Performance { ours, limit } => run_performance(&db, ours, limit)?,
     }
 
     Ok(())
@@ -87,6 +118,29 @@ fn run_stats(db: &Database) -> Result<()> {
         info!("Gaps:             None (continuous)");
     } else {
         info!("Gaps:             {} gap(s) detected", gaps.len());
+    }
+
+    // Validator statistics
+    let total_validators = db.count_validators()?;
+    let our_validators = db.count_our_validators()?;
+
+    if total_validators > 0 {
+        info!("─────────────────────────────────────────");
+        info!("Validators:       {}", total_validators);
+        if our_validators > 0 {
+            info!("  Ours:           {}", our_validators);
+        }
+
+        // Show blocks with author attribution
+        let blocks_with_authors = db.get_blocks_in_range(0, u64::MAX, None)?
+            .iter()
+            .filter(|b| b.author_key.is_some())
+            .count();
+
+        if blocks_with_authors > 0 {
+            let attribution_pct = (blocks_with_authors as f64 / total_blocks as f64) * 100.0;
+            info!("  Blocks with author: {} ({:.1}%)", blocks_with_authors, attribution_pct);
+        }
     }
 
     Ok(())
@@ -168,6 +222,220 @@ fn run_gaps(db: &Database) -> Result<()> {
     info!("Total missing blocks: {}", total_missing);
     info!("");
     info!("To resync gaps, run: mvm sync --start-block <from>");
+
+    Ok(())
+}
+
+fn run_validators(db: &Database, ours_only: bool, limit: u64) -> Result<()> {
+    let validators = if ours_only {
+        db.get_our_validators()?
+    } else {
+        db.get_all_validators()?
+    };
+
+    if validators.is_empty() {
+        if ours_only {
+            info!("No validators marked as ours.");
+            info!("Run 'mvm keys verify' to mark your validators.");
+        } else {
+            info!("No validators found in database.");
+            info!("Run 'mvm sync' to populate validator data.");
+        }
+        return Ok(());
+    }
+
+    let title = if ours_only {
+        format!("Our Validators ({} total)", validators.len())
+    } else {
+        format!("All Validators ({} total)", validators.len())
+    };
+
+    info!("{}", title);
+    info!("─────────────────────────────────────────────────────────────────────────────────────");
+    info!(
+        "{:>68} {:>15} {:>12}",
+        "Sidechain Key", "Status", "Blocks"
+    );
+    info!("─────────────────────────────────────────────────────────────────────────────────────");
+
+    for validator in validators.iter().take(limit as usize) {
+        let status = validator
+            .registration_status
+            .as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or("unknown");
+        let ours_marker = if validator.is_ours { " *" } else { "" };
+
+        info!(
+            "{:>68} {:>15} {:>12}{}",
+            validator.sidechain_key, status, validator.total_blocks, ours_marker
+        );
+    }
+
+    if validators.len() > limit as usize {
+        info!("");
+        info!("... and {} more (use --limit to show more)", validators.len() - limit as usize);
+    }
+
+    if !ours_only && validators.iter().any(|v| v.is_ours) {
+        info!("");
+        info!("* = Our validator");
+    }
+
+    Ok(())
+}
+
+fn run_validator(db: &Database, key: &str) -> Result<()> {
+    // Normalize the key
+    let normalized_key = if key.starts_with("0x") {
+        key.to_lowercase()
+    } else {
+        format!("0x{}", key.to_lowercase())
+    };
+
+    let validator = db.get_validator(&normalized_key)?;
+
+    match validator {
+        Some(v) => {
+            info!("Validator Details");
+            info!("─────────────────────────────────────────────────────────────────");
+            info!("Sidechain Key:  {}", v.sidechain_key);
+            if let Some(aura) = &v.aura_key {
+                info!("AURA Key:       {}", aura);
+            }
+            if let Some(grandpa) = &v.grandpa_key {
+                info!("Grandpa Key:    {}", grandpa);
+            }
+            if let Some(label) = &v.label {
+                info!("Label:          {}", label);
+            }
+            info!("Status:         {}", v.registration_status.as_ref().unwrap_or(&"unknown".to_string()));
+            info!("Is Ours:        {}", if v.is_ours { "Yes" } else { "No" });
+            if let Some(epoch) = v.first_seen_epoch {
+                info!("First Seen:     Epoch {}", epoch);
+            }
+            info!("Blocks Produced: {}", v.total_blocks);
+
+            // Get recent blocks by this validator
+            info!("");
+            info!("Recent blocks produced by this validator:");
+            let total_blocks = db.count_blocks()?;
+            if total_blocks > 0 {
+                let max_block = db.get_max_block_number()?.unwrap_or(0);
+                let start = max_block.saturating_sub(1000);
+                let blocks = db.get_blocks_in_range(start, max_block, Some(1000))?;
+
+                let validator_blocks: Vec<_> = blocks
+                    .iter()
+                    .filter(|b| {
+                        b.author_key.as_ref()
+                            .map(|k| k == &v.sidechain_key)
+                            .unwrap_or(false)
+                    })
+                    .take(5)
+                    .collect();
+
+                if validator_blocks.is_empty() {
+                    info!("  No recent blocks found (checked last 1000 blocks)");
+                } else {
+                    for block in validator_blocks {
+                        info!(
+                            "  Block #{} (slot {}, epoch {})",
+                            block.block_number, block.slot_number, block.epoch
+                        );
+                    }
+                }
+            }
+
+            Ok(())
+        }
+        None => {
+            bail!("Validator not found: {}", normalized_key);
+        }
+    }
+}
+
+fn run_performance(db: &Database, ours_only: bool, limit: u64) -> Result<()> {
+    let validators = if ours_only {
+        db.get_our_validators()?
+    } else {
+        db.get_all_validators()?
+    };
+
+    if validators.is_empty() {
+        if ours_only {
+            info!("No validators marked as ours.");
+            info!("Run 'mvm keys verify' to mark your validators.");
+        } else {
+            info!("No validators found in database.");
+            info!("Run 'mvm sync' to populate validator data.");
+        }
+        return Ok(());
+    }
+
+    // Filter validators with at least 1 block
+    let active_validators: Vec<_> = validators
+        .iter()
+        .filter(|v| v.total_blocks > 0)
+        .collect();
+
+    if active_validators.is_empty() {
+        info!("No validators have produced blocks yet.");
+        return Ok(());
+    }
+
+    let total_blocks: u64 = active_validators.iter().map(|v| v.total_blocks).sum();
+    let avg_blocks = if !active_validators.is_empty() {
+        total_blocks as f64 / active_validators.len() as f64
+    } else {
+        0.0
+    };
+
+    let title = if ours_only {
+        "Our Validator Performance"
+    } else {
+        "Validator Performance"
+    };
+
+    info!("{}", title);
+    info!("─────────────────────────────────────────────────────────────────────────────────────");
+    info!("Active validators: {}", active_validators.len());
+    info!("Total blocks:      {}", total_blocks);
+    info!("Average blocks:    {:.2}", avg_blocks);
+    info!("─────────────────────────────────────────────────────────────────────────────────────");
+    info!(
+        "{:>4} {:>68} {:>12} {:>8}",
+        "Rank", "Sidechain Key", "Blocks", "Share %"
+    );
+    info!("─────────────────────────────────────────────────────────────────────────────────────");
+
+    for (i, validator) in active_validators.iter().take(limit as usize).enumerate() {
+        let share = if total_blocks > 0 {
+            (validator.total_blocks as f64 / total_blocks as f64) * 100.0
+        } else {
+            0.0
+        };
+        let ours_marker = if validator.is_ours { " *" } else { "" };
+
+        info!(
+            "{:>4} {:>68} {:>12} {:>7.2}%{}",
+            i + 1,
+            validator.sidechain_key,
+            validator.total_blocks,
+            share,
+            ours_marker
+        );
+    }
+
+    if active_validators.len() > limit as usize {
+        info!("");
+        info!("... and {} more (use --limit to show more)", active_validators.len() - limit as usize);
+    }
+
+    if !ours_only && validators.iter().any(|v| v.is_ours) {
+        info!("");
+        info!("* = Our validator");
+    }
 
     Ok(())
 }

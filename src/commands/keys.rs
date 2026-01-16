@@ -1,11 +1,12 @@
 //! Keys command - verify and manage session keys
 
+use crate::db::{Database, ValidatorRecord};
 use crate::midnight::{get_key_status, ValidatorKeys};
 use crate::rpc::RpcClient;
 use anyhow::Result;
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 /// Keys command arguments
 #[derive(Args, Debug)]
@@ -17,6 +18,10 @@ pub struct KeysArgs {
     /// Validator node RPC endpoint URL (for verification)
     #[arg(short, long, default_value = "http://localhost:9944")]
     pub rpc_url: String,
+
+    /// SQLite database path (for marking validators and showing stats)
+    #[arg(short, long, default_value = "./mvm.db")]
+    pub db_path: PathBuf,
 
     #[command(subcommand)]
     pub command: KeysCommands,
@@ -45,7 +50,7 @@ pub async fn run(args: KeysArgs) -> Result<()> {
 
     match args.command {
         KeysCommands::Show => run_show(&keys),
-        KeysCommands::Verify => run_verify(&keys, &args.rpc_url).await,
+        KeysCommands::Verify => run_verify(&keys, &args.rpc_url, &args.db_path).await,
     }
 }
 
@@ -67,7 +72,7 @@ fn run_show(keys: &ValidatorKeys) -> Result<()> {
     Ok(())
 }
 
-async fn run_verify(keys: &ValidatorKeys, rpc_url: &str) -> Result<()> {
+async fn run_verify(keys: &ValidatorKeys, rpc_url: &str, db_path: &PathBuf) -> Result<()> {
     info!("Verifying validator keys...");
     info!("RPC endpoint: {}", rpc_url);
     info!("─────────────────────────────────────────────────────────────────────────────");
@@ -91,6 +96,9 @@ async fn run_verify(keys: &ValidatorKeys, rpc_url: &str) -> Result<()> {
 
     // Get key status
     let key_status = get_key_status(&rpc, keys, current_epoch).await;
+
+    // Try to open database for marking validator and showing stats
+    let db = Database::open(db_path).ok();
 
     info!("");
     info!("Key Status:");
@@ -195,6 +203,112 @@ async fn run_verify(keys: &ValidatorKeys, rpc_url: &str) -> Result<()> {
         warn!("Summary: Keys loaded but registration issue detected");
     } else {
         error!("Summary: One or more keys not loaded!");
+    }
+
+    // Mark validator as ours in database and show block production stats
+    if let Some(db) = db {
+        info!("");
+        info!("Block Production Statistics:");
+        info!("─────────────────────────────────────────────────────────────────────────────");
+
+        // Check if validator exists in database
+        match db.get_validator(&keys.sidechain_pub_key)? {
+            Some(mut validator) => {
+                // Mark as ours if not already marked
+                if !validator.is_ours {
+                    validator.is_ours = true;
+                    db.upsert_validator(&validator)?;
+                    debug!("Marked validator {} as ours", keys.sidechain_pub_key);
+                }
+
+                // Show block production stats
+                info!("  Total blocks produced: {}", validator.total_blocks);
+                if let Some(epoch) = validator.first_seen_epoch {
+                    info!("  First seen in epoch:   {}", epoch);
+                }
+
+                // Calculate share of total blocks
+                let total_blocks = db.count_blocks()?;
+                if total_blocks > 0 {
+                    let share = (validator.total_blocks as f64 / total_blocks as f64) * 100.0;
+                    info!("  Share of synced blocks: {:.2}%", share);
+                }
+
+                // Get all validators to show rank
+                let all_validators = db.get_all_validators()?;
+                if !all_validators.is_empty() {
+                    let rank = all_validators.iter()
+                        .position(|v| v.sidechain_key == keys.sidechain_pub_key)
+                        .map(|i| i + 1)
+                        .unwrap_or(0);
+                    if rank > 0 {
+                        info!("  Performance rank:       #{} of {} validators", rank, all_validators.len());
+                    }
+                }
+
+                // Show recent blocks
+                if validator.total_blocks > 0 {
+                    let max_block = db.get_max_block_number()?.unwrap_or(0);
+                    if max_block > 0 {
+                        let start = max_block.saturating_sub(1000);
+                        let blocks = db.get_blocks_in_range(start, max_block, Some(1000))?;
+
+                        let recent_blocks: Vec<_> = blocks
+                            .iter()
+                            .filter(|b| {
+                                b.author_key.as_ref()
+                                    .map(|k| k == &keys.sidechain_pub_key)
+                                    .unwrap_or(false)
+                            })
+                            .take(3)
+                            .collect();
+
+                        if !recent_blocks.is_empty() {
+                            info!("");
+                            info!("  Recent blocks (last 1000):");
+                            for block in recent_blocks {
+                                info!(
+                                    "    Block #{} (slot {}, epoch {})",
+                                    block.block_number, block.slot_number, block.epoch
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            None => {
+                info!("  Validator not found in database");
+                info!("  Run 'mvm sync' to populate validator data");
+
+                // Still try to mark the validator as ours for future syncs
+                let registration_status = match &key_status.registration {
+                    Some(crate::midnight::RegistrationStatus::Permissioned) => {
+                        Some("permissioned".to_string())
+                    }
+                    Some(crate::midnight::RegistrationStatus::RegisteredValid) => {
+                        Some("registered".to_string())
+                    }
+                    _ => None,
+                };
+
+                if registration_status.is_some() {
+                    let validator_record = ValidatorRecord {
+                        sidechain_key: keys.sidechain_pub_key.clone(),
+                        aura_key: Some(keys.aura_pub_key.clone()),
+                        grandpa_key: Some(keys.grandpa_pub_key.clone()),
+                        label: None,
+                        is_ours: true,
+                        registration_status,
+                        first_seen_epoch: Some(current_epoch),
+                        total_blocks: 0,
+                    };
+                    db.upsert_validator(&validator_record)?;
+                    debug!("Created validator record and marked as ours");
+                }
+            }
+        }
+    } else {
+        debug!("Database not available, skipping validator marking and stats");
     }
 
     Ok(())
