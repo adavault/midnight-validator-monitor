@@ -212,8 +212,8 @@ The sync command creates a SQLite database with:
 - `chain_getBlock` - Full block with extrinsics
 - `chain_getBlockHash` - Block hash by number
 - `chain_getFinalizedHead` - Finalized block hash
-- `sidechain_getStatus` - Epoch/slot info
-- `sidechain_getAriadneParameters` - Validator registration data
+- `sidechain_getStatus` - Epoch/slot info for both chains
+- `sidechain_getAriadneParameters(mainchain_epoch)` - Validator registration data (requires mainchain epoch)
 - `author_hasKey` - Check if key is in keystore
 
 ## License
