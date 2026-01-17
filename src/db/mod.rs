@@ -90,6 +90,23 @@ impl Database {
         blocks::count_blocks_by_author_in_epoch(&self.conn, author_key, epoch)
     }
 
+    // Committee snapshot operations
+    pub fn store_committee_snapshot(&self, epoch: u64, committee: &[String]) -> Result<()> {
+        blocks::store_committee_snapshot(&self.conn, epoch, committee)
+    }
+
+    pub fn get_committee_snapshot(&self, epoch: u64) -> Result<Option<Vec<String>>> {
+        blocks::get_committee_snapshot(&self.conn, epoch)
+    }
+
+    pub fn get_committee_size(&self, epoch: u64) -> Result<Option<usize>> {
+        blocks::get_committee_size(&self.conn, epoch)
+    }
+
+    pub fn list_committee_epochs(&self) -> Result<Vec<u64>> {
+        blocks::list_committee_epochs(&self.conn)
+    }
+
     // Sync status operations
     pub fn get_sync_status(&self) -> Result<SyncStatusRecord> {
         blocks::get_sync_status(&self.conn)

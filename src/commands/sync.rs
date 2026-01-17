@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use clap::Args;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::time;
@@ -113,11 +114,15 @@ pub async fn run(args: SyncArgs) -> Result<()> {
     } else if sync_status.last_synced_block > 0 {
         sync_status.last_synced_block + 1
     } else {
-        // Start from a recent block rather than genesis (too many blocks)
-        chain_tip.saturating_sub(1000)
+        // Start from block 1 to sync entire chain history
+        1
     };
 
     info!("Starting sync from block {}", start_from);
+    info!("Target block: {} ({})",
+        if finalized_only { finalized } else { chain_tip },
+        if finalized_only { "finalized" } else { "chain tip" }
+    );
 
     // Initial sync: catch up to chain tip
     let mut current_block = start_from;
@@ -127,15 +132,29 @@ pub async fn run(args: SyncArgs) -> Result<()> {
         chain_tip
     };
 
+    let total_blocks_to_sync = if target >= start_from {
+        target - start_from + 1
+    } else {
+        0
+    };
+
     while current_block <= target {
         let batch_end = std::cmp::min(current_block + batch_size as u64 - 1, target);
 
-        let synced = sync_block_range(&rpc, &db, current_block, batch_end, mainchain_epoch).await?;
+        let synced = sync_block_range(&rpc, &db, current_block, batch_end).await?;
 
         if synced > 0 {
+            let blocks_synced_so_far = batch_end - start_from + 1;
+            let progress_pct = if total_blocks_to_sync > 0 {
+                (blocks_synced_so_far as f64 / total_blocks_to_sync as f64) * 100.0
+            } else {
+                100.0
+            };
+
             info!(
-                "Synced blocks {}-{} ({} blocks)",
-                current_block, batch_end, synced
+                "Synced blocks {}-{} ({} blocks) - Progress: {:.1}% ({}/{})",
+                current_block, batch_end, synced,
+                progress_pct, blocks_synced_so_far, total_blocks_to_sync
             );
 
             // Update sync status
@@ -150,13 +169,17 @@ pub async fn run(args: SyncArgs) -> Result<()> {
 
     let total_blocks = db.count_blocks()?;
     info!(
-        "Initial sync complete. {} blocks in database",
-        total_blocks
+        "Initial sync complete - Progress: 100.0% ({}/{})",
+        total_blocks_to_sync, total_blocks_to_sync
+    );
+    info!(
+        "{} blocks in database (block range: {}-{})",
+        total_blocks, start_from, target
     );
 
     // Continuous sync: poll for new blocks
     info!(
-        "Watching for new blocks (poll interval: {}s)",
+        "Sync at 100.0% - Watching for new blocks (poll interval: {}s)",
         poll_interval
     );
     let mut interval = time::interval(Duration::from_secs(poll_interval));
@@ -212,15 +235,25 @@ pub async fn run(args: SyncArgs) -> Result<()> {
                     };
 
                     if target > last_synced {
-                        match sync_block_range(&rpc, &db, last_synced + 1, target, current_mainchain_epoch).await {
+                        match sync_block_range(&rpc, &db, last_synced + 1, target).await {
                             Ok(synced) => {
                                 if synced > 0 {
+                                    // Calculate how far behind we are
+                                    let blocks_behind = new_tip.saturating_sub(target);
+                                    let sync_pct = if blocks_behind == 0 {
+                                        100.0
+                                    } else {
+                                        ((target - start_from) as f64 / (new_tip - start_from) as f64) * 100.0
+                                    };
+
                                     info!(
-                                        "New block{}: {}-{} ({} synced)",
+                                        "New block{}: {}-{} ({} synced) - Sync: {:.1}% ({} behind)",
                                         if synced > 1 { "s" } else { "" },
                                         last_synced + 1,
                                         target,
-                                        synced
+                                        synced,
+                                        sync_pct,
+                                        blocks_behind
                                     );
                                     last_synced = target;
 
@@ -233,6 +266,9 @@ pub async fn run(args: SyncArgs) -> Result<()> {
                                 warn!("Failed to sync block range {}-{}: {}", last_synced + 1, target, e);
                             }
                         }
+                    } else {
+                        // Fully synced - only log occasionally
+                        debug!("Sync at 100.0% - No new blocks");
                     }
                 }
             }
@@ -272,6 +308,12 @@ async fn get_sidechain_status(rpc: &RpcClient) -> Result<SidechainStatus> {
     rpc.call("sidechain_getStatus", Vec::<()>::new()).await
 }
 
+async fn get_sidechain_status_at_block(rpc: &RpcClient, block_hash: &str) -> Result<SidechainStatus> {
+    // Query sidechain status at a specific block hash
+    // Substrate RPC methods typically accept an optional block hash as the last parameter
+    rpc.call("sidechain_getStatus", vec![block_hash]).await
+}
+
 async fn get_block_hash(rpc: &RpcClient, block_number: u64) -> Result<String> {
     rpc.call("chain_getBlockHash", vec![block_number]).await
 }
@@ -280,36 +322,32 @@ async fn get_block(rpc: &RpcClient, hash: &str) -> Result<SignedBlock> {
     rpc.call("chain_getBlock", vec![hash]).await
 }
 
+/// Committee cache entry with the block hash used to fetch it
+struct CommitteeCache {
+    validator_set: ValidatorSet,
+    /// Block hash used to fetch this committee (for reference/debugging)
+    #[allow(dead_code)]
+    fetched_at_block: String,
+    /// True if we had to fall back to current committee due to pruned state
+    #[allow(dead_code)]
+    used_fallback: bool,
+}
+
 async fn sync_block_range(
     rpc: &RpcClient,
     db: &Database,
     from: u64,
     to: u64,
-    mainchain_epoch: u64,
 ) -> Result<u64> {
     let mut synced = 0;
 
-    // Fetch validator set for this epoch (cached for the batch)
-    let validator_set = match ValidatorSet::fetch(rpc, mainchain_epoch).await {
-        Ok(vs) => {
-            debug!(
-                "Fetched validator set for epoch {} ({} validators)",
-                mainchain_epoch,
-                vs.validators.len()
-            );
-            Some(vs)
-        }
-        Err(e) => {
-            warn!(
-                "Failed to fetch validator set for epoch {}: {}. Author attribution will be skipped.",
-                mainchain_epoch, e
-            );
-            None
-        }
-    };
+    // Cache committees per epoch (multiple epochs may exist in a range)
+    // We store (validator_set, block_hash_used) so we can fetch the committee
+    // at the correct historical point for each epoch
+    let mut committee_cache: HashMap<u64, CommitteeCache> = HashMap::new();
 
     for block_num in from..=to {
-        match sync_single_block(rpc, db, block_num, mainchain_epoch, validator_set.as_ref()).await {
+        match sync_single_block(rpc, db, block_num, &mut committee_cache).await {
             Ok(true) => synced += 1,
             Ok(false) => {
                 debug!("Block {} already exists, skipping", block_num);
@@ -328,8 +366,7 @@ async fn sync_single_block(
     rpc: &RpcClient,
     db: &Database,
     block_number: u64,
-    mainchain_epoch: u64,
-    validator_set: Option<&ValidatorSet>,
+    committee_cache: &mut HashMap<u64, CommitteeCache>,
 ) -> Result<bool> {
     // Check if already synced
     if db.get_block(block_number)?.is_some() {
@@ -346,6 +383,84 @@ async fn sync_single_block(
         .with_context(|| format!("Failed to get block {}", block_number))?;
 
     let header = &signed_block.block.header;
+
+    // Determine the actual epoch for this block by querying at the block hash
+    let mainchain_epoch = match get_sidechain_status_at_block(rpc, &hash).await {
+        Ok(status) => {
+            let epoch = status.mainchain.epoch;
+            debug!("Block {} is from epoch {}", block_number, epoch);
+            epoch
+        }
+        Err(e) => {
+            warn!(
+                "Failed to get epoch for block {} (hash {}): {}. Using epoch 0.",
+                block_number, hash, e
+            );
+            0
+        }
+    };
+
+    // Fetch or retrieve cached committee for this epoch
+    // IMPORTANT: When fetching the committee, we must query at a block hash from
+    // that epoch to get the correct historical committee (committees change each epoch)
+    let validator_set = if let Some(cached) = committee_cache.get(&mainchain_epoch) {
+        // Already cached - use the previously fetched committee for this epoch
+        Some(&cached.validator_set)
+    } else if mainchain_epoch > 0 {
+        // Fetch and cache committee for this epoch AT THIS BLOCK HASH
+        // This ensures we get the committee that was active when this block was produced
+        // Uses fallback to current committee if historical state is pruned
+        match ValidatorSet::fetch_with_committee_or_fallback(rpc, mainchain_epoch, &hash).await {
+            Ok((vs, used_fallback)) => {
+                if used_fallback {
+                    info!(
+                        "Using current committee for epoch {} (historical state pruned) - {} candidates, {} seats",
+                        mainchain_epoch,
+                        vs.candidate_count(),
+                        vs.committee_size()
+                    );
+                } else {
+                    debug!(
+                        "Fetched validator set for epoch {} at block {} ({} candidates, {} committee seats)",
+                        mainchain_epoch,
+                        hash,
+                        vs.candidate_count(),
+                        vs.committee_size()
+                    );
+                }
+
+                // Store committee snapshot for this epoch (even if fallback was used)
+                // Note: If fallback was used, this may not be the exact committee for this epoch
+                if let Err(e) = db.store_committee_snapshot(mainchain_epoch, &vs.committee) {
+                    warn!(
+                        "Failed to store committee snapshot for epoch {}: {}",
+                        mainchain_epoch, e
+                    );
+                } else {
+                    debug!("Stored committee snapshot for epoch {}", mainchain_epoch);
+                }
+
+                committee_cache.insert(
+                    mainchain_epoch,
+                    CommitteeCache {
+                        validator_set: vs,
+                        fetched_at_block: hash.clone(),
+                        used_fallback,
+                    },
+                );
+                committee_cache.get(&mainchain_epoch).map(|c| &c.validator_set)
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to fetch validator set for epoch {} at block {}: {}. Author attribution will be skipped.",
+                    mainchain_epoch, hash, e
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
 
     // Extract slot from digest
     let slot = header
@@ -394,11 +509,11 @@ async fn sync_single_block(
                 }
 
                 debug!(
-                    "Block {} authored by validator {} (slot {} % {} validators)",
+                    "Block {} authored by validator {} (slot {} % {} committee seats)",
                     block_number,
                     validator.sidechain_key,
                     slot,
-                    vset.validators.len()
+                    vset.committee_size()
                 );
 
                 Some(validator.sidechain_key.clone())

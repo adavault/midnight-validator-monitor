@@ -413,11 +413,22 @@ mvm --version
 sudo ./scripts/uninstall.sh
 ```
 
+## Known Issues (v0.3.0-alpha)
+
+**Critical: Incorrect Block Attribution**
+
+The current version has a known issue with block author attribution. The implementation uses 185 candidates instead of the actual 1200-seat committee for calculating block authors, resulting in incorrect attributions. This will be fixed in v0.4-beta. See `VALIDATOR_COMMITTEE_DISCOVERY.md` for details.
+
+**Impact**: Block statistics and performance rankings are currently unreliable and should not be used for critical decisions.
+
 ## Documentation
 
 - `DEPLOYMENT.md` - Detailed deployment guide with systemd setup
 - `CLAUDE.md` - Architecture and implementation details
 - `RELEASE_NOTES_v0.3.0-alpha.md` - What's new in v0.3.0
+- `VALIDATOR_COMMITTEE_DISCOVERY.md` - Critical bug discovery documentation
+- `STAKE_ALLOCATION_RESEARCH.md` - Ongoing research into stake-weighted allocations
+- `RELEASE_PLAN_v0.4-beta.md` - v0.4-beta development roadmap
 
 ## License
 

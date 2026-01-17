@@ -231,7 +231,33 @@ directories = "5.0"
 
 ## Known Issues
 
-**None critical.**
+### Critical: Incorrect Block Attribution (Discovered 2026-01-16)
+
+**Impact**: HIGH - All block author attributions in v0.3.0-alpha are INCORRECT
+
+**Issue**: The current implementation uses the validator candidate count (185) instead of the actual committee size (~1200) for calculating block authors. This results in:
+- Incorrect block attributions for all synced blocks
+- Unreliable validator statistics and performance rankings
+- Invalid block production predictions
+
+**Root Cause**: Midnight uses a committee-based system where 185 candidates fill ~1200 rotating committee seats. Each candidate appears approximately 6-7 times in the committee. Block author should be calculated as:
+```rust
+author_index = slot % 1200  // Correct (committee size)
+// NOT: slot % 185           // Wrong (candidate count)
+```
+
+**Workaround**: None available in v0.3.0-alpha
+
+**Fix**: Will be addressed in v0.4-beta (see `VALIDATOR_COMMITTEE_DISCOVERY.md` for full details)
+
+**User Action**:
+- Be aware that block statistics and rankings are currently unreliable
+- Wait for v0.4-beta release for accurate attribution
+- A database migration or resync may be required when upgrading to v0.4-beta
+
+---
+
+### Minor Issues
 
 Minor warnings for unused utility functions (reserved for future features).
 

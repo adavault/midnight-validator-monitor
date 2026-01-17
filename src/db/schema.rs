@@ -43,6 +43,18 @@ CREATE TABLE IF NOT EXISTS validators (
 CREATE INDEX IF NOT EXISTS idx_validators_sidechain ON validators(sidechain_key);
 CREATE INDEX IF NOT EXISTS idx_validators_ours ON validators(is_ours);
 
+-- Committee snapshots (for historical committee composition)
+CREATE TABLE IF NOT EXISTS committee_snapshots (
+    epoch INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    aura_key TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (epoch, position)
+);
+
+CREATE INDEX IF NOT EXISTS idx_committee_epoch ON committee_snapshots(epoch);
+CREATE INDEX IF NOT EXISTS idx_committee_aura_key ON committee_snapshots(aura_key);
+
 -- Sync progress (singleton row)
 CREATE TABLE IF NOT EXISTS sync_status (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -85,6 +97,7 @@ mod tests {
 
         assert!(tables.contains(&"blocks".to_string()));
         assert!(tables.contains(&"validators".to_string()));
+        assert!(tables.contains(&"committee_snapshots".to_string()));
         assert!(tables.contains(&"sync_status".to_string()));
     }
 }

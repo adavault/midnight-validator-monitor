@@ -97,16 +97,18 @@ The application uses a modular command-based architecture where each major featu
 - Handles both Substrate standard RPC methods and Midnight-specific sidechain methods
 
 **Database Layer (`src/db/`)**
-- SQLite-based persistence with three main tables: blocks, validators, sync_status
+- SQLite-based persistence with four main tables: blocks, validators, committee_snapshots, sync_status
 - Schema includes indexes on block_hash, slot_number, epoch, author_key, timestamp
 - Block storage includes full header data, slot/epoch info, finalization status, and extrinsics count
+- `committee_snapshots` table stores the full committee (AURA keys by position) for each epoch
 - `sync_status` table is a singleton (id=1) that tracks synchronization progress
 
 **Midnight-Specific Logic (`src/midnight/`)**
 - `digest.rs` - Extracts AURA slot numbers from block digest logs (PreRuntime format: 0x06 + "aura" + slot_le_bytes)
 - `keystore.rs` - Loads Substrate keystore files and validator keys (supports both keystore directories and JSON files)
 - `registration.rs` - Checks validator registration status via `sidechain_getAriadneParameters` RPC call
-- `validators.rs` - Validator set management and registration data structures
+- `scale.rs` - SCALE decoder for AURA authorities response (committee member list)
+- `validators.rs` - Validator set management with committee fetching, historical state queries, and fallback logic for pruned nodes
 
 **Configuration System (`src/config.rs`)**
 - TOML-based configuration with three-tier priority: CLI flags > Environment variables > Config file > Defaults
@@ -151,14 +153,40 @@ The application uses a modular command-based architecture where each major featu
 
 ### Validator Registration
 Two types of validators:
-1. **Permissioned Candidates**: Static list in `permissionedCandidates` field
+1. **Permissioned Candidates**: Static list in `permissionedCandidates` field (IOG/Midnight team validators, no stake required)
 2. **Dynamic Registrations**: Runtime registrations in `candidateRegistrations` map, validated with `isValid` flag
+
+### Committee vs Candidates (Critical Distinction)
+
+**Candidates** (~185 validators): Registered validators from `sidechain_getAriadneParameters`. These are validators that MAY produce blocks.
+
+**Committee** (~1200 seats, ~50-60 unique validators): The actual block production schedule from `AuraApi_authorities`. This is an ordered list of AURA keys where:
+- Block author = `committee[slot % committee.len()]`
+- Validators can have multiple seats (stake-weighted)
+- Committee changes each epoch (~2 hours)
+- Selection is stake-weighted random (not purely top-N by stake)
+
+**Important**: A validator being registered with `isValid: true` does NOT guarantee they are in the committee. Committee selection is probabilistic based on stake.
+
+### Block Author Attribution
+
+The sync command attributes blocks to validators using:
+1. Extract slot number from AURA PreRuntime digest
+2. Fetch committee via `state_call("AuraApi_authorities", "0x", block_hash)`
+3. Calculate: `author_aura_key = committee[slot % committee.len()]`
+4. Look up validator by AURA key to get sidechain key
+5. Store sidechain key as `author_key` in blocks table
+
+**Historical State Queries**: When syncing historical blocks, the committee must be queried at that block's hash to get the correct historical committee (since committees change each epoch).
+
+**State Pruning Fallback**: Non-archive nodes prune historical state (typically keeping only ~256 blocks). When historical state is unavailable, the sync falls back to using the current committee with a warning that attribution may be inaccurate for blocks from different epochs.
 
 ### RPC Methods Used
 Standard Substrate:
 - `system_health`, `system_version`, `system_syncState`
 - `chain_getHeader`, `chain_getBlock`, `chain_getBlockHash`, `chain_getFinalizedHead`
 - `author_hasKey`
+- `state_call("AuraApi_authorities", "0x", [optional_block_hash])` - Returns SCALE-encoded committee (requires historical state for past blocks)
 
 Midnight-specific:
 - `sidechain_getStatus` - Returns epoch/slot information

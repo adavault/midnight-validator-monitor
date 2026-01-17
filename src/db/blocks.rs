@@ -1,5 +1,6 @@
 use anyhow::Result;
 use rusqlite::{params, Connection};
+use tracing;
 
 /// Block record for database storage
 #[derive(Debug, Clone)]
@@ -242,6 +243,83 @@ pub fn count_blocks_by_author_in_epoch(
         |row| row.get(0),
     )?;
     Ok(count as u64)
+}
+
+/// Store a committee snapshot for an epoch
+///
+/// This stores the complete committee (all AURA keys in order) for a specific epoch.
+/// The committee is used for correct block author attribution.
+pub fn store_committee_snapshot(
+    conn: &Connection,
+    epoch: u64,
+    committee: &[String],
+) -> Result<()> {
+    // Delete existing snapshot for this epoch (if any)
+    conn.execute(
+        "DELETE FROM committee_snapshots WHERE epoch = ?1",
+        params![epoch as i64],
+    )?;
+
+    // Insert all committee members with their positions
+    let timestamp = chrono::Utc::now().timestamp();
+    for (position, aura_key) in committee.iter().enumerate() {
+        conn.execute(
+            "INSERT INTO committee_snapshots (epoch, position, aura_key, created_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![epoch as i64, position as i64, aura_key, timestamp],
+        )?;
+    }
+
+    tracing::debug!(
+        "Stored committee snapshot for epoch {} ({} members)",
+        epoch,
+        committee.len()
+    );
+
+    Ok(())
+}
+
+/// Retrieve a committee snapshot for an epoch
+///
+/// Returns the committee in order (sorted by position).
+/// Returns None if no committee snapshot exists for this epoch.
+pub fn get_committee_snapshot(conn: &Connection, epoch: u64) -> Result<Option<Vec<String>>> {
+    let mut stmt = conn.prepare(
+        "SELECT aura_key FROM committee_snapshots
+         WHERE epoch = ?1
+         ORDER BY position ASC",
+    )?;
+
+    let rows = stmt.query_map(params![epoch as i64], |row| row.get::<_, String>(0))?;
+
+    let committee: Vec<String> = rows.collect::<std::result::Result<Vec<_>, _>>()?;
+
+    if committee.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(committee))
+    }
+}
+
+/// Get committee size for an epoch
+pub fn get_committee_size(conn: &Connection, epoch: u64) -> Result<Option<usize>> {
+    let count: Option<i64> = conn.query_row(
+        "SELECT COUNT(*) FROM committee_snapshots WHERE epoch = ?1",
+        params![epoch as i64],
+        |row| row.get(0),
+    )?;
+
+    Ok(count.and_then(|c| if c > 0 { Some(c as usize) } else { None }))
+}
+
+/// List all epochs with stored committee snapshots
+pub fn list_committee_epochs(conn: &Connection) -> Result<Vec<u64>> {
+    let mut stmt = conn.prepare("SELECT DISTINCT epoch FROM committee_snapshots ORDER BY epoch DESC")?;
+
+    let rows = stmt.query_map([], |row| row.get::<_, i64>(0))?;
+
+    rows.map(|r| r.map(|n| n as u64).map_err(Into::into))
+        .collect()
 }
 
 #[cfg(test)]
