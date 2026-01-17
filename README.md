@@ -2,6 +2,8 @@
 
 A production-ready Rust CLI tool for monitoring and managing Midnight blockchain validator nodes.
 
+![MVM Dashboard](assets/screenshots/dashboard.png)
+
 ## Features
 
 - **Status Monitoring**: Node health, sync status, peer count, block production
