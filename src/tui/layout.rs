@@ -1,29 +1,29 @@
 //! Responsive layout system for TUI
 //!
-//! Provides dynamic terminal scaling with three size categories:
-//! - Small: Compact layouts for narrow terminals
-//! - Medium: Balanced layouts for standard terminals
-//! - Large: Expanded layouts for wide terminals
+//! Provides dynamic terminal scaling with two size categories:
+//! - Medium: Standard layouts for typical terminals (< 120 cols) - truncated keys
+//! - Large: Expanded layouts with full keys (>= 120 cols)
+//!
+//! The 120 col threshold is based on the widest content line (block list):
+//! `#12345678  slot 123456789012  epoch 1234  ✓ author: 0x...66_char_key`
+//! which requires 118 chars + 2 for borders = 120 cols to fit without truncation.
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
 /// Screen size categories for responsive layouts
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ScreenSize {
-    /// Small: < 100 cols or < 30 rows
-    Small,
-    /// Medium: 100-150 cols and 30-50 rows
+    /// Medium: < 120 cols - truncated keys (23 chars: 12...8)
     Medium,
-    /// Large: > 150 cols or > 50 rows
+    /// Large: >= 120 cols - full keys (66 chars)
     Large,
 }
 
 impl ScreenSize {
     /// Determine screen size from terminal dimensions
-    pub fn from_dimensions(width: u16, height: u16) -> Self {
-        if width < 100 || height < 30 {
-            ScreenSize::Small
-        } else if width > 150 || height > 50 {
+    /// Threshold at 120 cols where full 66-char keys fit in block list
+    pub fn from_dimensions(width: u16, _height: u16) -> Self {
+        if width >= 120 {
             ScreenSize::Large
         } else {
             ScreenSize::Medium
@@ -51,101 +51,35 @@ impl ResponsiveLayout {
 
     /// Get the main layout (title bar, content, status bar)
     pub fn main_layout(&self, area: Rect) -> Vec<Rect> {
-        let title_height = match self.size {
-            ScreenSize::Small => 1, // Minimal title bar
-            ScreenSize::Medium => 3,
-            ScreenSize::Large => 3,
-        };
-
-        let status_height = match self.size {
-            ScreenSize::Small => 1, // Minimal status bar
-            ScreenSize::Medium => 3,
-            ScreenSize::Large => 3,
-        };
-
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(title_height),
-                Constraint::Min(0),
-                Constraint::Length(status_height),
+                Constraint::Length(3),  // Title bar
+                Constraint::Min(0),     // Content
+                Constraint::Length(3),  // Status bar
             ])
             .split(area)
             .to_vec()
     }
 
     /// Get the dashboard layout constraints
+    /// Heights are fixed based on content: Network Status (4 lines + 2 border = 6),
+    /// Our Validator (6 lines for 1 validator with 3 keys + 2 border = 8)
     pub fn dashboard_layout(&self, area: Rect) -> Vec<Rect> {
-        match self.size {
-            ScreenSize::Small => {
-                // Stack everything vertically for small screens
-                Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([
-                        Constraint::Length(5),  // Network status (compact + sync)
-                        Constraint::Length(5),  // Our validators (compact)
-                        Constraint::Min(0),     // Recent blocks
-                    ])
-                    .split(area)
-                    .to_vec()
-            }
-            ScreenSize::Medium => {
-                // Standard layout
-                Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([
-                        Constraint::Length(6),  // Network status + sync progress
-                        Constraint::Length(10), // Our validators + all 3 public keys
-                        Constraint::Min(0),     // Recent blocks
-                    ])
-                    .split(area)
-                    .to_vec()
-            }
-            ScreenSize::Large => {
-                // Expanded layout with more detail
-                Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([
-                        Constraint::Length(7),   // Network status + sync progress
-                        Constraint::Length(12),  // Our validators + all 3 public keys
-                        Constraint::Min(0),      // Recent blocks
-                    ])
-                    .split(area)
-                    .to_vec()
-            }
-        }
-    }
-
-    /// Get the enhanced dashboard layout with side-by-side panels (for large screens)
-    pub fn dashboard_wide_layout(&self, area: Rect) -> Option<(Vec<Rect>, Vec<Rect>)> {
-        if self.size != ScreenSize::Large || self.width < 160 {
-            return None;
-        }
-
-        // Top row: Network status (left) and Our validators (right)
-        let top_chunks = Layout::default()
+        Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(8),  // Top row
-                Constraint::Min(0),     // Recent blocks
+                Constraint::Length(6),  // Network status: 4 content lines + 2 border
+                Constraint::Length(8),  // Our validator: 3 header + 3 keys + 2 border
+                Constraint::Min(0),     // Recent blocks: fills remaining space
             ])
-            .split(area);
-
-        let top_horizontal = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(50),
-                Constraint::Percentage(50),
-            ])
-            .split(top_chunks[0]);
-
-        Some((top_horizontal.to_vec(), vec![top_chunks[1]]))
+            .split(area)
+            .to_vec()
     }
 
     /// Get optimal block count to display based on screen size
     pub fn blocks_to_display(&self) -> usize {
         match self.size {
-            ScreenSize::Small => 10,
             ScreenSize::Medium => 20,
             ScreenSize::Large => 30,
         }
@@ -154,7 +88,6 @@ impl ResponsiveLayout {
     /// Get optimal validator count to display
     pub fn validators_to_display(&self) -> usize {
         match self.size {
-            ScreenSize::Small => 15,
             ScreenSize::Medium => 25,
             ScreenSize::Large => 50,
         }
@@ -163,9 +96,8 @@ impl ResponsiveLayout {
     /// Determine if we should show the full key or truncated version
     pub fn key_display_length(&self) -> KeyDisplayMode {
         match self.size {
-            ScreenSize::Small => KeyDisplayMode::VeryShort,  // 8 chars
-            ScreenSize::Medium => KeyDisplayMode::Short,     // 12...8
-            ScreenSize::Large => KeyDisplayMode::Full,       // Full key
+            ScreenSize::Medium => KeyDisplayMode::Short,  // 12...8
+            ScreenSize::Large => KeyDisplayMode::Full,    // Full key
         }
     }
 
@@ -177,12 +109,6 @@ impl ResponsiveLayout {
     /// Get column widths for block list
     pub fn block_list_columns(&self) -> BlockListColumns {
         match self.size {
-            ScreenSize::Small => BlockListColumns {
-                show_slot: false,
-                show_epoch: true,
-                show_extrinsics: false,
-                author_width: 14, // Short display
-            },
             ScreenSize::Medium => BlockListColumns {
                 show_slot: true,
                 show_epoch: true,
@@ -201,11 +127,6 @@ impl ResponsiveLayout {
     /// Get column widths for validator list
     pub fn validator_list_columns(&self) -> ValidatorListColumns {
         match self.size {
-            ScreenSize::Small => ValidatorListColumns {
-                key_width: 20,
-                show_status: false,
-                show_registration: false,
-            },
             ScreenSize::Medium => ValidatorListColumns {
                 key_width: 66,
                 show_status: true,
@@ -223,8 +144,6 @@ impl ResponsiveLayout {
 /// Key display mode based on screen size
 #[derive(Debug, Clone, Copy)]
 pub enum KeyDisplayMode {
-    /// Very short: first 4...last 4
-    VeryShort,
     /// Short: first 12...last 8
     Short,
     /// Full: entire key
@@ -236,13 +155,6 @@ impl KeyDisplayMode {
     pub fn format(&self, key: &str) -> String {
         let key = key.trim();
         match self {
-            KeyDisplayMode::VeryShort => {
-                if key.len() > 12 {
-                    format!("{}...{}", &key[..6], &key[key.len()-4..])
-                } else {
-                    key.to_string()
-                }
-            }
             KeyDisplayMode::Short => {
                 if key.len() > 22 {
                     format!("{}...{}", &key[..12], &key[key.len()-8..])
@@ -278,29 +190,20 @@ mod tests {
 
     #[test]
     fn test_screen_size_detection() {
-        // Small screens
-        assert_eq!(ScreenSize::from_dimensions(80, 24), ScreenSize::Small);
-        assert_eq!(ScreenSize::from_dimensions(99, 40), ScreenSize::Small);
-        assert_eq!(ScreenSize::from_dimensions(120, 29), ScreenSize::Small);
+        // Medium screens (< 120 cols) - truncated keys
+        assert_eq!(ScreenSize::from_dimensions(80, 24), ScreenSize::Medium);
+        assert_eq!(ScreenSize::from_dimensions(100, 40), ScreenSize::Medium);
+        assert_eq!(ScreenSize::from_dimensions(119, 50), ScreenSize::Medium);
 
-        // Medium screens
-        assert_eq!(ScreenSize::from_dimensions(100, 30), ScreenSize::Medium);
-        assert_eq!(ScreenSize::from_dimensions(120, 40), ScreenSize::Medium);
-        assert_eq!(ScreenSize::from_dimensions(150, 50), ScreenSize::Medium);
-
-        // Large screens
-        assert_eq!(ScreenSize::from_dimensions(151, 40), ScreenSize::Large);
-        assert_eq!(ScreenSize::from_dimensions(120, 51), ScreenSize::Large);
+        // Large screens (>= 120 cols) - full keys fit
+        assert_eq!(ScreenSize::from_dimensions(120, 40), ScreenSize::Large);
+        assert_eq!(ScreenSize::from_dimensions(150, 40), ScreenSize::Large);
         assert_eq!(ScreenSize::from_dimensions(200, 60), ScreenSize::Large);
     }
 
     #[test]
     fn test_key_display_mode() {
         let test_key = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
-
-        let very_short = KeyDisplayMode::VeryShort.format(test_key);
-        assert!(very_short.len() < 20);
-        assert!(very_short.contains("..."));
 
         let short = KeyDisplayMode::Short.format(test_key);
         assert!(short.len() < 30);

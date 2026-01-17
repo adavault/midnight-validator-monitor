@@ -319,22 +319,19 @@ impl App {
         self.state.validators = db.get_all_validators()?;
         self.state.our_validators = db.get_our_validators()?;
 
-        // Calculate our blocks in current epoch
-        // NOTE: Blocks are stored with mainchain_epoch, not sidechain_epoch
+        // Calculate our blocks in current epoch using database query
+        // NOTE: Blocks are stored with mainchain_epoch and sidechain_key as author
         let current_epoch = self.state.mainchain_epoch;
         if current_epoch > 0 {
             let mut our_blocks_this_epoch: u64 = 0;
             for v in &self.state.our_validators {
-                // Blocks are stored with sidechain_key as author_key
-                let sidechain_key = &v.sidechain_key;
-                // Count blocks produced by this validator in the current epoch
-                // Note: For now we count from recent_blocks; a more accurate count
-                // would require a database query for blocks in the epoch range
-                let count = self.state.recent_blocks.iter()
-                    .filter(|b| b.epoch == current_epoch &&
-                            b.author_key.as_ref() == Some(sidechain_key))
-                    .count() as u64;
-                our_blocks_this_epoch += count;
+                // Query database for blocks by this validator in current epoch
+                match db.count_blocks_by_author_in_epoch(&v.sidechain_key, current_epoch) {
+                    Ok(count) => our_blocks_this_epoch += count,
+                    Err(e) => {
+                        tracing::warn!("Failed to count epoch blocks for {}: {}", v.sidechain_key, e);
+                    }
+                }
             }
             self.state.epoch_progress.our_blocks_this_epoch = our_blocks_this_epoch;
 

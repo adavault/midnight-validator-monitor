@@ -74,11 +74,11 @@ Tip: If you installed MVM, the database should be at /opt/midnight/mvm/data/mvm.
         error!("Initial update failed: {}", e);
     }
 
-    // Create event handler
-    let event_handler = EventHandler::new(Duration::from_millis(refresh_interval));
+    // Create event handler with 1-second tick for UI updates
+    let event_handler = EventHandler::new(Duration::from_millis(1000));
 
-    // Run the TUI loop
-    let res = run_tui(&mut terminal, &mut app, &rpc, &db, &event_handler).await;
+    // Run the TUI loop (data refresh at configured interval)
+    let res = run_tui(&mut terminal, &mut app, &rpc, &db, &event_handler, refresh_interval).await;
 
     // Restore terminal (always, even on error)
     let _ = disable_raw_mode();
@@ -104,9 +104,12 @@ async fn run_tui(
     rpc: &RpcClient,
     db: &Database,
     event_handler: &EventHandler,
+    data_refresh_interval_ms: u64,
 ) -> Result<()> {
+    let data_refresh_interval = Duration::from_millis(data_refresh_interval_ms);
+
     loop {
-        // Render UI
+        // Render UI (every tick - 1 second)
         terminal.draw(|f| crate::tui::render(f, app))?;
 
         // Handle events
@@ -117,10 +120,13 @@ async fn run_tui(
                 }
             }
             Event::Tick | Event::Resize => {
-                // Update data on tick
-                if let Err(e) = app.update(rpc, db).await {
-                    error!("Update failed: {}", e);
+                // Only fetch new data at the configured refresh interval
+                if app.last_update.elapsed() >= data_refresh_interval {
+                    if let Err(e) = app.update(rpc, db).await {
+                        error!("Update failed: {}", e);
+                    }
                 }
+                // UI still redraws every tick to update the "Updated Xs ago" counter
             }
         }
 

@@ -6,7 +6,7 @@ use ratatui::style::Color;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Theme {
     Midnight,
-    Daytime,
+    Midday,
 }
 
 impl Theme {
@@ -14,7 +14,7 @@ impl Theme {
     pub fn primary(&self) -> Color {
         match self {
             Theme::Midnight => Color::Rgb(138, 102, 255), // Purple/Violet
-            Theme::Daytime => Color::Rgb(75, 50, 180),    // Darker purple for light mode
+            Theme::Midday => Color::Rgb(0, 150, 200),     // Vibrant teal/cyan
         }
     }
 
@@ -22,7 +22,7 @@ impl Theme {
     pub fn secondary(&self) -> Color {
         match self {
             Theme::Midnight => Color::Rgb(102, 153, 255), // Light blue
-            Theme::Daytime => Color::Rgb(50, 100, 200),   // Darker blue for light mode
+            Theme::Midday => Color::Rgb(65, 105, 225),    // Royal blue
         }
     }
 
@@ -30,7 +30,7 @@ impl Theme {
     pub fn success(&self) -> Color {
         match self {
             Theme::Midnight => Color::Rgb(120, 255, 180), // Mint green
-            Theme::Daytime => Color::Rgb(0, 150, 80),     // Darker green for light mode
+            Theme::Midday => Color::Rgb(0, 180, 100),     // Vibrant emerald
         }
     }
 
@@ -38,7 +38,7 @@ impl Theme {
     pub fn warning(&self) -> Color {
         match self {
             Theme::Midnight => Color::Rgb(255, 200, 100), // Warm yellow/orange
-            Theme::Daytime => Color::Rgb(200, 120, 0),    // Darker orange for light mode
+            Theme::Midday => Color::Rgb(255, 140, 0),     // Bright orange
         }
     }
 
@@ -46,7 +46,7 @@ impl Theme {
     pub fn error(&self) -> Color {
         match self {
             Theme::Midnight => Color::Rgb(255, 100, 120), // Soft red
-            Theme::Daytime => Color::Rgb(200, 0, 40),     // Darker red for light mode
+            Theme::Midday => Color::Rgb(220, 50, 80),     // Vibrant coral red
         }
     }
 
@@ -54,23 +54,23 @@ impl Theme {
     pub fn muted(&self) -> Color {
         match self {
             Theme::Midnight => Color::Rgb(150, 150, 170), // Light gray-purple
-            Theme::Daytime => Color::Rgb(100, 100, 120),  // Darker gray for light mode
+            Theme::Midday => Color::Rgb(100, 115, 140),   // Medium slate (brighter)
         }
     }
 
     /// Highlight color for selected items
     pub fn highlight(&self) -> Color {
         match self {
-            Theme::Midnight => Color::Rgb(60, 45, 90),   // Dark purple
-            Theme::Daytime => Color::Rgb(220, 220, 240), // Light purple-gray
+            Theme::Midnight => Color::Rgb(60, 45, 90),    // Dark purple
+            Theme::Midday => Color::Rgb(210, 235, 255),   // Light sky blue
         }
     }
 
     /// Border color
     pub fn border(&self) -> Color {
         match self {
-            Theme::Midnight => Color::Rgb(100, 80, 140), // Purple-gray
-            Theme::Daytime => Color::Rgb(180, 180, 200), // Light gray
+            Theme::Midnight => Color::Rgb(100, 80, 140),  // Purple-gray
+            Theme::Midday => Color::Rgb(140, 170, 200),   // Light steel blue
         }
     }
 
@@ -78,7 +78,7 @@ impl Theme {
     pub fn title(&self) -> Color {
         match self {
             Theme::Midnight => Color::Rgb(180, 150, 255), // Bright purple
-            Theme::Daytime => Color::Rgb(60, 40, 150),    // Dark purple
+            Theme::Midday => Color::Rgb(0, 140, 200),     // Bright teal
         }
     }
 
@@ -86,7 +86,7 @@ impl Theme {
     pub fn ours(&self) -> Color {
         match self {
             Theme::Midnight => Color::Rgb(255, 215, 100), // Gold
-            Theme::Daytime => Color::Rgb(200, 140, 0),    // Dark gold
+            Theme::Midday => Color::Rgb(230, 140, 0),     // Amber orange
         }
     }
 
@@ -94,7 +94,7 @@ impl Theme {
     pub fn epoch(&self) -> Color {
         match self {
             Theme::Midnight => Color::Rgb(150, 200, 255), // Light cyan-blue
-            Theme::Daytime => Color::Rgb(40, 80, 150),    // Dark blue
+            Theme::Midday => Color::Rgb(130, 80, 200),    // Bright purple (readable)
         }
     }
 
@@ -107,23 +107,23 @@ impl Theme {
     pub fn text(&self) -> Color {
         match self {
             Theme::Midnight => Color::Rgb(220, 220, 230), // Light gray
-            Theme::Daytime => Color::Rgb(40, 40, 50),     // Dark gray
+            Theme::Midday => Color::Rgb(50, 60, 80),      // Medium navy (brighter)
         }
     }
 
     /// Toggle to the other theme
     pub fn toggle(&self) -> Theme {
         match self {
-            Theme::Midnight => Theme::Daytime,
-            Theme::Daytime => Theme::Midnight,
+            Theme::Midnight => Theme::Midday,
+            Theme::Midday => Theme::Midnight,
         }
     }
 
     /// Get theme name as string
     pub fn name(&self) -> &'static str {
         match self {
-            Theme::Midnight => "Midnight Mode",
-            Theme::Daytime => "Daytime Mode",
+            Theme::Midnight => "Midnight Theme",
+            Theme::Midday => "Midday Theme",
         }
     }
 }

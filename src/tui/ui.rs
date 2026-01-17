@@ -31,134 +31,94 @@ pub fn render(f: &mut Frame, app: &App) {
     render_status_bar(f, app, chunks[2], &layout);
 }
 
-fn render_title_bar(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout) {
+fn render_title_bar(f: &mut Frame, app: &App, area: Rect, _layout: &ResponsiveLayout) {
     let theme = app.theme;
 
-    let title = match layout.size {
-        ScreenSize::Small => {
-            // Compact title for small screens - no borders, minimal info
-            vec![
-                Span::styled("MVM", Style::default().fg(theme.title()).add_modifier(Modifier::BOLD)),
-                Span::raw(" "),
-                Span::styled(
-                    match app.view_mode {
-                        ViewMode::Dashboard => "Dash",
-                        ViewMode::Blocks => "Blks",
-                        ViewMode::Validators => "Vals",
-                        ViewMode::Performance => "Perf",
-                        ViewMode::Help => "Help",
-                    },
-                    Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD),
-                ),
-            ]
-        }
-        _ => {
-            // Standard title bar
-            vec![
-                Span::styled("Midnight Validator Monitor", Style::default().fg(theme.title()).add_modifier(Modifier::BOLD)),
-                Span::styled(" v0.5.0", Style::default().fg(theme.muted())),
-                Span::raw("  |  "),
-                Span::styled(
-                    match app.view_mode {
-                        ViewMode::Dashboard => "[1] Dashboard",
-                        ViewMode::Blocks => "[2] Blocks",
-                        ViewMode::Validators => "[3] Validators",
-                        ViewMode::Performance => "[4] Performance",
-                        ViewMode::Help => "[?] Help",
-                    },
-                    Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD),
-                ),
-                Span::raw("  |  "),
-                Span::styled(theme.name(), Style::default().fg(theme.secondary())),
-            ]
-        }
-    };
+    let title = vec![
+        Span::styled("Midnight Validator Monitor", Style::default().fg(theme.title()).add_modifier(Modifier::BOLD)),
+        Span::styled(" v0.5.1", Style::default().fg(theme.muted())),
+        Span::raw("  |  "),
+        Span::styled(
+            match app.view_mode {
+                ViewMode::Dashboard => "[1] Dashboard",
+                ViewMode::Blocks => "[2] Blocks",
+                ViewMode::Validators => "[3] Validators",
+                ViewMode::Performance => "[4] Performance",
+                ViewMode::Help => "[?] Help",
+            },
+            Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD),
+        ),
+    ];
 
-    let title_paragraph = if layout.size == ScreenSize::Small {
-        // No borders for small screens
-        Paragraph::new(Line::from(title))
-            .style(Style::default().bg(theme.border()))
-            .alignment(Alignment::Center)
-    } else {
-        Paragraph::new(Line::from(title))
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border())))
-            .alignment(Alignment::Left)
-    };
+    let title_paragraph = Paragraph::new(Line::from(title))
+        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border())))
+        .alignment(Alignment::Left);
 
     f.render_widget(title_paragraph, area);
 }
 
-fn render_status_bar(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout) {
+fn render_status_bar(f: &mut Frame, app: &App, area: Rect, _layout: &ResponsiveLayout) {
+    use ratatui::layout::{Constraint, Direction, Layout};
+
     let theme = app.theme;
     let since_update = app.last_update.elapsed().as_secs();
 
-    let status_text = if let Some(ref err) = app.state.last_error {
+    // Standard status bar: left-aligned status with right-aligned theme name
+    let inner_area = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme.border()))
+        .inner(area);
+
+    // Render the border block
+    let border_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme.border()));
+    f.render_widget(border_block, area);
+
+    // Split inner area: left for status, right for theme name
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(0), Constraint::Length(18)])
+        .split(inner_area);
+
+    // Left side: status info
+    let left_text = if let Some(ref err) = app.state.last_error {
         vec![
             Span::styled("ERR: ", Style::default().fg(theme.error()).add_modifier(Modifier::BOLD)),
-            Span::styled(
-                if layout.size == ScreenSize::Small && err.len() > 30 {
-                    format!("{}...", &err[..27])
-                } else {
-                    err.clone()
-                },
-                Style::default().fg(theme.error())
-            ),
+            Span::styled(err.clone(), Style::default().fg(theme.error())),
         ]
     } else {
-        match layout.size {
-            ScreenSize::Small => {
-                // Minimal status for small screens
-                vec![
-                    Span::styled("●", Style::default().fg(theme.success())),
-                    Span::styled(format!(" {}s ", since_update), Style::default().fg(theme.text())),
-                    Span::styled("Q", Style::default().fg(theme.primary())),
-                    Span::styled(":quit ", Style::default().fg(theme.muted())),
-                    Span::styled("?", Style::default().fg(theme.primary())),
-                    Span::styled(":help", Style::default().fg(theme.muted())),
-                ]
-            }
-            _ => {
-                // Standard status bar
-                vec![
-                    Span::styled("●", Style::default().fg(theme.success())),
-                    Span::styled(format!(" Synced  |  Updated {}s ago  |  ", since_update), Style::default().fg(theme.text())),
-                    Span::styled("[Q]", Style::default().fg(theme.primary())),
-                    Span::styled(" Quit  ", Style::default().fg(theme.muted())),
-                    Span::styled("[1-4]", Style::default().fg(theme.primary())),
-                    Span::styled(" Views  ", Style::default().fg(theme.muted())),
-                    Span::styled("[T]", Style::default().fg(theme.primary())),
-                    Span::styled(" Theme  ", Style::default().fg(theme.muted())),
-                    Span::styled("[?]", Style::default().fg(theme.primary())),
-                    Span::styled(" Help", Style::default().fg(theme.muted())),
-                ]
-            }
-        }
+        vec![
+            Span::styled("●", Style::default().fg(theme.success())),
+            Span::styled(format!(" Synced  |  Updated {}s ago  |  ", since_update), Style::default().fg(theme.text())),
+            Span::styled("[Q]", Style::default().fg(theme.primary())),
+            Span::styled(" Quit  ", Style::default().fg(theme.muted())),
+            Span::styled("[1-4]", Style::default().fg(theme.primary())),
+            Span::styled(" Views  ", Style::default().fg(theme.muted())),
+            Span::styled("[T]", Style::default().fg(theme.primary())),
+            Span::styled(" Theme  ", Style::default().fg(theme.muted())),
+            Span::styled("[?]", Style::default().fg(theme.primary())),
+            Span::styled(" Help", Style::default().fg(theme.muted())),
+        ]
     };
 
-    let status_paragraph = if layout.size == ScreenSize::Small {
-        Paragraph::new(Line::from(status_text))
-            .style(Style::default().bg(theme.border()))
-            .alignment(Alignment::Center)
-    } else {
-        Paragraph::new(Line::from(status_text))
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border())))
-            .alignment(Alignment::Left)
-    };
+    let left_paragraph = Paragraph::new(Line::from(left_text))
+        .alignment(Alignment::Left);
+    f.render_widget(left_paragraph, chunks[0]);
 
-    f.render_widget(status_paragraph, area);
+    // Right side: theme name
+    let right_text = Line::from(vec![
+        Span::styled(theme.name(), Style::default().fg(theme.secondary())),
+        Span::raw(" "),
+    ]);
+    let right_paragraph = Paragraph::new(right_text)
+        .alignment(Alignment::Right);
+    f.render_widget(right_paragraph, chunks[1]);
 }
 
 fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout) {
     let theme = app.theme;
     let key_mode = layout.key_display_length();
-
-    // Check for wide layout (side-by-side panels for large screens)
-    if let Some((top_panels, bottom_panels)) = layout.dashboard_wide_layout(area) {
-        render_dashboard_wide(f, app, top_panels, bottom_panels, layout);
-        return;
-    }
-
-    // Standard vertical layout
     let chunks = layout.dashboard_layout(area);
 
     // Network status - responsive based on screen size with epoch progress
@@ -168,7 +128,6 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
     // Create epoch progress bar
     let epoch_progress = &app.state.epoch_progress;
     let progress_width = match layout.size {
-        ScreenSize::Small => 10,
         ScreenSize::Medium => 20,
         ScreenSize::Large => 30,
     };
@@ -182,7 +141,6 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
     // Build sync progress bar
     let sync = &app.state.sync_progress;
     let sync_bar_width = match layout.size {
-        ScreenSize::Small => 10,
         ScreenSize::Medium => 20,
         ScreenSize::Large => 25,
     };
@@ -198,115 +156,68 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         ("⟳", theme.warning())
     };
 
-    let network_text = match layout.size {
-        ScreenSize::Small => {
-            // Compact network status for small screens
-            let mut lines = vec![
-                Line::from(vec![
-                    Span::styled(health_indicator, Style::default().fg(health_color)),
-                    Span::raw(" "),
-                    Span::styled(format!("#{}", app.state.chain_tip), Style::default().fg(theme.block_number())),
-                    Span::raw(" "),
-                    Span::styled(format!("P:{}", app.state.peer_count), Style::default().fg(theme.muted())),
-                ]),
-            ];
-            // Show sync progress or "Synced"
-            if sync.is_synced {
-                lines.push(Line::from(vec![
-                    Span::styled("Sync:", Style::default().fg(theme.muted())),
-                    Span::styled(format!("{} Synced", sync_icon), Style::default().fg(sync_color)),
-                ]));
-            } else {
-                lines.push(Line::from(vec![
-                    Span::styled("Sync:", Style::default().fg(theme.muted())),
-                    Span::styled(sync_bar.clone(), Style::default().fg(theme.warning())),
-                    Span::styled(format!(" {:.0}%", sync.sync_percent), Style::default().fg(theme.text())),
-                ]));
-            }
-            lines.push(Line::from(vec![
-                Span::styled("E:", Style::default().fg(theme.muted())),
-                Span::styled(format!("{}", app.state.sidechain_epoch), Style::default().fg(theme.epoch())),
-                Span::raw(" "),
-                Span::styled(progress_bar.clone(), Style::default().fg(theme.primary())),
-                Span::styled(format!(" {:.0}%", epoch_progress.progress_percent), Style::default().fg(theme.text())),
-            ]));
-            lines
-        }
-        _ => {
-            // Standard network status with enhanced info
-            let mut lines = vec![
-                Line::from(vec![
-                    Span::styled(health_indicator, Style::default().fg(health_color)),
-                    Span::styled(" Health: ", Style::default().fg(theme.muted())),
-                    Span::styled(
-                        if app.state.node_health { "OK" } else { "SYNCING" },
-                        Style::default().fg(health_color)
-                    ),
-                    Span::raw("      "),
-                    Span::styled("Peers: ", Style::default().fg(theme.muted())),
-                    Span::styled(format!("{}", app.state.peer_count), Style::default().fg(theme.text())),
-                    Span::raw("      "),
-                    Span::styled("Block: ", Style::default().fg(theme.muted())),
-                    Span::styled(format!("#{}", app.state.chain_tip), Style::default().fg(theme.block_number())),
-                    Span::styled(
-                        if app.state.chain_tip == app.state.finalized_block { " (finalized)" } else { "" },
-                        Style::default().fg(theme.success())
-                    ),
-                ]),
-            ];
+    // Standard network status with enhanced info (same for Medium and Large)
+    let mut network_text = vec![
+        Line::from(vec![
+            Span::styled(health_indicator, Style::default().fg(health_color)),
+            Span::styled(" Health: ", Style::default().fg(theme.muted())),
+            Span::styled(
+                if app.state.node_health { "OK" } else { "SYNCING" },
+                Style::default().fg(health_color)
+            ),
+            Span::raw("      "),
+            Span::styled("Peers: ", Style::default().fg(theme.muted())),
+            Span::styled(format!("{}", app.state.peer_count), Style::default().fg(theme.text())),
+            Span::raw("      "),
+            Span::styled("Block: ", Style::default().fg(theme.muted())),
+            Span::styled(format!("#{}", app.state.chain_tip), Style::default().fg(theme.block_number())),
+            Span::styled(
+                if app.state.chain_tip == app.state.finalized_block { " (finalized)" } else { "" },
+                Style::default().fg(theme.success())
+            ),
+        ]),
+    ];
 
-            // Node sync status line
-            if sync.is_synced {
-                lines.push(Line::from(vec![
-                    Span::styled("Node Sync:     ", Style::default().fg(theme.muted())),
-                    Span::styled(format!("{} Synced", sync_icon), Style::default().fg(sync_color)),
-                    Span::raw("      "),
-                    Span::styled("Node: ", Style::default().fg(theme.muted())),
-                    Span::styled(&app.state.node_name, Style::default().fg(theme.secondary())),
-                ]));
-            } else {
-                lines.push(Line::from(vec![
-                    Span::styled("Node Sync:     ", Style::default().fg(theme.muted())),
-                    Span::styled(sync_bar.clone(), Style::default().fg(theme.warning())),
-                    Span::styled(format!(" {:.1}%", sync.sync_percent), Style::default().fg(theme.text())),
-                    Span::styled(format!("  ({} blocks behind)", sync.blocks_remaining), Style::default().fg(theme.muted())),
-                ]));
-            }
-
-            lines.push(Line::from(vec![
-                Span::styled("Mainchain: ", Style::default().fg(theme.muted())),
-                Span::styled(format!("epoch {}", app.state.mainchain_epoch), Style::default().fg(theme.epoch())),
-                Span::raw("    "),
-                Span::styled("Sidechain: ", Style::default().fg(theme.muted())),
-                Span::styled(format!("epoch {}", app.state.sidechain_epoch), Style::default().fg(theme.epoch())),
-                Span::raw("  "),
-                Span::styled(format!("slot {}", app.state.sidechain_slot), Style::default().fg(theme.muted())),
-            ]));
-            lines.push(Line::from(vec![
-                Span::styled("Epoch Progress: ", Style::default().fg(theme.muted())),
-                Span::styled(progress_bar.clone(), Style::default().fg(theme.primary())),
-                Span::styled(format!(" {:.1}%", epoch_progress.progress_percent), Style::default().fg(theme.text())),
-                Span::raw("   "),
-                Span::styled("Database: ", Style::default().fg(theme.muted())),
-                Span::styled(format!("{} blocks", app.state.total_blocks), Style::default().fg(theme.text())),
-            ]));
-            lines
-        }
-    };
-
-    let network_widget = if layout.size == ScreenSize::Small {
-        Paragraph::new(network_text)
-            .block(Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme.border()))
-                .title(Span::styled("Net", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))))
+    // Node sync status line
+    if sync.is_synced {
+        network_text.push(Line::from(vec![
+            Span::styled("Node Sync:     ", Style::default().fg(theme.muted())),
+            Span::styled(format!("{} Synced", sync_icon), Style::default().fg(sync_color)),
+            Span::raw("      "),
+            Span::styled("Node: ", Style::default().fg(theme.muted())),
+            Span::styled(&app.state.node_name, Style::default().fg(theme.secondary())),
+        ]));
     } else {
-        Paragraph::new(network_text)
-            .block(Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme.border()))
-                .title(Span::styled("Network Status", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))))
-    };
+        network_text.push(Line::from(vec![
+            Span::styled("Node Sync:     ", Style::default().fg(theme.muted())),
+            Span::styled(sync_bar.clone(), Style::default().fg(theme.warning())),
+            Span::styled(format!(" {:.1}%", sync.sync_percent), Style::default().fg(theme.text())),
+            Span::styled(format!("  ({} blocks behind)", sync.blocks_remaining), Style::default().fg(theme.muted())),
+        ]));
+    }
+
+    network_text.push(Line::from(vec![
+        Span::styled("Mainchain:  ", Style::default().fg(theme.muted())),
+        Span::styled(format!("epoch {}", app.state.mainchain_epoch), Style::default().fg(theme.epoch())),
+        Span::raw("  "),
+        Span::styled(progress_bar.clone(), Style::default().fg(theme.primary())),
+        Span::styled(format!(" {:.1}%", epoch_progress.progress_percent), Style::default().fg(theme.text())),
+    ]));
+    network_text.push(Line::from(vec![
+        Span::styled("Sidechain:  ", Style::default().fg(theme.muted())),
+        Span::styled(format!("epoch {}", app.state.sidechain_epoch), Style::default().fg(theme.epoch())),
+        Span::raw("  "),
+        Span::styled(format!("slot {}", app.state.sidechain_slot), Style::default().fg(theme.muted())),
+        Span::raw("      "),
+        Span::styled("MVM Db: ", Style::default().fg(theme.muted())),
+        Span::styled(format!("{} blocks", app.state.total_blocks), Style::default().fg(theme.text())),
+    ]));
+
+    let network_widget = Paragraph::new(network_text)
+        .block(Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(theme.border()))
+            .title(Span::styled("Network Status", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))));
     f.render_widget(network_widget, chunks[0]);
 
     // Our validators - responsive with epoch block predictions
@@ -328,11 +239,8 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
             "?"
         };
 
-        let max_validators = match layout.size {
-            ScreenSize::Small => 2,
-            ScreenSize::Medium => 3,
-            ScreenSize::Large => 5,
-        };
+        // Panel height (8) fits 1 validator with all 3 keys (3 header + 3 key lines + 2 border)
+        let max_validators = 1;
 
         // Committee election status
         let (committee_icon, committee_color) = if app.state.committee_elected {
@@ -341,112 +249,73 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
             ("✗", theme.warning())
         };
 
-        let mut lines = match layout.size {
-            ScreenSize::Small => {
-                vec![
-                    Line::from(vec![
-                        Span::styled("N:", Style::default().fg(theme.muted())),
-                        Span::styled(format!("{}", app.state.our_validators_count), Style::default().fg(theme.success())),
-                        Span::raw(" "),
-                        Span::styled("Tot:", Style::default().fg(theme.muted())),
-                        Span::styled(format!("{}", total_our_blocks), Style::default().fg(theme.success())),
-                        Span::raw(" "),
-                        Span::styled(format!("{:.1}%", share), Style::default().fg(theme.success())),
-                    ]),
-                    Line::from(vec![
-                        Span::styled("Elected:", Style::default().fg(theme.muted())),
-                        Span::styled(format!("{}", committee_icon), Style::default().fg(committee_color)),
-                        Span::raw(" "),
-                        Span::styled("Epoch:", Style::default().fg(theme.muted())),
-                        Span::styled(format!("{}", epoch_blocks), Style::default().fg(theme.primary())),
-                        Span::styled(format!("/{:.0}", expected_blocks), Style::default().fg(theme.muted())),
-                    ]),
-                ]
+        // Committee status text (same for Medium and Large)
+        let committee_status = if app.state.committee_elected {
+            if app.state.committee_seats > 1 {
+                format!("{} Elected ({} seats in {} member committee)", committee_icon, app.state.committee_seats, app.state.committee_size)
+            } else {
+                format!("{} Elected ({} seat in {} member committee)", committee_icon, app.state.committee_seats, app.state.committee_size)
             }
-            _ => {
-                // Committee status text
-                let committee_status = if app.state.committee_elected {
-                    if app.state.committee_seats > 1 {
-                        format!("{} Elected ({} seats in {} member committee)", committee_icon, app.state.committee_seats, app.state.committee_size)
-                    } else {
-                        format!("{} Elected ({} seat in {} member committee)", committee_icon, app.state.committee_seats, app.state.committee_size)
-                    }
-                } else if app.state.committee_size > 0 {
-                    format!("{} Not elected this epoch", committee_icon)
-                } else {
-                    format!("? Checking committee...")
-                };
-
-                vec![
-                    Line::from(vec![
-                        Span::styled("Committee: ", Style::default().fg(theme.muted())),
-                        Span::styled(committee_status, Style::default().fg(committee_color)),
-                    ]),
-                    Line::from(vec![
-                        Span::styled("Count: ", Style::default().fg(theme.muted())),
-                        Span::styled(format!("{}", app.state.our_validators_count), Style::default().fg(theme.success())),
-                        Span::raw("      "),
-                        Span::styled("All-Time Blocks: ", Style::default().fg(theme.muted())),
-                        Span::styled(format!("{}", total_our_blocks), Style::default().fg(theme.success())),
-                        Span::raw("      "),
-                        Span::styled("Share: ", Style::default().fg(theme.muted())),
-                        Span::styled(format!("{:.3}%", share), Style::default().fg(theme.success())),
-                    ]),
-                    Line::from(vec![
-                        Span::styled("This Epoch: ", Style::default().fg(theme.muted())),
-                        Span::styled(format!("{}", epoch_blocks), Style::default().fg(theme.primary())),
-                        Span::styled(format!(" blocks  (expected: ~{:.1})", expected_blocks), Style::default().fg(theme.muted())),
-                        Span::raw("  "),
-                        Span::styled(performance_indicator, Style::default().fg(
-                            if performance_indicator == "✓" { theme.success() }
-                            else if performance_indicator == "!" { theme.warning() }
-                            else { theme.muted() }
-                        )),
-                    ]),
-                ]
-            }
+        } else if app.state.committee_size > 0 {
+            format!("{} Not elected this epoch", committee_icon)
+        } else {
+            format!("? Checking committee...")
         };
 
-        // Show validators with public keys based on screen size
+        let mut lines = vec![
+            Line::from(vec![
+                Span::styled("Committee: ", Style::default().fg(theme.muted())),
+                Span::styled(committee_status, Style::default().fg(committee_color)),
+            ]),
+            Line::from(vec![
+                Span::styled("All-Time Blocks: ", Style::default().fg(theme.muted())),
+                Span::styled(format!("{}", total_our_blocks), Style::default().fg(theme.success())),
+                Span::raw("      "),
+                Span::styled("Share: ", Style::default().fg(theme.muted())),
+                Span::styled(format!("{:.3}%", share), Style::default().fg(theme.success())),
+            ]),
+            Line::from(vec![
+                Span::styled("This Epoch: ", Style::default().fg(theme.muted())),
+                Span::styled(format!("{}", epoch_blocks), Style::default().fg(theme.primary())),
+                Span::styled(format!(" blocks  (expected: ~{:.1})", expected_blocks), Style::default().fg(theme.muted())),
+                Span::raw("  "),
+                Span::styled(performance_indicator, Style::default().fg(
+                    if performance_indicator == "✓" { theme.success() }
+                    else if performance_indicator == "!" { theme.warning() }
+                    else { theme.muted() }
+                )),
+            ]),
+        ];
+
+        // Show validators with all three public keys (same for Medium and Large)
         for v in app.state.our_validators.iter().take(max_validators) {
             let sidechain_display = key_mode.format(&v.sidechain_key);
             let label = v.label.as_ref().map(|l| format!(" ({})", l)).unwrap_or_default();
 
-            if layout.size == ScreenSize::Small {
-                // Compact view: just sidechain key
-                lines.push(Line::from(vec![
-                    Span::styled("★", Style::default().fg(theme.ours())),
-                    Span::styled(sidechain_display, Style::default().fg(theme.secondary())),
-                    Span::raw(" "),
-                    Span::styled(format!("{}b", v.total_blocks), Style::default().fg(theme.success())),
-                ]));
-            } else {
-                // Standard/Large view: show all three public keys
-                lines.push(Line::from(vec![
-                    Span::styled("  ★ Sidechain: ", Style::default().fg(theme.ours())),
-                    Span::styled(sidechain_display.clone(), Style::default().fg(theme.secondary())),
-                    Span::styled(label.clone(), Style::default().fg(theme.muted())),
-                    Span::raw(" - "),
-                    Span::styled(format!("{} blocks", v.total_blocks), Style::default().fg(theme.success())),
-                ]));
+            lines.push(Line::from(vec![
+                Span::styled("  ★ Sidechain: ", Style::default().fg(theme.ours())),
+                Span::styled(sidechain_display.clone(), Style::default().fg(theme.secondary())),
+                Span::styled(label.clone(), Style::default().fg(theme.muted())),
+                Span::raw(" - "),
+                Span::styled(format!("{} blocks", v.total_blocks), Style::default().fg(theme.success())),
+            ]));
 
-                // Show AURA key if available
-                if let Some(ref aura_key) = v.aura_key {
-                    let aura_display = key_mode.format(aura_key);
-                    lines.push(Line::from(vec![
-                        Span::styled("    AURA:      ", Style::default().fg(theme.muted())),
-                        Span::styled(aura_display, Style::default().fg(theme.text())),
-                    ]));
-                }
+            // Show AURA key if available
+            if let Some(ref aura_key) = v.aura_key {
+                let aura_display = key_mode.format(aura_key);
+                lines.push(Line::from(vec![
+                    Span::styled("    AURA:      ", Style::default().fg(theme.muted())),
+                    Span::styled(aura_display, Style::default().fg(theme.text())),
+                ]));
+            }
 
-                // Show Grandpa key if available
-                if let Some(ref grandpa_key) = v.grandpa_key {
-                    let grandpa_display = key_mode.format(grandpa_key);
-                    lines.push(Line::from(vec![
-                        Span::styled("    Grandpa:   ", Style::default().fg(theme.muted())),
-                        Span::styled(grandpa_display, Style::default().fg(theme.text())),
-                    ]));
-                }
+            // Show Grandpa key if available
+            if let Some(ref grandpa_key) = v.grandpa_key {
+                let grandpa_display = key_mode.format(grandpa_key);
+                lines.push(Line::from(vec![
+                    Span::styled("    Grandpa:   ", Style::default().fg(theme.muted())),
+                    Span::styled(grandpa_display, Style::default().fg(theme.text())),
+                ]));
             }
         }
 
@@ -458,294 +327,14 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
 
         lines
     } else {
-        match layout.size {
-            ScreenSize::Small => {
-                vec![
-                    Line::from(vec![
-                        Span::styled("No validators", Style::default().fg(theme.warning())),
-                    ]),
-                    Line::from(vec![
-                        Span::styled("mvm keys verify", Style::default().fg(theme.secondary())),
-                    ]),
-                ]
-            }
-            _ => {
-                vec![
-                    Line::from(vec![
-                        Span::styled("No validators marked as 'ours'", Style::default().fg(theme.warning())),
-                    ]),
-                    Line::from(""),
-                    Line::from(vec![
-                        Span::styled("  Run: ", Style::default().fg(theme.muted())),
-                        Span::styled("mvm keys --keystore <path> verify", Style::default().fg(theme.secondary())),
-                    ]),
-                ]
-            }
-        }
-    };
-
-    let our_validators_widget = if layout.size == ScreenSize::Small {
-        Paragraph::new(our_validators_text)
-            .block(Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme.border()))
-                .title(Span::styled("Ours", Style::default().fg(theme.ours()).add_modifier(Modifier::BOLD))))
-    } else {
-        Paragraph::new(our_validators_text)
-            .block(Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme.border()))
-                .title(Span::styled("Our Validators", Style::default().fg(theme.ours()).add_modifier(Modifier::BOLD))))
-    };
-    f.render_widget(our_validators_widget, chunks[1]);
-
-    // Recent blocks - responsive
-    let blocks_to_show = match layout.size {
-        ScreenSize::Small => 5,
-        ScreenSize::Medium => 10,
-        ScreenSize::Large => 15,
-    };
-
-    let blocks_items: Vec<ListItem> = app.state.recent_blocks.iter().take(blocks_to_show).map(|block| {
-        let author_display = if let Some(ref author) = block.author_key {
-            key_mode.format(author)
-        } else {
-            "unknown".to_string()
-        };
-
-        let finalized = if block.is_finalized { "✓" } else { " " };
-
-        let line = match layout.size {
-            ScreenSize::Small => {
-                Line::from(vec![
-                    Span::styled(format!("#{}", block.block_number), Style::default().fg(theme.block_number())),
-                    Span::raw(" "),
-                    Span::styled(format!("e{}", block.epoch), Style::default().fg(theme.epoch())),
-                    Span::raw(" "),
-                    Span::styled(finalized, Style::default().fg(theme.success())),
-                    Span::styled(author_display, Style::default().fg(theme.text())),
-                ])
-            }
-            _ => {
-                Line::from(vec![
-                    Span::styled(format!("#{:<8}", block.block_number), Style::default().fg(theme.block_number())),
-                    Span::raw("  "),
-                    Span::styled(format!("slot {:>12}", block.slot_number), Style::default().fg(theme.muted())),
-                    Span::raw("  "),
-                    Span::styled(format!("epoch {:>4}", block.epoch), Style::default().fg(theme.epoch())),
-                    Span::raw("  "),
-                    Span::styled(format!("{} ", finalized), Style::default().fg(theme.success())),
-                    Span::styled("author: ", Style::default().fg(theme.muted())),
-                    Span::styled(author_display, Style::default().fg(theme.text())),
-                ])
-            }
-        };
-
-        ListItem::new(line)
-    }).collect();
-
-    let blocks_title = if layout.size == ScreenSize::Small {
-        "Blocks"
-    } else {
-        "Recent Blocks"
-    };
-
-    let blocks_list = List::new(blocks_items)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled(blocks_title, Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))));
-    f.render_widget(blocks_list, chunks[2]);
-}
-
-/// Render dashboard with wide layout (side-by-side panels for large screens)
-fn render_dashboard_wide(
-    f: &mut Frame,
-    app: &App,
-    top_panels: Vec<Rect>,
-    bottom_panels: Vec<Rect>,
-    layout: &ResponsiveLayout,
-) {
-    let theme = app.theme;
-    let key_mode = layout.key_display_length();
-
-    // === LEFT PANEL: Network Status ===
-    let health_indicator = if app.state.node_health { "●" } else { "○" };
-    let health_color = if app.state.node_health { theme.success() } else { theme.error() };
-
-    // Epoch progress bar
-    let epoch_progress = &app.state.epoch_progress;
-    let progress_width = 25;
-    let filled = ((epoch_progress.progress_percent / 100.0) * progress_width as f64) as usize;
-    let progress_bar: String = format!(
-        "{}{}",
-        "━".repeat(filled.min(progress_width)),
-        "░".repeat(progress_width.saturating_sub(filled))
-    );
-
-    // Sync progress bar
-    let sync = &app.state.sync_progress;
-    let sync_bar_width = 20;
-    let sync_filled = ((sync.sync_percent / 100.0) * sync_bar_width as f64) as usize;
-    let sync_bar: String = format!(
-        "{}{}",
-        "━".repeat(sync_filled.min(sync_bar_width)),
-        "░".repeat(sync_bar_width.saturating_sub(sync_filled))
-    );
-    let (sync_icon, sync_color) = if sync.is_synced {
-        ("✓", theme.success())
-    } else {
-        ("⟳", theme.warning())
-    };
-
-    let network_text = vec![
-        Line::from(vec![
-            Span::styled(health_indicator, Style::default().fg(health_color)),
-            Span::styled(" Health: ", Style::default().fg(theme.muted())),
-            Span::styled(
-                if app.state.node_health { "OK" } else { "SYNCING" },
-                Style::default().fg(health_color)
-            ),
-            Span::raw("    "),
-            Span::styled("Peers: ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{}", app.state.peer_count), Style::default().fg(theme.text())),
-        ]),
-        Line::from(vec![
-            Span::styled("Block: ", Style::default().fg(theme.muted())),
-            Span::styled(format!("#{}", app.state.chain_tip), Style::default().fg(theme.block_number())),
-            Span::styled(
-                if app.state.chain_tip == app.state.finalized_block { " (finalized)" } else { "" },
-                Style::default().fg(theme.success())
-            ),
-        ]),
-        if sync.is_synced {
-            Line::from(vec![
-                Span::styled("Node Sync: ", Style::default().fg(theme.muted())),
-                Span::styled(format!("{} Synced", sync_icon), Style::default().fg(sync_color)),
-                Span::raw("   "),
-                Span::styled("Node: ", Style::default().fg(theme.muted())),
-                Span::styled(&app.state.node_name, Style::default().fg(theme.secondary())),
-            ])
-        } else {
-            Line::from(vec![
-                Span::styled("Node Sync: ", Style::default().fg(theme.muted())),
-                Span::styled(sync_bar.clone(), Style::default().fg(theme.warning())),
-                Span::styled(format!(" {:.1}%", sync.sync_percent), Style::default().fg(theme.text())),
-            ])
-        },
-        Line::from(vec![
-            Span::styled("Mainchain: ", Style::default().fg(theme.muted())),
-            Span::styled(format!("e{}", app.state.mainchain_epoch), Style::default().fg(theme.epoch())),
-            Span::raw("  "),
-            Span::styled("Sidechain: ", Style::default().fg(theme.muted())),
-            Span::styled(format!("e{} s{}", app.state.sidechain_epoch, app.state.sidechain_slot), Style::default().fg(theme.epoch())),
-        ]),
-        Line::from(vec![
-            Span::styled("Epoch: ", Style::default().fg(theme.muted())),
-            Span::styled(progress_bar, Style::default().fg(theme.primary())),
-            Span::styled(format!(" {:.1}%", epoch_progress.progress_percent), Style::default().fg(theme.text())),
-        ]),
-        Line::from(vec![
-            Span::styled("Database: ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{} blocks synced", app.state.total_blocks), Style::default().fg(theme.text())),
-        ]),
-    ];
-
-    let network_widget = Paragraph::new(network_text)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled("Network Status", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))));
-    f.render_widget(network_widget, top_panels[0]);
-
-    // === RIGHT PANEL: Our Validators ===
-    let our_validators_text = if app.state.our_validators_count > 0 {
-        let total_our_blocks: u64 = app.state.our_validators.iter().map(|v| v.total_blocks).sum();
-        let share = if app.state.total_blocks > 0 {
-            (total_our_blocks as f64 / app.state.total_blocks as f64) * 100.0
-        } else {
-            0.0
-        };
-
-        let epoch_blocks = epoch_progress.our_blocks_this_epoch;
-        let expected_blocks = epoch_progress.expected_blocks;
-
-        // Committee election status
-        let (committee_icon, committee_color) = if app.state.committee_elected {
-            ("✓", theme.success())
-        } else {
-            ("✗", theme.warning())
-        };
-
-        let committee_status = if app.state.committee_elected {
-            format!("{} Elected ({} seat{} / {} member committee)",
-                committee_icon,
-                app.state.committee_seats,
-                if app.state.committee_seats > 1 { "s" } else { "" },
-                app.state.committee_size)
-        } else if app.state.committee_size > 0 {
-            format!("{} Not elected this epoch", committee_icon)
-        } else {
-            "? Checking committee...".to_string()
-        };
-
-        let mut lines = vec![
-            Line::from(vec![
-                Span::styled("Committee: ", Style::default().fg(theme.muted())),
-                Span::styled(committee_status, Style::default().fg(committee_color)),
-            ]),
-            Line::from(vec![
-                Span::styled("Count: ", Style::default().fg(theme.muted())),
-                Span::styled(format!("{}", app.state.our_validators_count), Style::default().fg(theme.success())),
-                Span::raw("   "),
-                Span::styled("Total: ", Style::default().fg(theme.muted())),
-                Span::styled(format!("{} blocks", total_our_blocks), Style::default().fg(theme.success())),
-                Span::raw("   "),
-                Span::styled("Share: ", Style::default().fg(theme.muted())),
-                Span::styled(format!("{:.3}%", share), Style::default().fg(theme.success())),
-            ]),
-            Line::from(vec![
-                Span::styled("This Epoch: ", Style::default().fg(theme.muted())),
-                Span::styled(format!("{}", epoch_blocks), Style::default().fg(theme.primary())),
-                Span::styled(format!(" blocks (expected: ~{:.1})", expected_blocks), Style::default().fg(theme.muted())),
-            ]),
-        ];
-
-        // Show validators with all three public keys
-        for v in app.state.our_validators.iter().take(2) {
-            let sidechain_display = key_mode.format(&v.sidechain_key);
-            let label = v.label.as_ref().map(|l| format!(" ({})", l)).unwrap_or_default();
-
-            lines.push(Line::from(vec![
-                Span::styled("★ SC: ", Style::default().fg(theme.ours())),
-                Span::styled(sidechain_display, Style::default().fg(theme.secondary())),
-                Span::styled(label, Style::default().fg(theme.muted())),
-            ]));
-
-            if let Some(ref aura_key) = v.aura_key {
-                let aura_display = key_mode.format(aura_key);
-                lines.push(Line::from(vec![
-                    Span::styled("  AU: ", Style::default().fg(theme.muted())),
-                    Span::styled(aura_display, Style::default().fg(theme.text())),
-                ]));
-            }
-        }
-
-        if app.state.our_validators_count > 2 {
-            lines.push(Line::from(vec![
-                Span::styled(format!("  +{} more validator(s)", app.state.our_validators_count - 2), Style::default().fg(theme.muted())),
-            ]));
-        }
-
-        lines
-    } else {
+        // No validators message (same for Medium and Large)
         vec![
             Line::from(vec![
                 Span::styled("No validators marked as 'ours'", Style::default().fg(theme.warning())),
             ]),
             Line::from(""),
             Line::from(vec![
-                Span::styled("Run: ", Style::default().fg(theme.muted())),
+                Span::styled("  Run: ", Style::default().fg(theme.muted())),
                 Span::styled("mvm keys --keystore <path> verify", Style::default().fg(theme.secondary())),
             ]),
         ]
@@ -755,11 +344,12 @@ fn render_dashboard_wide(
         .block(Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled("Our Validators", Style::default().fg(theme.ours()).add_modifier(Modifier::BOLD))));
-    f.render_widget(our_validators_widget, top_panels[1]);
+            .title(Span::styled("Our Validator", Style::default().fg(theme.ours()).add_modifier(Modifier::BOLD))));
+    f.render_widget(our_validators_widget, chunks[1]);
 
-    // === BOTTOM PANEL: Recent Blocks ===
-    let blocks_to_show = 20;
+    // Recent blocks - fill available space (panel height minus 2 for borders)
+    let blocks_to_show = chunks[2].height.saturating_sub(2) as usize;
+
     let blocks_items: Vec<ListItem> = app.state.recent_blocks.iter().take(blocks_to_show).map(|block| {
         let author_display = if let Some(ref author) = block.author_key {
             key_mode.format(author)
@@ -769,6 +359,7 @@ fn render_dashboard_wide(
 
         let finalized = if block.is_finalized { "✓" } else { " " };
 
+        // Standard block format (same for Medium and Large)
         let line = Line::from(vec![
             Span::styled(format!("#{:<8}", block.block_number), Style::default().fg(theme.block_number())),
             Span::raw("  "),
@@ -789,7 +380,7 @@ fn render_dashboard_wide(
             .borders(Borders::ALL)
             .border_style(Style::default().fg(theme.border()))
             .title(Span::styled("Recent Blocks", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))));
-    f.render_widget(blocks_list, bottom_panels[0]);
+    f.render_widget(blocks_list, chunks[2]);
 }
 
 fn render_blocks(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout) {
@@ -806,53 +397,34 @@ fn render_blocks(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout
 
         let finalized = if block.is_finalized { "✓" } else { " " };
 
-        let line = match layout.size {
-            ScreenSize::Small => {
-                Line::from(vec![
-                    Span::styled(format!("#{}", block.block_number), Style::default().fg(theme.block_number())),
-                    Span::raw(" "),
-                    Span::styled(format!("e{}", block.epoch), Style::default().fg(theme.epoch())),
-                    Span::raw(" "),
-                    Span::styled(finalized, Style::default().fg(theme.success())),
-                    Span::raw(" "),
-                    Span::styled(author_display, Style::default().fg(theme.text())),
-                ])
-            }
-            _ => {
-                let mut spans = vec![
-                    Span::styled(format!("#{:<8}", block.block_number), Style::default().fg(theme.block_number())),
-                    Span::raw("  "),
-                ];
+        // Standard block format (same for Medium and Large)
+        let mut spans = vec![
+            Span::styled(format!("#{:<8}", block.block_number), Style::default().fg(theme.block_number())),
+            Span::raw("  "),
+        ];
 
-                if block_cols.show_slot {
-                    spans.push(Span::styled(format!("slot {:>12}", block.slot_number), Style::default().fg(theme.muted())));
-                    spans.push(Span::raw("  "));
-                }
+        if block_cols.show_slot {
+            spans.push(Span::styled(format!("slot {:>12}", block.slot_number), Style::default().fg(theme.muted())));
+            spans.push(Span::raw("  "));
+        }
 
-                if block_cols.show_epoch {
-                    spans.push(Span::styled(format!("epoch {:>4}", block.epoch), Style::default().fg(theme.epoch())));
-                    spans.push(Span::raw("  "));
-                }
+        if block_cols.show_epoch {
+            spans.push(Span::styled(format!("epoch {:>4}", block.epoch), Style::default().fg(theme.epoch())));
+            spans.push(Span::raw("  "));
+        }
 
-                if block_cols.show_extrinsics {
-                    spans.push(Span::styled(format!("extr:{:<3}", block.extrinsics_count), Style::default().fg(theme.text())));
-                    spans.push(Span::raw("  "));
-                }
+        if block_cols.show_extrinsics {
+            spans.push(Span::styled(format!("extr:{:<3}", block.extrinsics_count), Style::default().fg(theme.text())));
+            spans.push(Span::raw("  "));
+        }
 
-                spans.push(Span::styled(format!("{} ", finalized), Style::default().fg(theme.success())));
-                spans.push(Span::styled(author_display, Style::default().fg(theme.text())));
+        spans.push(Span::styled(format!("{} ", finalized), Style::default().fg(theme.success())));
+        spans.push(Span::styled(author_display, Style::default().fg(theme.text())));
 
-                Line::from(spans)
-            }
-        };
-
-        ListItem::new(line)
+        ListItem::new(Line::from(spans))
     }).collect();
 
-    let title = match layout.size {
-        ScreenSize::Small => format!("Blocks ({})", app.state.total_blocks),
-        _ => format!("Blocks ({} total, showing last 20) - Use j/k or ↑/↓ to scroll", app.state.total_blocks),
-    };
+    let title = format!("Blocks ({} total, showing last 20) - Use j/k or ↑/↓ to scroll", app.state.total_blocks);
 
     let blocks_list = List::new(blocks_items)
         .block(Block::default()
@@ -882,42 +454,26 @@ fn render_validators(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
         let ours = if v.is_ours { "★" } else { " " };
         let key_display = key_mode.format(&v.sidechain_key);
 
-        let line = match layout.size {
-            ScreenSize::Small => {
-                Line::from(vec![
-                    Span::styled(ours, Style::default().fg(theme.ours())),
-                    Span::styled(key_display, Style::default().fg(theme.secondary())),
-                    Span::raw(" "),
-                    Span::styled(format!("{}b", v.total_blocks), Style::default().fg(theme.text())),
-                ])
-            }
-            _ => {
-                let mut spans = vec![
-                    Span::styled(ours, Style::default().fg(theme.ours())),
-                    Span::raw(" "),
-                    Span::styled(key_display, Style::default().fg(theme.secondary())),
-                    Span::raw("  "),
-                ];
+        // Standard validator format (same for Medium and Large)
+        let mut spans = vec![
+            Span::styled(ours, Style::default().fg(theme.ours())),
+            Span::raw(" "),
+            Span::styled(key_display, Style::default().fg(theme.secondary())),
+            Span::raw("  "),
+        ];
 
-                if val_cols.show_status {
-                    spans.push(Span::styled(format!("{:<15}", status), Style::default().fg(if v.is_ours { theme.success() } else { theme.muted() })));
-                    spans.push(Span::raw("  "));
-                }
+        if val_cols.show_status {
+            spans.push(Span::styled(format!("{:<15}", status), Style::default().fg(if v.is_ours { theme.success() } else { theme.muted() })));
+            spans.push(Span::raw("  "));
+        }
 
-                spans.push(Span::styled(format!("{:>5} blocks", v.total_blocks), Style::default().fg(theme.text())));
+        spans.push(Span::styled(format!("{:>5} blocks", v.total_blocks), Style::default().fg(theme.text())));
 
-                Line::from(spans)
-            }
-        };
-
-        ListItem::new(line)
+        ListItem::new(Line::from(spans))
     }).collect();
 
     let filter_text = if app.show_ours_only { " (ours)" } else { "" };
-    let title = match layout.size {
-        ScreenSize::Small => format!("Vals ({}{})", validators.len(), filter_text),
-        _ => format!("Validators ({} total{}) - [F] filter, j/k or ↑/↓ scroll", validators.len(), filter_text),
-    };
+    let title = format!("Validators ({} total{}) - [F] filter, j/k or ↑/↓ scroll", validators.len(), filter_text);
 
     let validators_list = List::new(validator_items)
         .block(Block::default()
@@ -956,41 +512,24 @@ fn render_performance(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveL
         let ours = if v.is_ours { "★" } else { " " };
         let key_display = key_mode.format(&v.sidechain_key);
 
-        let line = match layout.size {
-            ScreenSize::Small => {
-                Line::from(vec![
-                    Span::styled(format!("{}.", i + 1), Style::default().fg(theme.warning())),
-                    Span::styled(ours, Style::default().fg(theme.ours())),
-                    Span::styled(key_display, Style::default().fg(theme.secondary())),
-                    Span::raw(" "),
-                    Span::styled(format!("{}b", v.total_blocks), Style::default().fg(theme.text())),
-                    Span::raw(" "),
-                    Span::styled(format!("{:.1}%", share), Style::default().fg(if v.is_ours { theme.success() } else { theme.muted() })),
-                ])
-            }
-            _ => {
-                Line::from(vec![
-                    Span::styled(format!("{:>3}.", i + 1), Style::default().fg(theme.warning())),
-                    Span::raw(" "),
-                    Span::styled(ours, Style::default().fg(theme.ours())),
-                    Span::raw(" "),
-                    Span::styled(key_display, Style::default().fg(theme.secondary())),
-                    Span::raw("  "),
-                    Span::styled(format!("{:>6} blocks", v.total_blocks), Style::default().fg(theme.text())),
-                    Span::raw("  "),
-                    Span::styled(format!("{:>6.3}%", share), Style::default().fg(if v.is_ours { theme.success() } else { theme.muted() })),
-                ])
-            }
-        };
+        // Standard performance format (same for Medium and Large)
+        let line = Line::from(vec![
+            Span::styled(format!("{:>3}.", i + 1), Style::default().fg(theme.warning())),
+            Span::raw(" "),
+            Span::styled(ours, Style::default().fg(theme.ours())),
+            Span::raw(" "),
+            Span::styled(key_display, Style::default().fg(theme.secondary())),
+            Span::raw("  "),
+            Span::styled(format!("{:>6} blocks", v.total_blocks), Style::default().fg(theme.text())),
+            Span::raw("  "),
+            Span::styled(format!("{:>6.3}%", share), Style::default().fg(if v.is_ours { theme.success() } else { theme.muted() })),
+        ]);
 
         ListItem::new(line)
     }).collect();
 
     let filter_text = if app.show_ours_only { " (ours)" } else { "" };
-    let title = match layout.size {
-        ScreenSize::Small => format!("Rank{}", filter_text),
-        _ => format!("Performance Rankings{} - [F] filter, j/k or ↑/↓ scroll", filter_text),
-    };
+    let title = format!("Performance Rankings{} - [F] filter, j/k or ↑/↓ scroll", filter_text);
 
     let performance_list = List::new(validator_items)
         .block(Block::default()
@@ -1052,7 +591,7 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
         ]),
         Line::from(vec![
             Span::styled("    t  /  T  ", Style::default().fg(theme.text())),
-            Span::raw("Toggle theme (Midnight Mode ⟷ Daytime Mode)"),
+            Span::raw("Toggle theme (Midnight Theme ⟷ Midday Theme)"),
         ]),
         Line::from(""),
         Line::from(vec![
