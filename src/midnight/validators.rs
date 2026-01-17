@@ -202,7 +202,7 @@ impl ValidatorSet {
     ///
     /// If block_hash is provided, queries the state at that historical block.
     /// If None, queries the current state.
-    async fn fetch_committee_at_block(
+    pub async fn fetch_committee_at_block(
         rpc: &RpcClient,
         block_hash: Option<&str>,
     ) -> Result<Vec<String>> {

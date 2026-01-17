@@ -273,6 +273,13 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
             ScreenSize::Large => 5,
         };
 
+        // Committee election status
+        let (committee_icon, committee_color) = if app.state.committee_elected {
+            ("✓", theme.success())
+        } else {
+            ("✗", theme.warning())
+        };
+
         let mut lines = match layout.size {
             ScreenSize::Small => {
                 vec![
@@ -286,19 +293,34 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
                         Span::styled(format!("{:.1}%", share), Style::default().fg(theme.success())),
                     ]),
                     Line::from(vec![
+                        Span::styled("Elected:", Style::default().fg(theme.muted())),
+                        Span::styled(format!("{}", committee_icon), Style::default().fg(committee_color)),
+                        Span::raw(" "),
                         Span::styled("Epoch:", Style::default().fg(theme.muted())),
                         Span::styled(format!("{}", epoch_blocks), Style::default().fg(theme.primary())),
                         Span::styled(format!("/{:.0}", expected_blocks), Style::default().fg(theme.muted())),
-                        Span::styled(format!(" {}", performance_indicator), Style::default().fg(
-                            if performance_indicator == "✓" { theme.success() }
-                            else if performance_indicator == "!" { theme.warning() }
-                            else { theme.muted() }
-                        )),
                     ]),
                 ]
             }
             _ => {
+                // Committee status text
+                let committee_status = if app.state.committee_elected {
+                    if app.state.committee_seats > 1 {
+                        format!("{} Elected ({} seats in {} member committee)", committee_icon, app.state.committee_seats, app.state.committee_size)
+                    } else {
+                        format!("{} Elected ({} seat in {} member committee)", committee_icon, app.state.committee_seats, app.state.committee_size)
+                    }
+                } else if app.state.committee_size > 0 {
+                    format!("{} Not elected this epoch", committee_icon)
+                } else {
+                    format!("? Checking committee...")
+                };
+
                 vec![
+                    Line::from(vec![
+                        Span::styled("Committee: ", Style::default().fg(theme.muted())),
+                        Span::styled(committee_status, Style::default().fg(committee_color)),
+                    ]),
                     Line::from(vec![
                         Span::styled("Count: ", Style::default().fg(theme.muted())),
                         Span::styled(format!("{}", app.state.our_validators_count), Style::default().fg(theme.success())),

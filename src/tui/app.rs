@@ -1,6 +1,7 @@
 //! Application state management for TUI
 
 use crate::db::{BlockRecord, Database, ValidatorRecord};
+use crate::midnight::ValidatorSet;
 use crate::rpc::{RpcClient, SidechainStatus};
 use crate::tui::Theme;
 use anyhow::Result;
@@ -80,6 +81,11 @@ pub struct AppState {
     // Epoch progress (enhanced dashboard)
     pub epoch_progress: EpochProgress,
 
+    // Committee election status
+    pub committee_elected: bool,
+    pub committee_seats: usize,
+    pub committee_size: usize,
+
     // Status
     pub last_error: Option<String>,
     pub update_duration: Duration,
@@ -103,6 +109,9 @@ impl Default for AppState {
             validators: Vec::new(),
             our_validators: Vec::new(),
             epoch_progress: EpochProgress::default(),
+            committee_elected: false,
+            committee_seats: 0,
+            committee_size: 0,
             last_error: None,
             update_duration: Duration::from_secs(0),
         }
@@ -171,16 +180,17 @@ impl App {
             self.state.sidechain_epoch = status.sidechain.epoch;
             self.state.sidechain_slot = status.sidechain.slot;
 
-            // Calculate epoch progress
-            // Midnight epochs are approximately 7200 slots (2 hours at 1 slot/second)
-            const EPOCH_LENGTH_SLOTS: u64 = 7200;
-            let epoch_start_slot = status.sidechain.epoch * EPOCH_LENGTH_SLOTS;
-            let current_slot_in_epoch = status.sidechain.slot.saturating_sub(epoch_start_slot);
+            // Calculate epoch progress using MAINCHAIN values
+            // Mainchain epochs on Midnight are approximately 86400 slots (24 hours at 1 slot/second)
+            // This matches Cardano's epoch structure
+            const EPOCH_LENGTH_SLOTS: u64 = 86400;
+            let epoch_start_slot = status.mainchain.epoch * EPOCH_LENGTH_SLOTS;
+            let current_slot_in_epoch = status.mainchain.slot.saturating_sub(epoch_start_slot);
             let progress = (current_slot_in_epoch as f64 / EPOCH_LENGTH_SLOTS as f64) * 100.0;
 
             self.state.epoch_progress.epoch_length_slots = EPOCH_LENGTH_SLOTS;
             self.state.epoch_progress.current_slot_in_epoch = current_slot_in_epoch.min(EPOCH_LENGTH_SLOTS);
-            self.state.epoch_progress.progress_percent = progress.min(100.0);
+            self.state.epoch_progress.progress_percent = progress.min(100.0).max(0.0);
         }
 
         // Get sync state
@@ -199,6 +209,34 @@ impl App {
             self.state.node_health = !health.get("isSyncing")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true);
+        }
+
+        // Check committee election status for our validators
+        // Only check if we have validators marked as ours
+        if !self.state.our_validators.is_empty() {
+            if let Ok(committee) = ValidatorSet::fetch_committee_at_block(rpc, None).await {
+                self.state.committee_size = committee.len();
+
+                // Count how many seats our validators have in the committee
+                let mut total_seats = 0;
+                for validator in &self.state.our_validators {
+                    if let Some(ref aura_key) = validator.aura_key {
+                        // Normalize key for comparison
+                        let normalized = if aura_key.starts_with("0x") {
+                            aura_key.to_lowercase()
+                        } else {
+                            format!("0x{}", aura_key.to_lowercase())
+                        };
+                        // Count occurrences in committee
+                        total_seats += committee.iter()
+                            .filter(|k| k.to_lowercase() == normalized)
+                            .count();
+                    }
+                }
+
+                self.state.committee_seats = total_seats;
+                self.state.committee_elected = total_seats > 0;
+            }
         }
 
         Ok(())
@@ -223,30 +261,52 @@ impl App {
         self.state.our_validators = db.get_our_validators()?;
 
         // Calculate our blocks in current epoch
-        let current_epoch = self.state.sidechain_epoch;
+        // NOTE: Blocks are stored with mainchain_epoch, not sidechain_epoch
+        let current_epoch = self.state.mainchain_epoch;
         if current_epoch > 0 {
             let mut our_blocks_this_epoch: u64 = 0;
             for v in &self.state.our_validators {
-                if let Some(aura_key) = v.aura_key.as_ref() {
-                    // Count blocks produced by this validator in the current epoch
-                    // Note: For now we count from recent_blocks; a more accurate count
-                    // would require a database query for blocks in the epoch range
-                    let count = self.state.recent_blocks.iter()
-                        .filter(|b| b.epoch == current_epoch &&
-                                b.author_key.as_ref() == Some(aura_key))
-                        .count() as u64;
-                    our_blocks_this_epoch += count;
-                }
+                // Blocks are stored with sidechain_key as author_key
+                let sidechain_key = &v.sidechain_key;
+                // Count blocks produced by this validator in the current epoch
+                // Note: For now we count from recent_blocks; a more accurate count
+                // would require a database query for blocks in the epoch range
+                let count = self.state.recent_blocks.iter()
+                    .filter(|b| b.epoch == current_epoch &&
+                            b.author_key.as_ref() == Some(sidechain_key))
+                    .count() as u64;
+                our_blocks_this_epoch += count;
             }
             self.state.epoch_progress.our_blocks_this_epoch = our_blocks_this_epoch;
 
-            // Calculate expected blocks (if we have committee info)
-            // Expected = (epoch_progress_percent / 100) * (epoch_length / committee_size) * our_seats
-            // For now, use a simple estimate based on total validators
-            if self.state.total_validators > 0 && self.state.our_validators_count > 0 {
+            // Calculate expected blocks based on validator's historical share
+            // This is more accurate than slot-based calculation since not every slot produces a block
+            if self.state.our_validators_count > 0 && self.state.total_blocks > 0 {
                 let epoch_progress_ratio = self.state.epoch_progress.progress_percent / 100.0;
-                let expected_per_seat = self.state.epoch_progress.epoch_length_slots as f64 / 1200.0; // Approximate committee size
-                self.state.epoch_progress.expected_blocks = epoch_progress_ratio * expected_per_seat * self.state.our_validators_count as f64;
+
+                // Calculate our validator's share based on total blocks produced
+                let our_total_blocks: u64 = self.state.our_validators.iter()
+                    .map(|v| v.total_blocks)
+                    .sum();
+
+                if our_total_blocks > 0 {
+                    // Historical share of blocks
+                    let our_share = our_total_blocks as f64 / self.state.total_blocks as f64;
+
+                    // Estimate blocks per epoch based on observed rate
+                    // ~30,000 blocks per epoch based on Midnight network data
+                    const ESTIMATED_BLOCKS_PER_EPOCH: f64 = 30000.0;
+
+                    // Expected = share * blocks_per_epoch * epoch_progress
+                    self.state.epoch_progress.expected_blocks =
+                        our_share * ESTIMATED_BLOCKS_PER_EPOCH * epoch_progress_ratio;
+                } else {
+                    // New validator with no history - use committee-based estimate
+                    // Assume 1 seat out of 1200, ~30000 blocks per epoch
+                    let expected_per_seat = 30000.0 / 1200.0; // ~25 per seat per epoch
+                    self.state.epoch_progress.expected_blocks =
+                        epoch_progress_ratio * expected_per_seat * self.state.our_validators_count as f64;
+                }
             }
         }
 

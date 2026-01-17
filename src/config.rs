@@ -120,7 +120,7 @@ fn default_poll_interval() -> u64 {
 }
 
 fn default_refresh_interval() -> u64 {
-    2000
+    6000 // Match Midnight block interval of 6 seconds
 }
 
 impl Default for Config {
