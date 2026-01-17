@@ -78,9 +78,9 @@ pub struct StatusMonitor {
 }
 
 impl StatusMonitor {
-    pub fn new(rpc_url: &str, metrics_url: &str, keys: Option<ValidatorKeys>) -> Self {
+    pub fn new(rpc_url: &str, metrics_url: &str, keys: Option<ValidatorKeys>, timeout_ms: u64) -> Self {
         Self {
-            rpc: RpcClient::new(rpc_url),
+            rpc: RpcClient::with_timeout(rpc_url, timeout_ms),
             metrics: MetricsClient::new(metrics_url),
             keys,
         }
@@ -310,7 +310,7 @@ pub async fn run(args: StatusArgs) -> Result<()> {
         }
     };
 
-    let monitor = StatusMonitor::new(&rpc_url, &metrics_url, keys);
+    let monitor = StatusMonitor::new(&rpc_url, &metrics_url, keys, config.rpc.timeout_ms);
 
     // Try to get version on startup
     match monitor.get_version().await {

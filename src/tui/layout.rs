@@ -82,7 +82,7 @@ impl ResponsiveLayout {
                 Layout::default()
                     .direction(Direction::Vertical)
                     .constraints([
-                        Constraint::Length(4),  // Network status (compact)
+                        Constraint::Length(5),  // Network status (compact + sync)
                         Constraint::Length(5),  // Our validators (compact)
                         Constraint::Min(0),     // Recent blocks
                     ])
@@ -94,8 +94,8 @@ impl ResponsiveLayout {
                 Layout::default()
                     .direction(Direction::Vertical)
                     .constraints([
-                        Constraint::Length(5),  // Network status
-                        Constraint::Length(7),  // Our validators
+                        Constraint::Length(6),  // Network status + sync progress
+                        Constraint::Length(10), // Our validators + all 3 public keys
                         Constraint::Min(0),     // Recent blocks
                     ])
                     .split(area)
@@ -106,8 +106,8 @@ impl ResponsiveLayout {
                 Layout::default()
                     .direction(Direction::Vertical)
                     .constraints([
-                        Constraint::Length(6),   // Network status (more info)
-                        Constraint::Length(10),  // Our validators (more info)
+                        Constraint::Length(7),   // Network status + sync progress
+                        Constraint::Length(12),  // Our validators + all 3 public keys
                         Constraint::Min(0),      // Recent blocks
                     ])
                     .split(area)

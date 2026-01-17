@@ -88,8 +88,8 @@ pub async fn run(args: SyncArgs) -> Result<()> {
     let db = Database::open(&db_path)?;
     info!("Database opened successfully");
 
-    // Connect to RPC
-    let rpc = RpcClient::new(&rpc_url);
+    // Connect to RPC with configured timeout
+    let rpc = RpcClient::with_timeout(&rpc_url, config.rpc.timeout_ms);
 
     // Get current chain state
     let chain_tip = get_chain_tip(&rpc).await?;

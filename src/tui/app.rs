@@ -54,6 +54,23 @@ pub struct EpochProgress {
     pub our_committee_seats: u64,
 }
 
+/// Node sync progress information
+#[derive(Debug, Clone, Default)]
+pub struct SyncProgress {
+    /// Current block the node has synced to
+    pub current_block: u64,
+    /// Highest known block in the network
+    pub highest_block: u64,
+    /// Block sync started from
+    pub starting_block: u64,
+    /// Sync percentage (0-100)
+    pub sync_percent: f64,
+    /// Whether the node is fully synced
+    pub is_synced: bool,
+    /// Blocks remaining to sync
+    pub blocks_remaining: u64,
+}
+
 /// Application state data
 pub struct AppState {
     // Network status
@@ -65,6 +82,12 @@ pub struct AppState {
     pub sync_state_syncing: bool,
     pub peer_count: u64,
     pub node_health: bool,
+
+    // Node sync progress
+    pub sync_progress: SyncProgress,
+
+    // Node identity
+    pub node_name: String,
 
     // Database stats
     pub total_blocks: u64,
@@ -93,6 +116,12 @@ pub struct AppState {
 
 impl Default for AppState {
     fn default() -> Self {
+        // Get hostname for default node name
+        let node_name = hostname::get()
+            .ok()
+            .and_then(|h| h.into_string().ok())
+            .unwrap_or_else(|| "unknown".to_string());
+
         Self {
             chain_tip: 0,
             finalized_block: 0,
@@ -102,6 +131,8 @@ impl Default for AppState {
             sync_state_syncing: false,
             peer_count: 0,
             node_health: true,
+            sync_progress: SyncProgress::default(),
+            node_name,
             total_blocks: 0,
             total_validators: 0,
             our_validators_count: 0,
@@ -193,12 +224,40 @@ impl App {
             self.state.epoch_progress.progress_percent = progress.min(100.0).max(0.0);
         }
 
-        // Get sync state
+        // Get sync state with detailed progress
         if let Ok(sync_state) = rpc.call::<_, serde_json::Value>("system_syncState", Vec::<()>::new()).await {
-            self.state.sync_state_syncing = sync_state.get("currentBlock")
+            let current_block = sync_state.get("currentBlock")
                 .and_then(|v| v.as_u64())
-                .map(|current| current < self.state.chain_tip)
-                .unwrap_or(false);
+                .unwrap_or(0);
+            let highest_block = sync_state.get("highestBlock")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(self.state.chain_tip);
+            let starting_block = sync_state.get("startingBlock")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+
+            // Calculate sync progress
+            let total_to_sync = highest_block.saturating_sub(starting_block);
+            let synced = current_block.saturating_sub(starting_block);
+            let sync_percent = if total_to_sync > 0 {
+                (synced as f64 / total_to_sync as f64) * 100.0
+            } else {
+                100.0
+            };
+
+            let blocks_remaining = highest_block.saturating_sub(current_block);
+            let is_synced = blocks_remaining <= 1; // Allow 1 block tolerance
+
+            self.state.sync_progress = SyncProgress {
+                current_block,
+                highest_block,
+                starting_block,
+                sync_percent: sync_percent.min(100.0).max(0.0),
+                is_synced,
+                blocks_remaining,
+            };
+
+            self.state.sync_state_syncing = !is_synced;
         }
 
         // Get system health (includes peer count)

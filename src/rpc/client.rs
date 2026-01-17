@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use reqwest::Client;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 static REQUEST_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -36,9 +37,20 @@ pub struct RpcClient {
 }
 
 impl RpcClient {
+    /// Create a new RPC client with default timeout (30 seconds)
     pub fn new(endpoint: &str) -> Self {
+        Self::with_timeout(endpoint, 30000)
+    }
+
+    /// Create a new RPC client with custom timeout in milliseconds
+    pub fn with_timeout(endpoint: &str, timeout_ms: u64) -> Self {
+        let client = Client::builder()
+            .timeout(Duration::from_millis(timeout_ms))
+            .build()
+            .unwrap_or_else(|_| Client::new());
+
         Self {
-            client: Client::new(),
+            client,
             endpoint: endpoint.to_string(),
         }
     }

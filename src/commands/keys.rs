@@ -71,7 +71,7 @@ pub async fn run(args: KeysArgs) -> Result<()> {
 
     match args.command {
         KeysCommands::Show => run_show(&keys),
-        KeysCommands::Verify => run_verify(&keys, &rpc_url, &db_path).await,
+        KeysCommands::Verify => run_verify(&keys, &rpc_url, &db_path, config.rpc.timeout_ms).await,
     }
 }
 
@@ -93,12 +93,12 @@ fn run_show(keys: &ValidatorKeys) -> Result<()> {
     Ok(())
 }
 
-async fn run_verify(keys: &ValidatorKeys, rpc_url: &str, db_path: &PathBuf) -> Result<()> {
+async fn run_verify(keys: &ValidatorKeys, rpc_url: &str, db_path: &PathBuf, timeout_ms: u64) -> Result<()> {
     info!("Verifying validator keys...");
     info!("RPC endpoint: {}", rpc_url);
     info!("─────────────────────────────────────────────────────────────────────────────");
 
-    let rpc = RpcClient::new(rpc_url);
+    let rpc = RpcClient::with_timeout(rpc_url, timeout_ms);
 
     // Get current epoch from sidechain status
     let current_epoch = match rpc

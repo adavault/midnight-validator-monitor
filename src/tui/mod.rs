@@ -7,7 +7,7 @@ mod theme;
 mod ui;
 pub mod widgets;
 
-pub use app::{App, EpochProgress, ViewMode};
+pub use app::{App, EpochProgress, SyncProgress, ViewMode};
 pub use event::{Event, EventHandler};
 pub use layout::ScreenSize;
 pub use theme::Theme;

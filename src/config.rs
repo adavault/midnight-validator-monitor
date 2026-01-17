@@ -53,6 +53,10 @@ pub struct ValidatorConfig {
 
     #[serde(default)]
     pub label: Option<String>,
+
+    /// Display name for this node (defaults to hostname)
+    #[serde(default)]
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -159,6 +163,7 @@ impl Default for ValidatorConfig {
         Self {
             keystore_path: None,
             label: None,
+            name: None,
         }
     }
 }

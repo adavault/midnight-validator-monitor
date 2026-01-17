@@ -43,7 +43,7 @@ pub async fn run(args: ViewArgs) -> Result<()> {
     let refresh_interval = args.refresh_interval.unwrap_or(config.view.refresh_interval_ms);
 
     // Connect to RPC and database BEFORE initializing terminal
-    let rpc = RpcClient::new(&rpc_url);
+    let rpc = RpcClient::with_timeout(&rpc_url, config.rpc.timeout_ms);
     let db = Database::open(&db_path)
         .context(format!("Failed to open database at {}.
 
@@ -63,6 +63,11 @@ Tip: If you installed MVM, the database should be at /opt/midnight/mvm/data/mvm.
 
     // Initialize app
     let mut app = App::new();
+
+    // Set node name from config if specified
+    if let Some(ref name) = config.validator.name {
+        app.state.node_name = name.clone();
+    }
 
     // Do initial update
     if let Err(e) = app.update(&rpc, &db).await {
