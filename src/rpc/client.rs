@@ -38,6 +38,7 @@ pub struct RpcClient {
 
 impl RpcClient {
     /// Create a new RPC client with default timeout (30 seconds)
+    #[allow(dead_code)]
     pub fn new(endpoint: &str) -> Self {
         Self::with_timeout(endpoint, 30000)
     }
@@ -55,6 +56,7 @@ impl RpcClient {
         }
     }
 
+    #[allow(dead_code)]
     pub fn endpoint(&self) -> &str {
         &self.endpoint
     }

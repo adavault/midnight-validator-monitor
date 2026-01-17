@@ -217,16 +217,19 @@ mvm view --rpc-url http://localhost:9944 --db-path ./mvm.db
 ```
 
 **Views:**
-- `1` - Dashboard: Network status, our validators, recent blocks
+- `1` - Dashboard: Network status, epoch progress, validator info, recent blocks
 - `2` - Blocks: Scrollable block list with author attribution
 - `3` - Validators: All validators with block production stats
 - `4` - Performance: Top validators ranked by blocks produced
+- `5` - Peers: Connected peers with sync status and IP addresses
+- `?` - Help: Keyboard shortcuts and field explanations (scrollable)
 
 **Controls:**
-- `1-4` - Switch views
-- `j/k` - Scroll up/down (Vim-style)
+- `1-5` - Switch views
+- `j/k` or `↑/↓` - Scroll up/down
 - `f` - Toggle "ours only" filter
-- `r` - Force refresh
+- `t` - Toggle theme (Midnight/Midday)
+- `?/h/F1` - Show help
 - `q/Esc` - Quit
 
 ### config - Configuration management
@@ -328,10 +331,13 @@ src/
 │   ├── digest.rs        # AURA slot extraction from block digest
 │   ├── keystore.rs      # Substrate keystore loading
 │   ├── registration.rs  # Validator registration checks
-│   └── validators.rs    # Validator set management
+│   ├── scale.rs         # SCALE decoding for AuraApi_authorities
+│   └── validators.rs    # Validator set and committee management
 ├── tui/
 │   ├── app.rs           # TUI application state
 │   ├── event.rs         # Keyboard event handling
+│   ├── layout.rs        # Responsive layout system
+│   ├── theme.rs         # Color themes (Midnight/Midday)
 │   └── ui.rs            # View rendering logic
 ├── config.rs            # TOML configuration system
 ├── daemon.rs            # PID file and daemon management
@@ -413,22 +419,44 @@ mvm --version
 sudo ./scripts/uninstall.sh
 ```
 
-## Known Issues (v0.3.0-alpha)
-
-**Critical: Incorrect Block Attribution**
-
-The current version has a known issue with block author attribution. The implementation uses 185 candidates instead of the actual 1200-seat committee for calculating block authors, resulting in incorrect attributions. This will be fixed in v0.4-beta. See `VALIDATOR_COMMITTEE_DISCOVERY.md` for details.
-
-**Impact**: Block statistics and performance rankings are currently unreliable and should not be used for critical decisions.
-
 ## Documentation
 
+- `README.md` - This file, main usage documentation
 - `DEPLOYMENT.md` - Detailed deployment guide with systemd setup
-- `CLAUDE.md` - Architecture and implementation details
-- `RELEASE_NOTES_v0.3.0-alpha.md` - What's new in v0.3.0
-- `VALIDATOR_COMMITTEE_DISCOVERY.md` - Critical bug discovery documentation
-- `STAKE_ALLOCATION_RESEARCH.md` - Ongoing research into stake-weighted allocations
-- `RELEASE_PLAN_v0.4-beta.md` - v0.4-beta development roadmap
+- `CLAUDE.md` - Architecture and implementation details for developers
+- `RELEASE_NOTES_v0.6.0.md` - Current release notes
+- `docs/archive/` - Historical planning and research documents
+
+## Changelog
+
+### v0.6.0 (Current)
+- New Peers view (key 5) showing connected peers with sync status and IP addresses
+- Dashboard enhancements: external IP, peer ID, node version, Grandpa voter status
+- Separate sidechain (2h) and mainchain (24h) epoch progress bars
+- "This Epoch" blocks now correctly tracks sidechain epoch (committee rotation cycle)
+- Scrollable help screen with field explanations
+- Improved labels and UI alignment throughout
+- Code quality improvements (clippy fixes)
+
+### v0.5.1
+- TUI polish: layout simplification, improved epoch display
+- Fixed "This Epoch" block counting bug
+- Renamed "Our Validators" to "Our Validator" in TUI
+- Two responsive layouts (Medium < 120 cols, Large >= 120 cols)
+
+### v0.5.0
+- Fixed critical block attribution bug - now uses actual 1200-seat committee
+- SCALE decoding of AuraApi_authorities for correct committee data
+- Fallback support for non-archive nodes
+
+### v0.4.0-beta
+- Committee snapshot storage for historical accuracy
+- Author attribution to sidechain keys
+- Performance improvements
+
+### v0.3.0-alpha
+- Interactive TUI with Dashboard/Blocks/Validators/Performance views
+- Daemon mode with systemd integration
 
 ## License
 

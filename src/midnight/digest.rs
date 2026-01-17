@@ -23,6 +23,7 @@ pub fn extract_slot_from_digest(logs: &[String]) -> Option<u64> {
 ///
 /// The first extrinsic is typically the timestamp set inherent.
 /// Format: compact-encoded call index + compact timestamp
+#[allow(dead_code)]
 pub fn extract_timestamp_from_extrinsics(extrinsics: &[String]) -> Option<u64> {
     // First extrinsic is usually set_timestamp
     // This is a simplified extraction - full SCALE decoding would be more robust

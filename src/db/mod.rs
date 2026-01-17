@@ -37,6 +37,7 @@ impl Database {
     }
 
     /// Open an in-memory database (for testing)
+    #[allow(dead_code)]
     pub fn open_in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         init_schema(&conn)?;
@@ -44,6 +45,7 @@ impl Database {
     }
 
     /// Get a reference to the underlying connection
+    #[allow(dead_code)]
     pub fn conn(&self) -> &Connection {
         &self.conn
     }
@@ -86,8 +88,13 @@ impl Database {
         blocks::find_gaps(&self.conn)
     }
 
+    #[allow(dead_code)]
     pub fn count_blocks_by_author_in_epoch(&self, author_key: &str, epoch: u64) -> Result<u64> {
         blocks::count_blocks_by_author_in_epoch(&self.conn, author_key, epoch)
+    }
+
+    pub fn count_blocks_by_author_since(&self, author_key: &str, since_timestamp: i64) -> Result<u64> {
+        blocks::count_blocks_by_author_since(&self.conn, author_key, since_timestamp)
     }
 
     // Committee snapshot operations
@@ -95,14 +102,17 @@ impl Database {
         blocks::store_committee_snapshot(&self.conn, epoch, committee)
     }
 
+    #[allow(dead_code)]
     pub fn get_committee_snapshot(&self, epoch: u64) -> Result<Option<Vec<String>>> {
         blocks::get_committee_snapshot(&self.conn, epoch)
     }
 
+    #[allow(dead_code)]
     pub fn get_committee_size(&self, epoch: u64) -> Result<Option<usize>> {
         blocks::get_committee_size(&self.conn, epoch)
     }
 
+    #[allow(dead_code)]
     pub fn list_committee_epochs(&self) -> Result<Vec<u64>> {
         blocks::list_committee_epochs(&self.conn)
     }

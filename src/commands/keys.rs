@@ -120,7 +120,7 @@ async fn run_verify(keys: &ValidatorKeys, rpc_url: &str, db_path: &PathBuf, time
 
     // Try to open database for marking validator and showing stats
     info!("Opening database: {}", db_path.display());
-    let db = match Database::open(&db_path) {
+    let db = match Database::open(db_path) {
         Ok(db) => {
             info!("Database opened successfully");
             Some(db)

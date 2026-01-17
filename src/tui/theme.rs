@@ -4,7 +4,9 @@ use ratatui::style::Color;
 
 /// Theme for the TUI
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Default)]
 pub enum Theme {
+    #[default]
     Midnight,
     Midday,
 }
@@ -22,7 +24,7 @@ impl Theme {
     pub fn secondary(&self) -> Color {
         match self {
             Theme::Midnight => Color::Rgb(102, 153, 255), // Light blue
-            Theme::Midday => Color::Rgb(65, 105, 225),    // Royal blue
+            Theme::Midday => Color::Rgb(0, 80, 180),      // Vivid blue (readable on light bg)
         }
     }
 
@@ -128,8 +130,3 @@ impl Theme {
     }
 }
 
-impl Default for Theme {
-    fn default() -> Self {
-        Theme::Midnight
-    }
-}

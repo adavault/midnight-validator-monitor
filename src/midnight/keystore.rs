@@ -72,16 +72,19 @@ impl ValidatorKeys {
     }
 
     /// Get a short form of the sidechain key for display
+    #[allow(dead_code)]
     pub fn sidechain_short(&self) -> String {
         truncate_key(&self.sidechain_pub_key, 10)
     }
 
     /// Get a short form of the aura key for display
+    #[allow(dead_code)]
     pub fn aura_short(&self) -> String {
         truncate_key(&self.aura_pub_key, 10)
     }
 
     /// Get a short form of the grandpa key for display
+    #[allow(dead_code)]
     pub fn grandpa_short(&self) -> String {
         truncate_key(&self.grandpa_pub_key, 10)
     }
@@ -101,6 +104,7 @@ pub struct KeyStatus {
 }
 
 impl KeyStatus {
+    #[allow(dead_code)]
     pub fn all_keys_loaded(&self) -> bool {
         self.sidechain_loaded == Some(true)
             && self.aura_loaded == Some(true)
@@ -109,6 +113,7 @@ impl KeyStatus {
 }
 
 /// Truncate a hex key for display
+#[allow(dead_code)]
 fn truncate_key(key: &str, chars: usize) -> String {
     if key.len() <= chars + 3 {
         key.to_string()

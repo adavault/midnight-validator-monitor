@@ -3,6 +3,7 @@ use serde::Deserialize;
 /// Response from system_health RPC call
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct SystemHealth {
     pub peers: u32,
     pub is_syncing: bool,
@@ -12,6 +13,7 @@ pub struct SystemHealth {
 /// Response from system_syncState RPC call
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct SyncState {
     pub current_block: u64,
     pub highest_block: u64,
@@ -43,6 +45,7 @@ pub struct Digest {
 
 /// Response from chain_getBlock RPC call
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct SignedBlock {
     pub block: Block,
     pub justifications: Option<serde_json::Value>,
@@ -58,6 +61,7 @@ pub struct Block {
 /// Epoch/slot info for a chain
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct ChainStatus {
     pub epoch: u64,
     pub slot: u64,

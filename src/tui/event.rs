@@ -71,6 +71,10 @@ pub fn handle_key_event(key: KeyEvent, app: &mut crate::tui::App) -> bool {
             app.set_view(crate::tui::ViewMode::Performance);
             true
         }
+        KeyCode::Char('5') => {
+            app.set_view(crate::tui::ViewMode::Peers);
+            true
+        }
         KeyCode::Char('?') | KeyCode::Char('h') | KeyCode::F(1) => {
             app.set_view(crate::tui::ViewMode::Help);
             true

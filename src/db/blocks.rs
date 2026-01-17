@@ -1,6 +1,5 @@
 use anyhow::Result;
 use rusqlite::{params, Connection};
-use tracing;
 
 /// Block record for database storage
 #[derive(Debug, Clone)]
@@ -20,6 +19,7 @@ pub struct BlockRecord {
 
 /// Sync status record
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct SyncStatusRecord {
     pub last_synced_block: u64,
     pub last_finalized_block: u64,
@@ -232,6 +232,7 @@ pub fn find_gaps(conn: &Connection) -> Result<Vec<(u64, u64)>> {
 }
 
 /// Count blocks by author in a specific epoch
+#[allow(dead_code)]
 pub fn count_blocks_by_author_in_epoch(
     conn: &Connection,
     author_key: &str,
@@ -240,6 +241,20 @@ pub fn count_blocks_by_author_in_epoch(
     let count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM blocks WHERE author_key = ?1 AND epoch = ?2",
         params![author_key, epoch as i64],
+        |row| row.get(0),
+    )?;
+    Ok(count as u64)
+}
+
+/// Count blocks by author since a given timestamp (in seconds)
+pub fn count_blocks_by_author_since(
+    conn: &Connection,
+    author_key: &str,
+    since_timestamp: i64,
+) -> Result<u64> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM blocks WHERE author_key = ?1 AND timestamp >= ?2",
+        params![author_key, since_timestamp],
         |row| row.get(0),
     )?;
     Ok(count as u64)
@@ -283,6 +298,7 @@ pub fn store_committee_snapshot(
 ///
 /// Returns the committee in order (sorted by position).
 /// Returns None if no committee snapshot exists for this epoch.
+#[allow(dead_code)]
 pub fn get_committee_snapshot(conn: &Connection, epoch: u64) -> Result<Option<Vec<String>>> {
     let mut stmt = conn.prepare(
         "SELECT aura_key FROM committee_snapshots
@@ -302,6 +318,7 @@ pub fn get_committee_snapshot(conn: &Connection, epoch: u64) -> Result<Option<Ve
 }
 
 /// Get committee size for an epoch
+#[allow(dead_code)]
 pub fn get_committee_size(conn: &Connection, epoch: u64) -> Result<Option<usize>> {
     let count: Option<i64> = conn.query_row(
         "SELECT COUNT(*) FROM committee_snapshots WHERE epoch = ?1",
@@ -313,6 +330,7 @@ pub fn get_committee_size(conn: &Connection, epoch: u64) -> Result<Option<usize>
 }
 
 /// List all epochs with stored committee snapshots
+#[allow(dead_code)]
 pub fn list_committee_epochs(conn: &Connection) -> Result<Vec<u64>> {
     let mut stmt = conn.prepare("SELECT DISTINCT epoch FROM committee_snapshots ORDER BY epoch DESC")?;
 

@@ -16,6 +16,7 @@ pub struct PermissionedCandidate {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct CandidateRegistration {
     pub sidechain_pub_key: String,
     pub aura_pub_key: String,
@@ -43,6 +44,7 @@ pub struct Validator {
 
 /// Ordered validator set for a specific epoch
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ValidatorSet {
     pub epoch: u64,
     /// Registered validator candidates (from AriadneParameters)
@@ -56,11 +58,13 @@ pub struct ValidatorSet {
 
 impl ValidatorSet {
     /// Legacy accessor for backward compatibility
+    #[allow(dead_code)]
     pub fn validators(&self) -> &[Validator] {
         &self.candidates
     }
 }
 
+#[allow(dead_code)]
 impl ValidatorSet {
     /// Fetch validator set with committee for a given epoch at a specific block
     ///

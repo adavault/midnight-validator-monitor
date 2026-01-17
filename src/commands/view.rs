@@ -1,6 +1,7 @@
 //! View command - interactive TUI for real-time monitoring
 
 use crate::db::Database;
+use crate::metrics::MetricsClient;
 use crate::rpc::RpcClient;
 use crate::tui::{App, Event, EventHandler};
 use anyhow::{Context, Result};
@@ -42,8 +43,9 @@ pub async fn run(args: ViewArgs) -> Result<()> {
     let db_path = args.db_path.unwrap_or_else(|| std::path::PathBuf::from(&config.database.path));
     let refresh_interval = args.refresh_interval.unwrap_or(config.view.refresh_interval_ms);
 
-    // Connect to RPC and database BEFORE initializing terminal
+    // Connect to RPC, metrics, and database BEFORE initializing terminal
     let rpc = RpcClient::with_timeout(&rpc_url, config.rpc.timeout_ms);
+    let metrics = MetricsClient::new(&config.rpc.metrics_url);
     let db = Database::open(&db_path)
         .context(format!("Failed to open database at {}.
 
@@ -70,7 +72,7 @@ Tip: If you installed MVM, the database should be at /opt/midnight/mvm/data/mvm.
     }
 
     // Do initial update
-    if let Err(e) = app.update(&rpc, &db).await {
+    if let Err(e) = app.update(&rpc, &metrics, &db).await {
         error!("Initial update failed: {}", e);
     }
 
@@ -78,7 +80,7 @@ Tip: If you installed MVM, the database should be at /opt/midnight/mvm/data/mvm.
     let event_handler = EventHandler::new(Duration::from_millis(1000));
 
     // Run the TUI loop (data refresh at configured interval)
-    let res = run_tui(&mut terminal, &mut app, &rpc, &db, &event_handler, refresh_interval).await;
+    let res = run_tui(&mut terminal, &mut app, &rpc, &metrics, &db, &event_handler, refresh_interval).await;
 
     // Restore terminal (always, even on error)
     let _ = disable_raw_mode();
@@ -102,6 +104,7 @@ async fn run_tui(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,
     rpc: &RpcClient,
+    metrics: &MetricsClient,
     db: &Database,
     event_handler: &EventHandler,
     data_refresh_interval_ms: u64,
@@ -122,7 +125,7 @@ async fn run_tui(
             Event::Tick | Event::Resize => {
                 // Only fetch new data at the configured refresh interval
                 if app.last_update.elapsed() >= data_refresh_interval {
-                    if let Err(e) = app.update(rpc, db).await {
+                    if let Err(e) = app.update(rpc, metrics, db).await {
                         error!("Update failed: {}", e);
                     }
                 }

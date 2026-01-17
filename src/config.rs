@@ -4,10 +4,11 @@ use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct Config {
     #[serde(default)]
     pub rpc: RpcConfig,
@@ -47,6 +48,7 @@ pub struct DatabaseConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct ValidatorConfig {
     #[serde(default)]
     pub keystore_path: Option<String>,
@@ -81,6 +83,7 @@ pub struct ViewConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct DaemonConfig {
     #[serde(default)]
     pub pid_file: Option<String>,
@@ -127,18 +130,6 @@ fn default_refresh_interval() -> u64 {
     6000 // Match Midnight block interval of 6 seconds
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            rpc: RpcConfig::default(),
-            database: DatabaseConfig::default(),
-            validator: ValidatorConfig::default(),
-            sync: SyncConfig::default(),
-            view: ViewConfig::default(),
-            daemon: DaemonConfig::default(),
-        }
-    }
-}
 
 impl Default for RpcConfig {
     fn default() -> Self {
@@ -158,15 +149,6 @@ impl Default for DatabaseConfig {
     }
 }
 
-impl Default for ValidatorConfig {
-    fn default() -> Self {
-        Self {
-            keystore_path: None,
-            label: None,
-            name: None,
-        }
-    }
-}
 
 impl Default for SyncConfig {
     fn default() -> Self {
@@ -187,15 +169,6 @@ impl Default for ViewConfig {
     }
 }
 
-impl Default for DaemonConfig {
-    fn default() -> Self {
-        Self {
-            pid_file: None,
-            log_file: None,
-            enable_syslog: false,
-        }
-    }
-}
 
 impl Config {
     /// Load configuration from file, environment, and defaults

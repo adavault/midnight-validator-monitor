@@ -76,7 +76,7 @@ pub async fn run(args: SyncArgs) -> Result<()> {
     };
 
     // Set up signal handling for graceful shutdown
-    let signals = Signals::new(&[SIGTERM, SIGINT, SIGQUIT])
+    let signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])
         .context("Failed to register signal handlers")?;
     let mut signals = signals.fuse();
 
@@ -92,7 +92,12 @@ pub async fn run(args: SyncArgs) -> Result<()> {
     let rpc = RpcClient::with_timeout(&rpc_url, config.rpc.timeout_ms);
 
     // Get current chain state
-    let chain_tip = get_chain_tip(&rpc).await?;
+    let chain_tip = get_chain_tip(&rpc).await
+        .context(format!("Failed to connect to node at {}.
+
+Tip: Make sure your Midnight node is running and RPC is enabled.
+     Check the RPC URL is correct: {}
+     Default port is 9944 for HTTP RPC.", rpc_url, rpc_url))?;
     let finalized = get_finalized_block(&rpc).await?;
     let sidechain_status = get_sidechain_status(&rpc).await.ok();
     let mainchain_epoch = sidechain_status

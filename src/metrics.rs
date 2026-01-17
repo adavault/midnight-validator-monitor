@@ -9,7 +9,7 @@ pub struct MetricsClient {
 }
 
 /// Parsed Prometheus metrics relevant to block production
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct BlockProductionMetrics {
     /// Total blocks constructed/proposed by this validator
     pub blocks_produced: u64,
@@ -19,6 +19,20 @@ pub struct BlockProductionMetrics {
     pub finalized_block: u64,
     /// Number of transactions in last produced block
     pub last_block_transactions: u64,
+    /// Network bandwidth in bytes (received)
+    pub bandwidth_in: u64,
+    /// Network bandwidth in bytes (sent)
+    pub bandwidth_out: u64,
+    /// Ready transactions in pool
+    pub txpool_ready: u64,
+    /// Transaction validations scheduled
+    pub txpool_validations_scheduled: u64,
+    /// Transaction validations finished
+    pub txpool_validations_finished: u64,
+    /// Process start time (for uptime calculation)
+    pub process_start_time: f64,
+    /// Is this node a Grandpa voter
+    pub grandpa_voter: bool,
 }
 
 impl MetricsClient {
@@ -78,6 +92,43 @@ fn parse_metrics(body: &str) -> BlockProductionMetrics {
     // Transactions in last produced block
     if let Some(value) = find_metric(&parsed, "substrate_proposer_number_of_transactions", None) {
         metrics.last_block_transactions = value as u64;
+    }
+
+    // Network bandwidth - substrate_sub_libp2p_network_bytes_total
+    if let Some(value) = find_metric(
+        &parsed,
+        "substrate_sub_libp2p_network_bytes_total",
+        Some(&[("direction", "in")]),
+    ) {
+        metrics.bandwidth_in = value as u64;
+    }
+    if let Some(value) = find_metric(
+        &parsed,
+        "substrate_sub_libp2p_network_bytes_total",
+        Some(&[("direction", "out")]),
+    ) {
+        metrics.bandwidth_out = value as u64;
+    }
+
+    // Transaction pool metrics
+    if let Some(value) = find_metric(&parsed, "substrate_ready_transactions_number", None) {
+        metrics.txpool_ready = value as u64;
+    }
+    if let Some(value) = find_metric(&parsed, "substrate_sub_txpool_validations_scheduled", None) {
+        metrics.txpool_validations_scheduled = value as u64;
+    }
+    if let Some(value) = find_metric(&parsed, "substrate_sub_txpool_validations_finished", None) {
+        metrics.txpool_validations_finished = value as u64;
+    }
+
+    // Process uptime
+    if let Some(value) = find_metric(&parsed, "substrate_process_start_time_seconds", None) {
+        metrics.process_start_time = value;
+    }
+
+    // Grandpa voter status - infer from prevotes cast (if > 0, we're a voter)
+    if let Some(value) = find_metric(&parsed, "substrate_finality_grandpa_prevotes_total", None) {
+        metrics.grandpa_voter = value > 0.0;
     }
 
     metrics

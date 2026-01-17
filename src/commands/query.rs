@@ -1,6 +1,6 @@
 //! Query command - query stored block data
 
-use crate::db::{Database, ValidatorRecord};
+use crate::db::Database;
 use anyhow::{bail, Result};
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
@@ -266,9 +266,7 @@ fn run_validators(db: &Database, ours_only: bool, limit: u64) -> Result<()> {
 
     for validator in validators.iter().take(limit as usize) {
         let status = validator
-            .registration_status
-            .as_ref()
-            .map(|s| s.as_str())
+            .registration_status.as_deref()
             .unwrap_or("unknown");
         let ours_marker = if validator.is_ours { " *" } else { "" };
 

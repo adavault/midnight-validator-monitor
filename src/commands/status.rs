@@ -315,7 +315,13 @@ pub async fn run(args: StatusArgs) -> Result<()> {
     // Try to get version on startup
     match monitor.get_version().await {
         Ok(version) => info!("Node version: {}", version),
-        Err(e) => warn!("Could not fetch node version: {}", e),
+        Err(e) => {
+            warn!("Could not connect to node at {}", rpc_url);
+            warn!("Error: {}", e);
+            warn!("");
+            warn!("Tip: Make sure your Midnight node is running and RPC is enabled.");
+            warn!("     Check the RPC URL is correct (default port is 9944).");
+        }
     }
 
     if args.once {

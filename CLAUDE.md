@@ -125,9 +125,9 @@ The application uses a modular command-based architecture where each major featu
 
 **TUI System (`src/tui/`)**
 - Event-driven architecture with ratatui and crossterm
-- Five views: Dashboard, Blocks, Validators, Performance, Help
-- Keyboard navigation (1-4 for views, j/k for scrolling, f for filtering, q to quit)
-- Components: `app.rs` (state), `event.rs` (input handling), `ui.rs` (rendering)
+- Six views: Dashboard, Blocks, Validators, Performance, Peers, Help
+- Keyboard navigation (1-5 for views, j/k for scrolling, f for filtering, t for theme, q to quit)
+- Components: `app.rs` (state), `event.rs` (input handling), `ui.rs` (rendering), `layout.rs` (responsive sizing), `theme.rs` (Midnight/Midday themes)
 
 ### Key Data Flow
 
@@ -137,7 +137,7 @@ The application uses a modular command-based architecture where each major featu
 
 3. **Key Verification**: Loads keys from keystore directory (filenames: `<key_type_hex><public_key_hex>`) → Checks each key loaded via `author_hasKey` RPC → Checks registration in permissioned candidates or dynamic registrations → Marks validators as "ours" in database
 
-4. **Interactive TUI**: Loads config → Connects to RPC and database → Enters event loop → Handles keyboard input → Fetches fresh data on intervals → Renders views (Dashboard/Blocks/Validators/Performance/Help) → Updates display → Repeats until quit
+4. **Interactive TUI**: Loads config → Connects to RPC and database → Enters event loop → Handles keyboard input → Fetches fresh data on intervals → Renders views (Dashboard/Blocks/Validators/Performance/Peers/Help) → Updates display → Repeats until quit
 
 ## Midnight Blockchain Specifics
 
@@ -149,7 +149,10 @@ The application uses a modular command-based architecture where each major featu
 ### Slot and Epoch Calculation
 - Slots are extracted from AURA PreRuntime digest logs in blocks
 - Epoch calculation is Midnight-specific (not standard Substrate)
-- The relationship between slots and epochs is determined by the sidechain runtime
+- **Sidechain epochs**: 2-hour cycles that determine committee rotation and block production eligibility
+- **Mainchain epochs**: 24-hour Cardano-style epochs
+- The `sidechain_getStatus` RPC returns `nextEpochTimestamp` for both chains
+- "This Epoch" block counting in TUI uses sidechain epoch (timestamp-based query)
 
 ### Validator Registration
 Two types of validators:
@@ -183,13 +186,15 @@ The sync command attributes blocks to validators using:
 
 ### RPC Methods Used
 Standard Substrate:
-- `system_health`, `system_version`, `system_syncState`
+- `system_health`, `system_version`, `system_syncState`, `system_chain`
 - `chain_getHeader`, `chain_getBlock`, `chain_getBlockHash`, `chain_getFinalizedHead`
 - `author_hasKey`
+- `system_peers` - Connected peers with sync status
+- `system_unstable_networkState` - Network state including external IPs and peer ID (requires `--rpc-methods=unsafe`)
 - `state_call("AuraApi_authorities", "0x", [optional_block_hash])` - Returns SCALE-encoded committee (requires historical state for past blocks)
 
 Midnight-specific:
-- `sidechain_getStatus` - Returns epoch/slot information
+- `sidechain_getStatus` - Returns epoch/slot information with `nextEpochTimestamp` for both chains
 - `sidechain_getAriadneParameters` - Returns validator registration data and permissioned candidates
 
 ## Error Handling Patterns

@@ -33,6 +33,7 @@ impl ScreenSize {
 
 /// Responsive layout manager
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ResponsiveLayout {
     pub size: ScreenSize,
     pub width: u16,
@@ -63,13 +64,13 @@ impl ResponsiveLayout {
     }
 
     /// Get the dashboard layout constraints
-    /// Heights are fixed based on content: Network Status (4 lines + 2 border = 6),
+    /// Heights are fixed based on content: Network Status (7 lines + 2 border = 9),
     /// Our Validator (6 lines for 1 validator with 3 keys + 2 border = 8)
     pub fn dashboard_layout(&self, area: Rect) -> Vec<Rect> {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(6),  // Network status: 4 content lines + 2 border
+                Constraint::Length(9),  // Network status: 7 content lines + 2 border
                 Constraint::Length(8),  // Our validator: 3 header + 3 keys + 2 border
                 Constraint::Min(0),     // Recent blocks: fills remaining space
             ])
@@ -78,6 +79,7 @@ impl ResponsiveLayout {
     }
 
     /// Get optimal block count to display based on screen size
+    #[allow(dead_code)]
     pub fn blocks_to_display(&self) -> usize {
         match self.size {
             ScreenSize::Medium => 20,
@@ -86,6 +88,7 @@ impl ResponsiveLayout {
     }
 
     /// Get optimal validator count to display
+    #[allow(dead_code)]
     pub fn validators_to_display(&self) -> usize {
         match self.size {
             ScreenSize::Medium => 25,
@@ -102,6 +105,7 @@ impl ResponsiveLayout {
     }
 
     /// Determine if we should show extra columns in tables
+    #[allow(dead_code)]
     pub fn show_extra_columns(&self) -> bool {
         matches!(self.size, ScreenSize::Large)
     }
@@ -169,6 +173,7 @@ impl KeyDisplayMode {
 
 /// Block list column configuration
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct BlockListColumns {
     pub show_slot: bool,
     pub show_epoch: bool,
@@ -178,6 +183,7 @@ pub struct BlockListColumns {
 
 /// Validator list column configuration
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ValidatorListColumns {
     pub key_width: usize,
     pub show_status: bool,
