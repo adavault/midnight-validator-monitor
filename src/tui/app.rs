@@ -593,13 +593,13 @@ impl App {
 
             // Calculate expected blocks - only if we're elected to the committee
             // If not in committee, expected is 0
-            if self.state.committee_elected && self.state.committee_seats > 0 {
+            if self.state.committee_elected && self.state.committee_seats > 0 && self.state.committee_size > 0 {
                 // Use committee seats for expected calculation
-                // ~2400 blocks per 2h sidechain epoch (1 block per 3 seconds)
-                // Sidechain epoch progress gives us time-based expected
+                // ~1200 blocks per 2h sidechain epoch (1 block per 6 seconds)
+                // Each committee seat produces ~1 block per epoch (round-robin)
                 let epoch_progress_ratio = self.state.epoch_progress.progress_percent / 100.0;
-                const BLOCKS_PER_SIDECHAIN_EPOCH: f64 = 2400.0;
-                let expected_per_seat = BLOCKS_PER_SIDECHAIN_EPOCH / 1200.0; // ~2 blocks per seat per 2h epoch
+                const BLOCKS_PER_SIDECHAIN_EPOCH: f64 = 1200.0;
+                let expected_per_seat = BLOCKS_PER_SIDECHAIN_EPOCH / self.state.committee_size as f64;
                 self.state.epoch_progress.expected_blocks =
                     epoch_progress_ratio * expected_per_seat * self.state.committee_seats as f64;
             } else {

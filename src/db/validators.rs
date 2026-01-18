@@ -27,7 +27,7 @@ pub fn upsert_validator(conn: &Connection, validator: &ValidatorRecord) -> Resul
            aura_key = ?2,
            grandpa_key = ?3,
            label = COALESCE(excluded.label, label),
-           is_ours = ?5,
+           is_ours = MAX(is_ours, ?5),
            registration_status = ?6,
            updated_at = ?10",
         params![
