@@ -1,13 +1,13 @@
 //! Sync command - synchronize blocks to local database
 
-use crate::db::{BlockRecord, Database, ValidatorRecord};
-use crate::midnight::{extract_slot_from_digest, ValidatorSet};
+use crate::db::{BlockRecord, Database, ValidatorRecord, ValidatorEpochRecord};
+use crate::midnight::{extract_slot_from_digest, ChainTiming, ValidatorSet};
 use crate::rpc::{RpcClient, SignedBlock, SidechainStatus};
 use anyhow::{Context, Result};
 use clap::Args;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::time;
@@ -57,7 +57,7 @@ pub async fn run(args: SyncArgs) -> Result<()> {
     let config = crate::config::Config::load()?;
 
     // Use args or fall back to config
-    let rpc_url = args.rpc_url.unwrap_or(config.rpc.url);
+    let rpc_url = args.rpc_url.unwrap_or_else(|| config.rpc.url.clone());
     let db_path = args.db_path.unwrap_or_else(|| std::path::PathBuf::from(&config.database.path));
     let batch_size = args.batch_size.unwrap_or(config.sync.batch_size);
     let poll_interval = args.poll_interval.unwrap_or(config.sync.poll_interval_secs);
@@ -88,8 +88,8 @@ pub async fn run(args: SyncArgs) -> Result<()> {
     let db = Database::open(&db_path)?;
     info!("Database opened successfully");
 
-    // Connect to RPC with configured timeout
-    let rpc = RpcClient::with_timeout(&rpc_url, config.rpc.timeout_ms);
+    // Connect to RPC with configured timeout and retry settings
+    let rpc = RpcClient::with_config(&rpc_url, config.rpc.timeout_ms, config.rpc.retry_config());
 
     // Get current chain state
     let chain_tip = get_chain_tip(&rpc).await
@@ -108,6 +108,29 @@ Tip: Make sure your Midnight node is running and RPC is enabled.
         .as_ref()
         .map(|s| s.sidechain.epoch)
         .unwrap_or(0);
+
+    // Get chain timing from config
+    let mut chain_timing = config.chain.timing();
+
+    // If genesis timestamp not configured, calculate from current slot and time
+    if chain_timing.genesis_timestamp_ms.is_none() {
+        if let Some(ref status) = sidechain_status {
+            let current_slot = status.sidechain.slot;
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0);
+
+            // genesis_time = now - (current_slot * slot_duration)
+            let calculated_genesis = now_ms.saturating_sub(current_slot * chain_timing.slot_duration_ms);
+            chain_timing.genesis_timestamp_ms = Some(calculated_genesis);
+
+            debug!(
+                "Calculated genesis timestamp: {} (from slot {} at {})",
+                calculated_genesis, current_slot, now_ms
+            );
+        }
+    }
 
     info!("Chain tip: {}, finalized: {}", chain_tip, finalized);
     info!("Mainchain epoch: {}, Sidechain epoch: {}", mainchain_epoch, sidechain_epoch);
@@ -161,7 +184,7 @@ Tip: Make sure your Midnight node is running and RPC is enabled.
     while current_block <= target {
         let batch_end = std::cmp::min(current_block + batch_size as u64 - 1, target);
 
-        let synced = sync_block_range(&rpc, &db, current_block, batch_end).await?;
+        let synced = sync_block_range(&rpc, &db, current_block, batch_end, &chain_timing).await?;
 
         if synced > 0 {
             let blocks_synced_so_far = batch_end - start_from + 1;
@@ -255,7 +278,7 @@ Tip: Make sure your Midnight node is running and RPC is enabled.
                     };
 
                     if target > last_synced {
-                        match sync_block_range(&rpc, &db, last_synced + 1, target).await {
+                        match sync_block_range(&rpc, &db, last_synced + 1, target, &chain_timing).await {
                             Ok(synced) => {
                                 if synced > 0 {
                                     // Calculate how far behind we are
@@ -312,34 +335,34 @@ Tip: Make sure your Midnight node is running and RPC is enabled.
 }
 
 async fn get_chain_tip(rpc: &RpcClient) -> Result<u64> {
-    let header: crate::rpc::BlockHeader = rpc.call("chain_getHeader", Vec::<()>::new()).await?;
+    let header: crate::rpc::BlockHeader = rpc.call_with_retry("chain_getHeader", Vec::<()>::new()).await?;
     Ok(header.block_number())
 }
 
 async fn get_finalized_block(rpc: &RpcClient) -> Result<u64> {
     let hash: String = rpc
-        .call("chain_getFinalizedHead", Vec::<()>::new())
+        .call_with_retry("chain_getFinalizedHead", Vec::<()>::new())
         .await?;
-    let header: crate::rpc::BlockHeader = rpc.call("chain_getHeader", vec![&hash]).await?;
+    let header: crate::rpc::BlockHeader = rpc.call_with_retry("chain_getHeader", vec![&hash]).await?;
     Ok(header.block_number())
 }
 
 async fn get_sidechain_status(rpc: &RpcClient) -> Result<SidechainStatus> {
-    rpc.call("sidechain_getStatus", Vec::<()>::new()).await
+    rpc.call_with_retry("sidechain_getStatus", Vec::<()>::new()).await
 }
 
 async fn get_sidechain_status_at_block(rpc: &RpcClient, block_hash: &str) -> Result<SidechainStatus> {
     // Query sidechain status at a specific block hash
     // Substrate RPC methods typically accept an optional block hash as the last parameter
-    rpc.call("sidechain_getStatus", vec![block_hash]).await
+    rpc.call_with_retry("sidechain_getStatus", vec![block_hash]).await
 }
 
 async fn get_block_hash(rpc: &RpcClient, block_number: u64) -> Result<String> {
-    rpc.call("chain_getBlockHash", vec![block_number]).await
+    rpc.call_with_retry("chain_getBlockHash", vec![block_number]).await
 }
 
 async fn get_block(rpc: &RpcClient, hash: &str) -> Result<SignedBlock> {
-    rpc.call("chain_getBlock", vec![hash]).await
+    rpc.call_with_retry("chain_getBlock", vec![hash]).await
 }
 
 /// Detect the oldest block that has state available for committee queries.
@@ -425,11 +448,58 @@ struct CommitteeCache {
     used_fallback: bool,
 }
 
+/// Capture validator epoch snapshot data
+///
+/// Stores validator state (committee seats, registration status) for a sidechain epoch.
+/// This is called when we first encounter a new sidechain epoch during sync.
+fn capture_validator_epoch_snapshot(
+    db: &Database,
+    sidechain_epoch: u64,
+    validator_set: &ValidatorSet,
+) -> Result<()> {
+    let committee_size = validator_set.committee_size() as u32;
+    let timestamp = chrono::Utc::now().timestamp();
+
+    let mut captured_count = 0;
+
+    for candidate in &validator_set.candidates {
+        let seats = validator_set.count_seats(&candidate.aura_key) as u32;
+
+        let record = ValidatorEpochRecord {
+            sidechain_epoch,
+            sidechain_key: candidate.sidechain_key.clone(),
+            aura_key: candidate.aura_key.clone(),
+            committee_seats: seats,
+            committee_size,
+            is_permissioned: candidate.is_permissioned,
+            stake_lovelace: None, // Stake not available via RPC
+            captured_at: timestamp,
+        };
+
+        if let Err(e) = db.store_validator_epoch(&record) {
+            warn!(
+                "Failed to store validator epoch data for {} in epoch {}: {}",
+                candidate.sidechain_key, sidechain_epoch, e
+            );
+        } else {
+            captured_count += 1;
+        }
+    }
+
+    info!(
+        "Captured validator epoch snapshot for epoch {} ({} validators, {} committee seats)",
+        sidechain_epoch, captured_count, committee_size
+    );
+
+    Ok(())
+}
+
 async fn sync_block_range(
     rpc: &RpcClient,
     db: &Database,
     from: u64,
     to: u64,
+    chain_timing: &ChainTiming,
 ) -> Result<u64> {
     let mut synced = 0;
 
@@ -438,8 +508,12 @@ async fn sync_block_range(
     // at the correct historical point for each epoch
     let mut committee_cache: HashMap<u64, CommitteeCache> = HashMap::new();
 
+    // Track sidechain epochs where we've captured validator epoch snapshots
+    // Initialize with epochs already in database to avoid duplicates
+    let mut captured_sidechain_epochs: HashSet<u64> = HashSet::new();
+
     for block_num in from..=to {
-        match sync_single_block(rpc, db, block_num, &mut committee_cache).await {
+        match sync_single_block(rpc, db, block_num, &mut committee_cache, &mut captured_sidechain_epochs, chain_timing).await {
             Ok(true) => synced += 1,
             Ok(false) => {
                 debug!("Block {} already exists, skipping", block_num);
@@ -459,6 +533,8 @@ async fn sync_single_block(
     db: &Database,
     block_number: u64,
     committee_cache: &mut HashMap<u64, CommitteeCache>,
+    captured_sidechain_epochs: &mut HashSet<u64>,
+    chain_timing: &ChainTiming,
 ) -> Result<bool> {
     // Check if already synced
     if db.get_block(block_number)?.is_some() {
@@ -569,6 +645,28 @@ async fn sync_single_block(
         None
     };
 
+    // Capture validator epoch snapshot for this sidechain epoch if:
+    // 1. We have valid validator data (not pruned state)
+    // 2. We haven't already captured this sidechain epoch
+    // 3. The epoch is valid (> 0)
+    if let Some(vset) = &validator_set {
+        if sidechain_epoch > 0 && !captured_sidechain_epochs.contains(&sidechain_epoch) {
+            // Check if already in database
+            let already_captured = db.has_validator_epoch_snapshot(sidechain_epoch)
+                .unwrap_or(false);
+
+            if !already_captured {
+                if let Err(e) = capture_validator_epoch_snapshot(db, sidechain_epoch, vset) {
+                    warn!(
+                        "Failed to capture validator epoch snapshot for epoch {}: {}",
+                        sidechain_epoch, e
+                    );
+                }
+            }
+            captured_sidechain_epochs.insert(sidechain_epoch);
+        }
+    }
+
     // Extract slot from digest
     let slot = header
         .digest
@@ -639,6 +737,17 @@ async fn sync_single_block(
         None
     };
 
+    // Calculate timestamp from slot number (if genesis is known)
+    // This gives accurate historical timestamps rather than using sync time
+    let timestamp = if slot > 0 {
+        chain_timing
+            .slot_to_timestamp_ms(slot)
+            .map(|ms| (ms / 1000) as i64)
+            .unwrap_or_else(|| chrono::Utc::now().timestamp())
+    } else {
+        chrono::Utc::now().timestamp()
+    };
+
     // Create block record
     let record = BlockRecord {
         block_number,
@@ -649,7 +758,7 @@ async fn sync_single_block(
         slot_number: slot,
         epoch: mainchain_epoch,
         sidechain_epoch,
-        timestamp: chrono::Utc::now().timestamp(), // TODO: extract from extrinsics
+        timestamp,
         is_finalized: false,
         author_key,
         extrinsics_count: signed_block.block.extrinsics.len() as u32,

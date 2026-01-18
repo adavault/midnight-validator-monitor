@@ -71,7 +71,7 @@ impl ResponsiveLayout {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(9),  // Network status: 7 content lines + 2 border
-                Constraint::Length(8),  // Our validator: 3 header + 3 keys + 2 border
+                Constraint::Length(9),  // Our validator: 4 header + 3 keys + 2 border
                 Constraint::Min(0),     // Recent blocks: fills remaining space
             ])
             .split(area)

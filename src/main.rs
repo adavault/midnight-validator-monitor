@@ -8,7 +8,8 @@ mod rpc;
 mod tui;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::{generate, Shell};
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
@@ -45,6 +46,13 @@ enum Commands {
 
     /// Manage configuration
     Config(commands::ConfigArgs),
+
+    /// Generate shell completions
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: Shell,
+    },
 }
 
 #[tokio::main]
@@ -83,6 +91,11 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Config(args)) => {
             commands::config::run(args).await?;
+        }
+        Some(Commands::Completions { shell }) => {
+            let mut cmd = Cli::command();
+            generate(shell, &mut cmd, "mvm", &mut std::io::stdout());
+            return Ok(());
         }
         None => {
             // Default behavior: run status command with defaults

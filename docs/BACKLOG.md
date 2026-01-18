@@ -25,3 +25,45 @@ See `docs/EXTERNAL_IP_RESEARCH.md` for detailed research findings.
 - [ ] **Historical performance graphs**: Show block production over time
 - [ ] **Multiple node monitoring**: Support monitoring multiple validator nodes from single TUI
 - [ ] **Export functionality**: Export performance data to CSV/JSON
+
+## v0.8 Release Plan
+
+### Help Screen Glossary
+Add a glossary section to the help screen explaining Substrate and Midnight-specific terms:
+- **Extrinsics** - transactions/calls submitted to the chain
+- **Sidechain epoch** - committee rotation period (2h preview, TBD mainnet)
+- **Mainchain epoch** - Cardano epoch alignment (24h preview, 5d mainnet)
+- **Committee** - validators selected for block production each epoch
+- **Seats** - weighted positions in the committee (stake-based)
+- **AURA** - block authoring consensus mechanism
+- **Grandpa** - block finalization protocol
+- **Finalized** - irreversible blocks confirmed by 2/3+ validators
+- **Slot** - 6-second time window for block production
+- **State pruning** - removal of old blockchain state to save disk space
+
+### Enhanced Peers View (Prometheus Metrics)
+Replace/augment RPC-based peer data with richer Prometheus metrics from the node's `/metrics` endpoint.
+
+**Known Issue (v0.6.1):** The current inbound peer count is unreliable. The `system_unstable_networkState.connectedPeers` RPC only shows peers with "dialing" endpoints (outbound connections we initiated). Inbound connections don't appear in this RPC response even when Prometheus confirms they exist. This will be fixed by using Prometheus metrics directly.
+
+- [ ] **Connection counts by direction**: `substrate_sub_libp2p_connections_opened_total{direction="in|out"}` - accurate inbound/outbound tracking (fixes inbound count bug)
+- [ ] **Connection close reasons**: `substrate_sub_libp2p_connections_closed_total{direction,reason}` - diagnose networking issues (transport-error, keep-alive-timeout, etc.)
+- [ ] **Peer discovery**: `substrate_sub_libp2p_peerset_num_discovered` - total known peers in DHT
+- [ ] **Pending connections**: `substrate_sub_libp2p_pending_connections` - connections being established
+- [ ] **Request latency histograms**: `substrate_sub_libp2p_requests_in_success_total` / `requests_out_success_total` - sync request performance
+- [ ] **Bandwidth stats**: `substrate_sub_libp2p_network_bytes_total{direction}` - already captured, could show rates
+
+Benefits over current RPC approach:
+- More accurate inbound/outbound detection (current method uses endpoint heuristics)
+- Connection failure diagnostics (helps identify firewall/NAT issues)
+- Performance metrics for network health assessment
+
+### System Resource Monitoring (Requires node_exporter)
+- [ ] CPU, memory, disk usage display
+- [ ] Integration with Prometheus node_exporter
+- [ ] Alert thresholds for resource usage
+
+### Other Candidates
+- [ ] Notification system for missed blocks
+- [ ] Web UI alternative to TUI
+- [ ] REST API for external integrations

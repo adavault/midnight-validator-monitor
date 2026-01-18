@@ -88,6 +88,16 @@ pub fn handle_key_event(key: KeyEvent, app: &mut crate::tui::App) -> bool {
             app.previous_view();
             true
         }
+        // Page scroll - J/K (uppercase) or PageUp/PageDown
+        KeyCode::Char('J') | KeyCode::PageDown => {
+            app.scroll_page_down();
+            true
+        }
+        KeyCode::Char('K') | KeyCode::PageUp => {
+            app.scroll_page_up();
+            true
+        }
+        // Single line scroll - j/k or arrow keys
         KeyCode::Down | KeyCode::Char('j') => {
             app.scroll_down();
             true

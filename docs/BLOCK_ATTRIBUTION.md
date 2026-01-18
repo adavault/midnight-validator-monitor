@@ -94,6 +94,87 @@ Queries should handle NULL appropriately:
 - `COUNT(*) WHERE author_key = ?` - counts attributed blocks
 - `COUNT(*) WHERE author_key IS NULL` - counts unattributed blocks
 
+## Archive Node vs Regular Node
+
+This is a critical infrastructure decision that affects MVM's ability to attribute blocks.
+
+### Regular (Pruned) Node
+
+Default configuration for Midnight nodes. Prunes old state to save disk space.
+
+```bash
+midnight-node  # Default pruning behavior
+```
+
+**Characteristics:**
+- Keeps only the last ~256 blocks of runtime state
+- Block data (headers, extrinsics) retained indefinitely
+- State queries (`state_call`) fail for old blocks
+- Disk usage: ~50-100 GB (stable)
+
+**Impact on MVM:**
+- Block attribution only works for recent blocks (~last 25 minutes)
+- After node restart, historical state is lost
+- Blocks synced during "state gap" have `author_key = NULL`
+- Validator statistics only reflect blocks attributed while state was available
+
+### Archive Node
+
+Retains all historical state from genesis.
+
+```bash
+midnight-node --state-pruning archive
+```
+
+**Characteristics:**
+- All historical state queries work
+- Can fetch committee at any block hash
+- Disk usage: 500+ GB and growing continuously
+- Longer initial sync time
+- Higher I/O requirements
+
+**Impact on MVM:**
+- Full block attribution for entire chain history
+- Complete validator statistics from genesis
+- No attribution gaps regardless of sync timing
+- Can backfill attribution for previously unattributed blocks
+
+### Comparison Table
+
+| Aspect | Regular Node | Archive Node |
+|--------|--------------|--------------|
+| Disk usage | ~50-100 GB (stable) | 500+ GB (grows) |
+| State retention | ~256 blocks | All blocks |
+| Historical queries | Fail for old blocks | Always succeed |
+| Block attribution | Recent only | Full history |
+| After restart | State lost, attribution gap | No impact |
+| Recommended for | Most validators | Analytics, explorers |
+
+### Choosing the Right Configuration
+
+**Use a regular (pruned) node if:**
+- Disk space is limited
+- You start MVM sync when the node starts and keep it running
+- You can accept attribution gaps during extended downtime
+- You primarily care about ongoing/future block production
+
+**Use an archive node if:**
+- You need complete historical attribution
+- You're running analytics or an explorer
+- You want accurate lifetime validator statistics
+- Disk space and I/O performance are not constraints
+
+### Hybrid Approach
+
+For validators who want accurate attribution without running archive:
+
+1. **Run MVM sync continuously** alongside the node
+2. **Start sync before any planned maintenance**
+3. **Monitor sync status** via systemd or mvm dashboard
+4. **Accept** that unplanned downtime may create attribution gaps
+
+Attribution gaps don't affect block production - they only impact historical statistics.
+
 ## Recommendations
 
 ### For Complete History

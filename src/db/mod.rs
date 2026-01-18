@@ -97,6 +97,15 @@ impl Database {
         blocks::count_blocks_by_author_since(&self.conn, author_key, since_timestamp)
     }
 
+    pub fn get_block_counts_bucketed(
+        &self,
+        author_keys: &[String],
+        bucket_duration_secs: i64,
+        num_buckets: usize,
+    ) -> Result<Vec<u64>> {
+        blocks::get_block_counts_bucketed(&self.conn, author_keys, bucket_duration_secs, num_buckets)
+    }
+
     // Committee snapshot operations
     pub fn store_committee_snapshot(&self, epoch: u64, committee: &[String]) -> Result<()> {
         blocks::store_committee_snapshot(&self.conn, epoch, committee)
@@ -115,6 +124,32 @@ impl Database {
     #[allow(dead_code)]
     pub fn list_committee_epochs(&self) -> Result<Vec<u64>> {
         blocks::list_committee_epochs(&self.conn)
+    }
+
+    // Validator epoch snapshot operations
+    pub fn store_validator_epoch(&self, record: &ValidatorEpochRecord) -> Result<()> {
+        blocks::store_validator_epoch(&self.conn, record)
+    }
+
+    #[allow(dead_code)]
+    pub fn get_validator_epoch(
+        &self,
+        sidechain_epoch: u64,
+        sidechain_key: &str,
+    ) -> Result<Option<ValidatorEpochRecord>> {
+        blocks::get_validator_epoch(&self.conn, sidechain_epoch, sidechain_key)
+    }
+
+    pub fn get_validators_for_epoch(&self, sidechain_epoch: u64) -> Result<Vec<ValidatorEpochRecord>> {
+        blocks::get_validators_for_epoch(&self.conn, sidechain_epoch)
+    }
+
+    pub fn get_latest_validator_epochs(&self) -> Result<Vec<ValidatorEpochRecord>> {
+        blocks::get_latest_validator_epochs(&self.conn)
+    }
+
+    pub fn has_validator_epoch_snapshot(&self, sidechain_epoch: u64) -> Result<bool> {
+        blocks::has_validator_epoch_snapshot(&self.conn, sidechain_epoch)
     }
 
     // Sync status operations

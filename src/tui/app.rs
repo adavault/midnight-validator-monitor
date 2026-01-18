@@ -1,11 +1,12 @@
 //! Application state management for TUI
 
-use crate::db::{BlockRecord, Database, ValidatorRecord};
+use crate::db::{BlockRecord, Database, ValidatorRecord, ValidatorEpochRecord};
 use crate::metrics::MetricsClient;
-use crate::midnight::ValidatorSet;
+use crate::midnight::{ChainTiming, ValidatorSet};
 use crate::rpc::{RpcClient, SidechainStatus};
 use crate::tui::Theme;
 use anyhow::Result;
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 /// View modes for the TUI
@@ -37,6 +38,8 @@ pub struct App {
     pub theme: Theme,
     /// Expected IP for filtering external addresses (from config)
     pub expected_ip: Option<String>,
+    /// Chain timing parameters (network-specific)
+    pub chain_timing: ChainTiming,
 }
 
 /// Epoch progress information
@@ -89,6 +92,8 @@ pub struct AppState {
     pub sidechain_slot: u64,
     pub sync_state_syncing: bool,
     pub peer_count: u64,
+    pub peers_inbound: u64,
+    pub peers_outbound: u64,
     pub node_health: bool,
 
     // Node sync progress
@@ -123,6 +128,17 @@ pub struct AppState {
     /// Next sidechain epoch timestamp in ms (used to calculate epoch start)
     pub sidechain_next_epoch_ms: Option<u64>,
 
+    // Validator epoch data (seats per validator in current epoch)
+    /// Maps sidechain_key -> ValidatorEpochRecord for current sidechain epoch
+    pub validator_epoch_data: HashMap<String, ValidatorEpochRecord>,
+    /// Maps sidechain_key -> blocks produced this epoch
+    pub validator_epoch_blocks: HashMap<String, u64>,
+
+    // Block production sparkline (for dashboard)
+    /// Block counts per sidechain epoch for our validators (last 12 epochs = 24h)
+    /// Index 0 = oldest, index 11 = most recent (left to right in sparkline)
+    pub our_blocks_sparkline: Vec<u64>,
+
     // Status
     pub last_error: Option<String>,
     pub update_duration: Duration,
@@ -152,6 +168,7 @@ pub struct PeerInfo {
     pub best_hash: String,
     pub best_number: u64,
     pub address: Option<String>,  // IP:port if available
+    pub is_outbound: bool,        // true = we dialed them, false = they dialed us
 }
 
 impl Default for AppState {
@@ -170,6 +187,8 @@ impl Default for AppState {
             sidechain_slot: 0,
             sync_state_syncing: false,
             peer_count: 0,
+            peers_inbound: 0,
+            peers_outbound: 0,
             node_health: true,
             sync_progress: SyncProgress::default(),
             node_name,
@@ -186,6 +205,9 @@ impl Default for AppState {
             committee_seats: 0,
             committee_size: 0,
             sidechain_next_epoch_ms: None,
+            validator_epoch_data: HashMap::new(),
+            validator_epoch_blocks: HashMap::new(),
+            our_blocks_sparkline: Vec::new(),
             last_error: None,
             update_duration: Duration::from_secs(0),
             is_loading: true,
@@ -215,7 +237,14 @@ impl App {
             last_update: Instant::now(),
             theme: Theme::default(),
             expected_ip: None,
+            chain_timing: ChainTiming::default(),
         }
+    }
+
+    /// Set chain timing configuration
+    pub fn with_chain_timing(mut self, timing: ChainTiming) -> Self {
+        self.chain_timing = timing;
+        self
     }
 
     /// Update application state from RPC and database
@@ -299,30 +328,30 @@ impl App {
                 .unwrap_or(0);
 
             // Calculate SIDECHAIN epoch progress using nextEpochTimestamp
-            // Sidechain epochs are 2 hours (7200 seconds) and determine committee elections
+            // Sidechain epoch duration varies by network (2h preview, 10h mainnet)
             if let Some(next_epoch_ms) = status.sidechain.next_epoch_timestamp {
-                const SIDECHAIN_EPOCH_DURATION_MS: u64 = 2 * 60 * 60 * 1000; // 2 hours in ms
+                let sidechain_epoch_ms = self.chain_timing.sidechain_epoch_ms;
 
                 // Store for block counting in fetch_db_data
                 self.state.sidechain_next_epoch_ms = Some(next_epoch_ms);
 
                 let time_remaining_ms = next_epoch_ms.saturating_sub(now_ms);
-                let time_elapsed_ms = SIDECHAIN_EPOCH_DURATION_MS.saturating_sub(time_remaining_ms);
-                let progress = (time_elapsed_ms as f64 / SIDECHAIN_EPOCH_DURATION_MS as f64) * 100.0;
+                let time_elapsed_ms = sidechain_epoch_ms.saturating_sub(time_remaining_ms);
+                let progress = (time_elapsed_ms as f64 / sidechain_epoch_ms as f64) * 100.0;
 
-                self.state.epoch_progress.epoch_length_slots = SIDECHAIN_EPOCH_DURATION_MS / 1000;
+                self.state.epoch_progress.epoch_length_slots = sidechain_epoch_ms / 1000;
                 self.state.epoch_progress.current_slot_in_epoch = time_elapsed_ms / 1000;
                 self.state.epoch_progress.progress_percent = progress.clamp(0.0, 100.0);
             }
 
             // Calculate MAINCHAIN epoch progress using nextEpochTimestamp
-            // Mainchain epochs are 24 hours (86400 seconds)
+            // Mainchain epoch duration varies by network (24h preview, 5d mainnet)
             if let Some(next_epoch_ms) = status.mainchain.next_epoch_timestamp {
-                const MAINCHAIN_EPOCH_DURATION_MS: u64 = 24 * 60 * 60 * 1000; // 24 hours in ms
+                let mainchain_epoch_ms = self.chain_timing.mainchain_epoch_ms;
 
                 let time_remaining_ms = next_epoch_ms.saturating_sub(now_ms);
-                let time_elapsed_ms = MAINCHAIN_EPOCH_DURATION_MS.saturating_sub(time_remaining_ms);
-                let progress = (time_elapsed_ms as f64 / MAINCHAIN_EPOCH_DURATION_MS as f64) * 100.0;
+                let time_elapsed_ms = mainchain_epoch_ms.saturating_sub(time_remaining_ms);
+                let progress = (time_elapsed_ms as f64 / mainchain_epoch_ms as f64) * 100.0;
 
                 self.state.epoch_progress.mainchain_progress_percent = progress.clamp(0.0, 100.0);
             }
@@ -394,10 +423,10 @@ impl App {
                     let mut public_ips: Vec<String> = external.iter()
                         .filter_map(|addr| addr.as_str())
                         .filter_map(|addr| {
-                            // Parse multiaddr format like /ip4/82.69.29.148/tcp/30333
+                            // Parse multiaddr format like /ip4/203.0.113.1/tcp/30333
                             if addr.starts_with("/ip4/") {
                                 let parts: Vec<&str> = addr.split('/').collect();
-                                // parts: ["", "ip4", "82.69.29.148", "tcp", "30333"]
+                                // parts: ["", "ip4", "203.0.113.1", "tcp", "30333"]
                                 if parts.len() >= 5 {
                                     let ip = parts[2];
                                     let port = parts[4];
@@ -440,74 +469,90 @@ impl App {
 
         // Get connected peers with sync info
         if let Ok(peers) = rpc.call::<_, Vec<serde_json::Value>>("system_peers", Vec::<()>::new()).await {
-            // Also get network state to extract peer addresses
-            let peer_addresses: std::collections::HashMap<String, String> =
+            // Also get network state to extract peer addresses and connection direction
+            let (peer_addresses, peer_directions): (HashMap<String, String>, HashMap<String, bool>) =
                 if let Ok(net_state) = rpc.call::<_, serde_json::Value>("system_unstable_networkState", Vec::<()>::new()).await {
-                    net_state.get("connectedPeers")
-                        .and_then(|v| v.as_object())
-                        .map(|peers_obj| {
-                            peers_obj.iter()
-                                .filter_map(|(peer_id, info)| {
-                                    // Extract first public IP from knownAddresses (try IPv4 first, then IPv6)
-                                    let addr = info.get("knownAddresses")
-                                        .and_then(|v| v.as_array())
-                                        .and_then(|addrs| {
-                                            // First try to find a public IPv4
-                                            let ipv4 = addrs.iter()
+                    let peers_obj = net_state.get("connectedPeers").and_then(|v| v.as_object());
+
+                    let addresses = peers_obj.map(|obj| {
+                        obj.iter()
+                            .filter_map(|(peer_id, info)| {
+                                // Extract first public IP from knownAddresses (try IPv4 first, then IPv6)
+                                let addr = info.get("knownAddresses")
+                                    .and_then(|v| v.as_array())
+                                    .and_then(|addrs| {
+                                        // First try to find a public IPv4
+                                        let ipv4 = addrs.iter()
+                                            .filter_map(|a| a.as_str())
+                                            .find_map(|addr| {
+                                                if addr.starts_with("/ip4/") {
+                                                    let parts: Vec<&str> = addr.split('/').collect();
+                                                    if parts.len() >= 5 {
+                                                        let ip = parts[2];
+                                                        let port = parts[4];
+                                                        // Filter out private IPs
+                                                        if !ip.starts_with("127.")
+                                                            && !ip.starts_with("10.")
+                                                            && !ip.starts_with("192.168.")
+                                                            && !ip.starts_with("172.16.")
+                                                            && !ip.starts_with("172.17.")
+                                                            && !ip.starts_with("172.18.")
+                                                            && !ip.starts_with("172.19.")
+                                                            && !ip.starts_with("172.2")
+                                                            && !ip.starts_with("172.30.")
+                                                            && !ip.starts_with("172.31.")
+                                                            && !ip.starts_with("0.")
+                                                        {
+                                                            return Some(format!("{}:{}", ip, port));
+                                                        }
+                                                    }
+                                                }
+                                                None
+                                            });
+
+                                        // If no IPv4, try IPv6
+                                        ipv4.or_else(|| {
+                                            addrs.iter()
                                                 .filter_map(|a| a.as_str())
                                                 .find_map(|addr| {
-                                                    if addr.starts_with("/ip4/") {
+                                                    if addr.starts_with("/ip6/") {
                                                         let parts: Vec<&str> = addr.split('/').collect();
                                                         if parts.len() >= 5 {
                                                             let ip = parts[2];
                                                             let port = parts[4];
-                                                            // Filter out private IPs
-                                                            if !ip.starts_with("127.")
-                                                                && !ip.starts_with("10.")
-                                                                && !ip.starts_with("192.168.")
-                                                                && !ip.starts_with("172.16.")
-                                                                && !ip.starts_with("172.17.")
-                                                                && !ip.starts_with("172.18.")
-                                                                && !ip.starts_with("172.19.")
-                                                                && !ip.starts_with("172.2")
-                                                                && !ip.starts_with("172.30.")
-                                                                && !ip.starts_with("172.31.")
-                                                                && !ip.starts_with("0.")
-                                                            {
-                                                                return Some(format!("{}:{}", ip, port));
+                                                            // Filter out localhost
+                                                            if ip != "::1" && !ip.starts_with("fe80:") {
+                                                                return Some(format!("[{}]:{}", ip, port));
                                                             }
                                                         }
                                                     }
                                                     None
-                                                });
+                                                })
+                                        })
+                                    });
+                                addr.map(|a| (peer_id.clone(), a))
+                            })
+                            .collect()
+                    }).unwrap_or_default();
 
-                                            // If no IPv4, try IPv6
-                                            ipv4.or_else(|| {
-                                                addrs.iter()
-                                                    .filter_map(|a| a.as_str())
-                                                    .find_map(|addr| {
-                                                        if addr.starts_with("/ip6/") {
-                                                            let parts: Vec<&str> = addr.split('/').collect();
-                                                            if parts.len() >= 5 {
-                                                                let ip = parts[2];
-                                                                let port = parts[4];
-                                                                // Filter out localhost
-                                                                if ip != "::1" && !ip.starts_with("fe80:") {
-                                                                    return Some(format!("[{}]:{}", ip, port));
-                                                                }
-                                                            }
-                                                        }
-                                                        None
-                                                    })
-                                            })
-                                        });
-                                    addr.map(|a| (peer_id.clone(), a))
-                                })
-                                .collect()
-                        })
-                        .unwrap_or_default()
+                    // Extract connection direction from endpoint field
+                    // "dialing" = outbound (we connected to them)
+                    // "listening" = inbound (they connected to us)
+                    let directions = peers_obj.map(|obj| {
+                        obj.iter()
+                            .map(|(peer_id, info)| {
+                                let is_outbound = info.get("endpoint")
+                                    .and_then(|e| e.as_object())
+                                    .map(|ep| ep.contains_key("dialing"))
+                                    .unwrap_or(true); // Default to outbound if unknown
+                                (peer_id.clone(), is_outbound)
+                            })
+                            .collect()
+                    }).unwrap_or_default();
+
+                    (addresses, directions)
                 } else {
-                    std::collections::HashMap::new()
+                    (HashMap::new(), HashMap::new())
                 };
 
             self.state.connected_peers = peers.iter()
@@ -521,17 +566,23 @@ impl App {
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
                     let address = peer_addresses.get(&peer_id).cloned();
+                    let is_outbound = peer_directions.get(&peer_id).copied().unwrap_or(true);
                     Some(PeerInfo {
                         peer_id,
                         best_hash,
                         best_number,
                         address,
+                        is_outbound,
                     })
                 })
                 .collect();
 
             // Sort by best_number descending (most synced peers first)
             self.state.connected_peers.sort_by(|a, b| b.best_number.cmp(&a.best_number));
+
+            // Count inbound/outbound
+            self.state.peers_outbound = self.state.connected_peers.iter().filter(|p| p.is_outbound).count() as u64;
+            self.state.peers_inbound = self.state.connected_peers.iter().filter(|p| !p.is_outbound).count() as u64;
         }
 
         // Check committee election status for our validators
@@ -571,11 +622,12 @@ impl App {
         self.state.total_validators = db.count_validators()?;
         self.state.our_validators_count = db.count_our_validators()?;
 
-        // Get recent blocks
+        // Get recent blocks - fetch enough to fill most terminal heights
         let max_block = db.get_max_block_number()?.unwrap_or(0);
         if max_block > 0 {
-            let start = max_block.saturating_sub(20);
-            self.state.recent_blocks = db.get_blocks_in_range(start, max_block, Some(20))?;
+            let blocks_to_fetch = 50; // Enough for tall terminals
+            let start = max_block.saturating_sub(blocks_to_fetch - 1);
+            self.state.recent_blocks = db.get_blocks_in_range(start, max_block, Some(blocks_to_fetch as u32))?;
             self.state.recent_blocks.reverse(); // Most recent first
         }
 
@@ -583,23 +635,48 @@ impl App {
         self.state.validators = db.get_all_validators()?;
         self.state.our_validators = db.get_our_validators()?;
 
-        // Calculate our blocks in current SIDECHAIN epoch using timestamp-based query
-        // Sidechain epochs are 2 hours and determine committee election
+        // Get validator epoch data for current sidechain epoch (seats info)
+        if self.state.sidechain_epoch > 0 {
+            match db.get_validators_for_epoch(self.state.sidechain_epoch) {
+                Ok(epoch_records) => {
+                    self.state.validator_epoch_data = epoch_records
+                        .into_iter()
+                        .map(|r| (r.sidechain_key.clone(), r))
+                        .collect();
+                }
+                Err(e) => {
+                    tracing::debug!("No epoch data for epoch {}: {}", self.state.sidechain_epoch, e);
+                }
+            }
+        }
+
+        // Calculate blocks in current SIDECHAIN epoch for all validators
+        // Sidechain epoch duration varies by network (2h preview, 10h mainnet)
         // Blocks are timestamped, so we query by time range
-        const SIDECHAIN_EPOCH_DURATION_SECS: i64 = 2 * 60 * 60; // 2 hours in seconds
+        let sidechain_epoch_duration_secs = (self.chain_timing.sidechain_epoch_ms / 1000) as i64;
 
         if let Some(next_epoch_ms) = self.state.sidechain_next_epoch_ms {
-            // Calculate sidechain epoch start: next_epoch - 2 hours
-            let epoch_start_secs = (next_epoch_ms / 1000) as i64 - SIDECHAIN_EPOCH_DURATION_SECS;
+            // Calculate sidechain epoch start: next_epoch - epoch duration
+            let epoch_start_secs = (next_epoch_ms / 1000) as i64 - sidechain_epoch_duration_secs;
 
+            // Calculate epoch blocks for ALL validators (for validators view)
+            self.state.validator_epoch_blocks.clear();
+            for v in &self.state.validators {
+                match db.count_blocks_by_author_since(&v.sidechain_key, epoch_start_secs) {
+                    Ok(count) => {
+                        self.state.validator_epoch_blocks.insert(v.sidechain_key.clone(), count);
+                    }
+                    Err(e) => {
+                        tracing::debug!("Failed to count epoch blocks for {}: {}", v.sidechain_key, e);
+                    }
+                }
+            }
+
+            // Sum up our validators' blocks for the dashboard
             let mut our_blocks_this_epoch: u64 = 0;
             for v in &self.state.our_validators {
-                // Query database for blocks by this validator since epoch start
-                match db.count_blocks_by_author_since(&v.sidechain_key, epoch_start_secs) {
-                    Ok(count) => our_blocks_this_epoch += count,
-                    Err(e) => {
-                        tracing::warn!("Failed to count epoch blocks for {}: {}", v.sidechain_key, e);
-                    }
+                if let Some(&count) = self.state.validator_epoch_blocks.get(&v.sidechain_key) {
+                    our_blocks_this_epoch += count;
                 }
             }
             self.state.epoch_progress.our_blocks_this_epoch = our_blocks_this_epoch;
@@ -607,18 +684,42 @@ impl App {
             // Calculate expected blocks - only if we're elected to the committee
             // If not in committee, expected is 0
             if self.state.committee_elected && self.state.committee_seats > 0 && self.state.committee_size > 0 {
-                // Use committee seats for expected calculation
-                // ~1200 blocks per 2h sidechain epoch (1 block per 6 seconds)
-                // Each committee seat produces ~1 block per epoch (round-robin)
+                // Use network-aware timing for expected block calculation
+                // blocks_per_epoch varies by network (1200 for preview, 6000 for mainnet)
                 let epoch_progress_ratio = self.state.epoch_progress.progress_percent / 100.0;
-                const BLOCKS_PER_SIDECHAIN_EPOCH: f64 = 1200.0;
-                let expected_per_seat = BLOCKS_PER_SIDECHAIN_EPOCH / self.state.committee_size as f64;
-                self.state.epoch_progress.expected_blocks =
-                    epoch_progress_ratio * expected_per_seat * self.state.committee_seats as f64;
+                self.state.epoch_progress.expected_blocks = self.chain_timing.expected_blocks(
+                    self.state.committee_seats as u64,
+                    self.state.committee_size as u64,
+                    epoch_progress_ratio,
+                );
             } else {
                 // Not in committee - no blocks expected
                 self.state.epoch_progress.expected_blocks = 0.0;
             }
+        }
+
+        // Fetch sparkline data for our validators (block production over last 12 sidechain epochs = 24h)
+        if !self.state.our_validators.is_empty() {
+            let author_keys: Vec<String> = self.state.our_validators
+                .iter()
+                .map(|v| v.sidechain_key.clone())
+                .collect();
+
+            // Use sidechain epoch duration for buckets (2h for preview, 10h for mainnet)
+            let bucket_secs = (self.chain_timing.sidechain_epoch_ms / 1000) as i64;
+            let num_buckets = 12; // 12 epochs = 24h on preview, 5 days on mainnet
+
+            match db.get_block_counts_bucketed(&author_keys, bucket_secs, num_buckets) {
+                Ok(counts) => {
+                    self.state.our_blocks_sparkline = counts;
+                }
+                Err(e) => {
+                    tracing::debug!("Failed to fetch sparkline data: {}", e);
+                    self.state.our_blocks_sparkline = vec![0; num_buckets];
+                }
+            }
+        } else {
+            self.state.our_blocks_sparkline = vec![0; 12];
         }
 
         Ok(())
@@ -679,7 +780,7 @@ impl App {
     /// Scroll down in current view
     pub fn scroll_down(&mut self) {
         // Help screen has 42 items (count of ListItems in render_help)
-        const HELP_ITEM_COUNT: usize = 42;
+        const HELP_ITEM_COUNT: usize = 44;
 
         let max_index = match self.view_mode {
             ViewMode::Blocks => self.state.recent_blocks.len().saturating_sub(1),
@@ -706,6 +807,35 @@ impl App {
         if self.selected_index > 0 {
             self.selected_index -= 1;
         }
+    }
+
+    /// Scroll down by a page (10 items)
+    pub fn scroll_page_down(&mut self) {
+        const PAGE_SIZE: usize = 10;
+        const HELP_ITEM_COUNT: usize = 44;
+
+        let max_index = match self.view_mode {
+            ViewMode::Blocks => self.state.recent_blocks.len().saturating_sub(1),
+            ViewMode::Validators => {
+                if self.show_ours_only {
+                    self.state.our_validators.len().saturating_sub(1)
+                } else {
+                    self.state.validators.len().saturating_sub(1)
+                }
+            }
+            ViewMode::Performance => self.state.validators.len().saturating_sub(1),
+            ViewMode::Peers => self.state.connected_peers.len().saturating_sub(1),
+            ViewMode::Help => HELP_ITEM_COUNT.saturating_sub(1),
+            _ => 0,
+        };
+
+        self.selected_index = (self.selected_index + PAGE_SIZE).min(max_index);
+    }
+
+    /// Scroll up by a page (10 items)
+    pub fn scroll_page_up(&mut self) {
+        const PAGE_SIZE: usize = 10;
+        self.selected_index = self.selected_index.saturating_sub(PAGE_SIZE);
     }
 
     /// Toggle "ours only" filter

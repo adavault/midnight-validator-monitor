@@ -1,16 +1,29 @@
-# Release Notes: v0.6.1
+# Release Notes: v0.7.0
 
 **Release Date:** January 2026
 
 ## Overview
 
-Version 0.6.1 is a bug fix release that addresses several issues:
+Version 0.7.0 includes bug fixes, new features, and UX improvements:
+
+### Bug Fixes
 - Fixed expected block prediction being 2x too high
 - Fixed validator ownership status being lost after epoch changes
 - Fixed TUI version display being hardcoded
-- Added sidechain epoch tracking to blocks (displays correct epoch in TUI)
 - Fixed block author attribution on pruned nodes (was attributing incorrectly)
+- Fixed block timestamps (now calculated from slot number instead of sync time)
+- Fixed external IP display showing incorrect peer-reported addresses
+
+### New Features
+- **Sparkline visualization**: Dashboard shows block production history as a sparkline graph
+- **Shell completions**: Support for bash, zsh, fish, powershell, and elvish
+- **Page scrolling**: J/K (uppercase) or PageUp/PageDown for faster navigation
+- **Help screen scrollbar**: Visual indicator when help content extends beyond screen
+
+### Improvements
 - Improved `mvm keys verify` messaging when validator not yet in database
+- Updated config file search paths and example configuration
+- Added sidechain epoch tracking to blocks
 
 **Breaking Change:** Database schema updated - requires database recreation (see Upgrade Instructions).
 
@@ -150,9 +163,37 @@ mvm keys --keystore /path/to/keystore --db-path /opt/midnight/mvm/data/mvm.db ve
 
 See `docs/COMPATIBILITY.md` for our pre-v1.0 compatibility policy.
 
+## Known Limitations
+
+### Inbound Peer Count Unreliable
+The TUI's inbound peer count may show 0 even when inbound connections exist. This is due to a limitation in the `system_unstable_networkState` RPC which only reports peers with "dialing" endpoints (outbound connections). Prometheus metrics confirm inbound connections are working, but this data isn't exposed via the RPC we use.
+
+**Workaround:** Check Prometheus directly:
+```bash
+curl -s "http://localhost:9615/metrics" | grep "connections_opened_total"
+```
+
+**Fix planned for v0.8:** Replace RPC-based peer detection with Prometheus metrics for accurate inbound/outbound counts.
+
+## Security Review
+
+A comprehensive security review was conducted for this release with no issues found:
+
+| Area | Status | Notes |
+|------|--------|-------|
+| SQL Injection | Safe | All queries use parameterized `params![]` |
+| Command Injection | Safe | No shell/subprocess execution |
+| File Path Traversal | Safe | Paths from config/CLI only |
+| Panic/Unwrap | Safe | All `unwrap()` in test code only |
+| Unsafe Code | Safe | No `unsafe` blocks |
+| Integer Overflow | Low risk | Casts bounded to block numbers/counts |
+| Memory Exhaustion | Protected | SCALE decoder validates data length |
+| Error Disclosure | Appropriate | No sensitive info in errors |
+| Dependencies | Clean | No known vulnerabilities |
+
 ## Files Changed
 
-- `Cargo.toml` - Version bump to 0.6.1
+- `Cargo.toml` - Version bump to 0.7.0, added clap_complete dependency
 - `src/config.rs` - Added `view.expected_ip` config option
 - `src/tui/app.rs` - Fixed expected block calculation, external IP filtering
 - `src/tui/ui.rs` - Dynamic version display, show sidechain_epoch
@@ -165,7 +206,14 @@ See `docs/COMPATIBILITY.md` for our pre-v1.0 compatibility policy.
 - `docs/COMPATIBILITY.md` - New compatibility policy documentation
 - `docs/BLOCK_ATTRIBUTION.md` - New block attribution design documentation
 - `docs/EXTERNAL_IP_RESEARCH.md` - External IP detection research and solution
-- `docs/BACKLOG.md` - Future research items
+- `docs/BACKLOG.md` - Future research items, v0.8 release plan
+- `src/main.rs` - Added shell completions command
+- `src/tui/ui.rs` - Added sparkline visualization, help screen scrollbar
+- `src/tui/event.rs` - Added page up/down key bindings (J/K, PageUp/PageDown)
+- `src/tui/app.rs` - Added sparkline state, page scroll methods
+- `src/tui/layout.rs` - Adjusted validator panel height for sparkline
+- `src/db/blocks.rs` - Added bucketed block counting for sparkline
+- `src/commands/config.rs` - Updated example config with detailed documentation
 
 ## Contributors
 

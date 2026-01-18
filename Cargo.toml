@@ -1,6 +1,6 @@
 [package]
 name = "midnight-validator-monitor"
-version = "0.6.1"
+version = "0.7.0"
 edition = "2021"
 description = "A monitoring tool for Midnight blockchain validators"
 authors = []
@@ -16,6 +16,7 @@ reqwest = { version = "0.11", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1.0"

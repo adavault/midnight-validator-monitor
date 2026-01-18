@@ -32,6 +32,20 @@ pub struct SyncStatusRecord {
     pub last_updated: i64,
 }
 
+/// Validator epoch snapshot record
+/// Captures validator state (seats, registration status) for each sidechain epoch
+#[derive(Debug, Clone)]
+pub struct ValidatorEpochRecord {
+    pub sidechain_epoch: u64,
+    pub sidechain_key: String,
+    pub aura_key: String,
+    pub committee_seats: u32,
+    pub committee_size: u32,
+    pub is_permissioned: bool,
+    pub stake_lovelace: Option<u64>,
+    pub captured_at: i64,
+}
+
 /// Insert a block into the database
 pub fn insert_block(conn: &Connection, block: &BlockRecord) -> Result<()> {
     conn.execute(
@@ -266,6 +280,80 @@ pub fn count_blocks_by_author_since(
     Ok(count as u64)
 }
 
+/// Get block counts for an author bucketed by time intervals
+///
+/// Returns a vector of block counts, one per bucket, from oldest to newest.
+/// Useful for sparkline visualization of block production over time.
+///
+/// # Arguments
+/// * `author_keys` - List of author keys to count (combined for "our" validators)
+/// * `bucket_duration_secs` - Duration of each bucket in seconds
+/// * `num_buckets` - Number of buckets to return
+///
+/// # Returns
+/// Vector of counts from oldest bucket to newest (left to right for sparkline)
+pub fn get_block_counts_bucketed(
+    conn: &Connection,
+    author_keys: &[String],
+    bucket_duration_secs: i64,
+    num_buckets: usize,
+) -> Result<Vec<u64>> {
+    if author_keys.is_empty() || num_buckets == 0 {
+        return Ok(vec![0; num_buckets]);
+    }
+
+    let now = chrono::Utc::now().timestamp();
+    let total_duration = bucket_duration_secs * num_buckets as i64;
+    let start_time = now - total_duration;
+
+    // Build IN clause for multiple author keys
+    let placeholders: Vec<String> = (0..author_keys.len())
+        .map(|i| format!("?{}", i + 3))
+        .collect();
+    let in_clause = placeholders.join(", ");
+
+    // Query blocks with timestamp bucketing
+    let sql = format!(
+        "SELECT ((timestamp - ?1) / ?2) as bucket, COUNT(*) as count
+         FROM blocks
+         WHERE author_key IN ({})
+           AND timestamp >= ?1
+           AND timestamp < ?1 + (?2 * {})
+         GROUP BY bucket
+         ORDER BY bucket",
+        in_clause, num_buckets
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+
+    // Build params: start_time, bucket_duration, then all author keys
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    params.push(Box::new(start_time));
+    params.push(Box::new(bucket_duration_secs));
+    for key in author_keys {
+        params.push(Box::new(key.clone()));
+    }
+
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+    let rows = stmt.query_map(param_refs.as_slice(), |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+    })?;
+
+    // Initialize all buckets to 0
+    let mut buckets = vec![0u64; num_buckets];
+
+    // Fill in counts from query results
+    for row in rows {
+        let (bucket_idx, count) = row?;
+        if bucket_idx >= 0 && (bucket_idx as usize) < num_buckets {
+            buckets[bucket_idx as usize] = count as u64;
+        }
+    }
+
+    Ok(buckets)
+}
+
 /// Store a committee snapshot for an epoch
 ///
 /// This stores the complete committee (all AURA keys in order) for a specific epoch.
@@ -344,6 +432,139 @@ pub fn list_committee_epochs(conn: &Connection) -> Result<Vec<u64>> {
 
     rows.map(|r| r.map(|n| n as u64).map_err(Into::into))
         .collect()
+}
+
+/// Store a validator epoch snapshot
+///
+/// Captures validator state for a specific sidechain epoch including:
+/// - Committee seats (how many times they appear in committee)
+/// - Committee size (total committee size)
+/// - Whether they're a permissioned validator
+/// - Stake amount (if available)
+pub fn store_validator_epoch(conn: &Connection, record: &ValidatorEpochRecord) -> Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO validator_epochs
+         (sidechain_epoch, sidechain_key, aura_key, committee_seats, committee_size,
+          is_permissioned, stake_lovelace, captured_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            record.sidechain_epoch as i64,
+            &record.sidechain_key,
+            &record.aura_key,
+            record.committee_seats as i64,
+            record.committee_size as i64,
+            record.is_permissioned as i32,
+            record.stake_lovelace.map(|s| s as i64),
+            record.captured_at
+        ],
+    )?;
+    Ok(())
+}
+
+/// Get a validator's epoch snapshot
+#[allow(dead_code)]
+pub fn get_validator_epoch(
+    conn: &Connection,
+    sidechain_epoch: u64,
+    sidechain_key: &str,
+) -> Result<Option<ValidatorEpochRecord>> {
+    let mut stmt = conn.prepare(
+        "SELECT sidechain_epoch, sidechain_key, aura_key, committee_seats, committee_size,
+                is_permissioned, stake_lovelace, captured_at
+         FROM validator_epochs
+         WHERE sidechain_epoch = ?1 AND sidechain_key = ?2",
+    )?;
+
+    let result = stmt.query_row(params![sidechain_epoch as i64, sidechain_key], |row| {
+        Ok(ValidatorEpochRecord {
+            sidechain_epoch: row.get::<_, i64>(0)? as u64,
+            sidechain_key: row.get(1)?,
+            aura_key: row.get(2)?,
+            committee_seats: row.get::<_, i64>(3)? as u32,
+            committee_size: row.get::<_, i64>(4)? as u32,
+            is_permissioned: row.get::<_, i32>(5)? != 0,
+            stake_lovelace: row.get::<_, Option<i64>>(6)?.map(|s| s as u64),
+            captured_at: row.get(7)?,
+        })
+    });
+
+    match result {
+        Ok(record) => Ok(Some(record)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Get all validator epoch snapshots for a specific epoch
+pub fn get_validators_for_epoch(
+    conn: &Connection,
+    sidechain_epoch: u64,
+) -> Result<Vec<ValidatorEpochRecord>> {
+    let mut stmt = conn.prepare(
+        "SELECT sidechain_epoch, sidechain_key, aura_key, committee_seats, committee_size,
+                is_permissioned, stake_lovelace, captured_at
+         FROM validator_epochs
+         WHERE sidechain_epoch = ?1
+         ORDER BY committee_seats DESC, sidechain_key ASC",
+    )?;
+
+    let rows = stmt.query_map(params![sidechain_epoch as i64], |row| {
+        Ok(ValidatorEpochRecord {
+            sidechain_epoch: row.get::<_, i64>(0)? as u64,
+            sidechain_key: row.get(1)?,
+            aura_key: row.get(2)?,
+            committee_seats: row.get::<_, i64>(3)? as u32,
+            committee_size: row.get::<_, i64>(4)? as u32,
+            is_permissioned: row.get::<_, i32>(5)? != 0,
+            stake_lovelace: row.get::<_, Option<i64>>(6)?.map(|s| s as u64),
+            captured_at: row.get(7)?,
+        })
+    })?;
+
+    rows.collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+/// Get the latest validator epoch snapshot for each validator
+pub fn get_latest_validator_epochs(conn: &Connection) -> Result<Vec<ValidatorEpochRecord>> {
+    let mut stmt = conn.prepare(
+        "SELECT ve.sidechain_epoch, ve.sidechain_key, ve.aura_key, ve.committee_seats,
+                ve.committee_size, ve.is_permissioned, ve.stake_lovelace, ve.captured_at
+         FROM validator_epochs ve
+         INNER JOIN (
+             SELECT sidechain_key, MAX(sidechain_epoch) as max_epoch
+             FROM validator_epochs
+             GROUP BY sidechain_key
+         ) latest ON ve.sidechain_key = latest.sidechain_key
+                  AND ve.sidechain_epoch = latest.max_epoch
+         ORDER BY ve.committee_seats DESC, ve.sidechain_key ASC",
+    )?;
+
+    let rows = stmt.query_map([], |row| {
+        Ok(ValidatorEpochRecord {
+            sidechain_epoch: row.get::<_, i64>(0)? as u64,
+            sidechain_key: row.get(1)?,
+            aura_key: row.get(2)?,
+            committee_seats: row.get::<_, i64>(3)? as u32,
+            committee_size: row.get::<_, i64>(4)? as u32,
+            is_permissioned: row.get::<_, i32>(5)? != 0,
+            stake_lovelace: row.get::<_, Option<i64>>(6)?.map(|s| s as u64),
+            captured_at: row.get(7)?,
+        })
+    })?;
+
+    rows.collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+/// Check if we have a validator epoch snapshot for a specific epoch
+pub fn has_validator_epoch_snapshot(conn: &Connection, sidechain_epoch: u64) -> Result<bool> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM validator_epochs WHERE sidechain_epoch = ?1",
+        params![sidechain_epoch as i64],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
 }
 
 #[cfg(test)]
@@ -428,5 +649,112 @@ mod tests {
         assert_eq!(updated, 5);
 
         assert_eq!(count_finalized_blocks(&conn).unwrap(), 5);
+    }
+
+    #[test]
+    fn test_validator_epoch_snapshot() {
+        let conn = setup_db();
+
+        // Store validator epoch data
+        let record1 = ValidatorEpochRecord {
+            sidechain_epoch: 100,
+            sidechain_key: "0xsidechain1".to_string(),
+            aura_key: "0xaura1".to_string(),
+            committee_seats: 15,
+            committee_size: 1200,
+            is_permissioned: true,
+            stake_lovelace: Some(1_000_000_000),
+            captured_at: chrono::Utc::now().timestamp(),
+        };
+
+        let record2 = ValidatorEpochRecord {
+            sidechain_epoch: 100,
+            sidechain_key: "0xsidechain2".to_string(),
+            aura_key: "0xaura2".to_string(),
+            committee_seats: 10,
+            committee_size: 1200,
+            is_permissioned: false,
+            stake_lovelace: Some(500_000_000),
+            captured_at: chrono::Utc::now().timestamp(),
+        };
+
+        store_validator_epoch(&conn, &record1).unwrap();
+        store_validator_epoch(&conn, &record2).unwrap();
+
+        // Test get single validator epoch
+        let retrieved = get_validator_epoch(&conn, 100, "0xsidechain1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(retrieved.committee_seats, 15);
+        assert!(retrieved.is_permissioned);
+        assert_eq!(retrieved.stake_lovelace, Some(1_000_000_000));
+
+        // Test get all validators for epoch
+        let validators = get_validators_for_epoch(&conn, 100).unwrap();
+        assert_eq!(validators.len(), 2);
+        // Should be sorted by committee_seats descending
+        assert_eq!(validators[0].sidechain_key, "0xsidechain1");
+        assert_eq!(validators[1].sidechain_key, "0xsidechain2");
+
+        // Test has_validator_epoch_snapshot
+        assert!(has_validator_epoch_snapshot(&conn, 100).unwrap());
+        assert!(!has_validator_epoch_snapshot(&conn, 101).unwrap());
+    }
+
+    #[test]
+    fn test_latest_validator_epochs() {
+        let conn = setup_db();
+
+        // Store records across multiple epochs
+        let record1_e100 = ValidatorEpochRecord {
+            sidechain_epoch: 100,
+            sidechain_key: "0xsidechain1".to_string(),
+            aura_key: "0xaura1".to_string(),
+            committee_seats: 10,
+            committee_size: 1200,
+            is_permissioned: true,
+            stake_lovelace: Some(1_000_000_000),
+            captured_at: 1000,
+        };
+
+        let record1_e101 = ValidatorEpochRecord {
+            sidechain_epoch: 101,
+            sidechain_key: "0xsidechain1".to_string(),
+            aura_key: "0xaura1".to_string(),
+            committee_seats: 12,
+            committee_size: 1200,
+            is_permissioned: true,
+            stake_lovelace: Some(1_100_000_000),
+            captured_at: 2000,
+        };
+
+        let record2_e100 = ValidatorEpochRecord {
+            sidechain_epoch: 100,
+            sidechain_key: "0xsidechain2".to_string(),
+            aura_key: "0xaura2".to_string(),
+            committee_seats: 5,
+            committee_size: 1200,
+            is_permissioned: false,
+            stake_lovelace: Some(500_000_000),
+            captured_at: 1000,
+        };
+
+        store_validator_epoch(&conn, &record1_e100).unwrap();
+        store_validator_epoch(&conn, &record1_e101).unwrap();
+        store_validator_epoch(&conn, &record2_e100).unwrap();
+
+        // Get latest snapshots
+        let latest = get_latest_validator_epochs(&conn).unwrap();
+        assert_eq!(latest.len(), 2);
+
+        // validator1 should have epoch 101 data
+        let v1 = latest.iter().find(|v| v.sidechain_key == "0xsidechain1").unwrap();
+        assert_eq!(v1.sidechain_epoch, 101);
+        assert_eq!(v1.committee_seats, 12);
+
+        // validator2 should have epoch 100 data (latest for that validator)
+        let v2 = latest.iter().find(|v| v.sidechain_key == "0xsidechain2").unwrap();
+        assert_eq!(v2.sidechain_epoch, 100);
+        assert_eq!(v2.committee_seats, 5);
     }
 }

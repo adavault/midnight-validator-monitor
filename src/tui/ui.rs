@@ -6,9 +6,38 @@ use ratatui::{
     layout::{Alignment, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
+
+/// Convert a slice of values to Unicode sparkline bars
+/// Uses block characters: ▁▂▃▄▅▆▇█ (8 levels)
+fn sparkline_bars(values: &[u64]) -> String {
+    const BARS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+
+    if values.is_empty() {
+        return String::new();
+    }
+
+    let max = *values.iter().max().unwrap_or(&1);
+    if max == 0 {
+        // All zeros - show flat line
+        return values.iter().map(|_| BARS[0]).collect();
+    }
+
+    values
+        .iter()
+        .map(|&v| {
+            let idx = if v == 0 {
+                0
+            } else {
+                // Scale to 0-7 range, with max value getting index 7
+                ((v as f64 / max as f64) * 7.0).round() as usize
+            };
+            BARS[idx.min(7)]
+        })
+        .collect()
+}
 
 /// Render the UI with responsive layout
 pub fn render(f: &mut Frame, app: &App) {
@@ -270,8 +299,29 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
             Span::raw("      "),
             Span::styled("Peers: ", Style::default().fg(theme.muted())),
             Span::styled(format!("{}", app.state.peer_count), Style::default().fg(theme.text())),
+            Span::styled(format!(" (↑{} ↓{})", app.state.peers_outbound, app.state.peers_inbound), Style::default().fg(theme.muted())),
         ]),
     ];
+
+    // Calculate MVM sync percentage (highest synced block vs chain tip)
+    // Use the most recent block number from our DB, not the count
+    let mvm_last_block = app.state.recent_blocks.first()
+        .map(|b| b.block_number)
+        .unwrap_or(0);
+    let mvm_sync_pct = if app.state.chain_tip > 0 && mvm_last_block > 0 {
+        (mvm_last_block as f64 / app.state.chain_tip as f64) * 100.0
+    } else if app.state.total_blocks > 0 {
+        100.0 // Have blocks but can't calculate - assume synced
+    } else {
+        0.0
+    };
+    let mvm_synced = mvm_sync_pct >= 99.9;
+    let mvm_status = if mvm_synced {
+        format!("{} blocks (100%)", app.state.total_blocks)
+    } else {
+        format!("{} blocks ({:.1}%)", app.state.total_blocks, mvm_sync_pct)
+    };
+    let mvm_color = if mvm_synced { theme.text() } else { theme.warning() };
 
     // Node sync status line
     if sync.is_synced {
@@ -280,7 +330,7 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
             Span::styled(format!("{} Synced", sync_icon), Style::default().fg(sync_color)),
             Span::raw("       "),
             Span::styled("MVM: ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{} blocks", app.state.total_blocks), Style::default().fg(theme.text())),
+            Span::styled(mvm_status, Style::default().fg(mvm_color)),
         ]));
     } else {
         network_text.push(Line::from(vec![
@@ -290,7 +340,7 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
             Span::styled(format!("  ({} behind)", sync.blocks_remaining), Style::default().fg(theme.muted())),
             Span::raw("     "),
             Span::styled("MVM: ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{}", app.state.total_blocks), Style::default().fg(theme.text())),
+            Span::styled(mvm_status, Style::default().fg(mvm_color)),
         ]));
     }
 
@@ -391,7 +441,7 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
             "?"
         };
 
-        // Panel height (8) fits 1 validator with all 3 keys (3 header + 3 key lines + 2 border)
+        // Panel height (9) fits 1 validator with all 3 keys (4 header + 3 key lines + 2 border)
         let max_validators = 1;
 
         // Committee election status
@@ -448,6 +498,15 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
                     else if performance_indicator == "!" { theme.warning() }
                     else { theme.muted() }
                 )),
+            ]),
+            // Sparkline showing block production over last 12 sidechain epochs (24h)
+            Line::from(vec![
+                Span::styled("Last 24h:   ", Style::default().fg(theme.muted())),
+                Span::styled(sparkline_bars(&app.state.our_blocks_sparkline), Style::default().fg(theme.primary())),
+                Span::styled(
+                    format!("  (total: {})", app.state.our_blocks_sparkline.iter().sum::<u64>()),
+                    Style::default().fg(theme.muted())
+                ),
             ]),
         ];
 
@@ -586,7 +645,7 @@ fn render_blocks(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout
         ListItem::new(Line::from(spans))
     }).collect();
 
-    let title = format!("Blocks ({} total, showing last 20) - Use j/k or ↑/↓ to scroll", app.state.total_blocks);
+    let title = format!("Blocks ({} total, showing last {}) - Use j/k or ↑/↓ to scroll", app.state.total_blocks, app.state.recent_blocks.len());
 
     let blocks_list = List::new(blocks_items)
         .block(Block::default()
@@ -616,6 +675,12 @@ fn render_validators(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
         let ours = if v.is_ours { "★" } else { " " };
         let key_display = key_mode.format(&v.sidechain_key);
 
+        // Get seats from epoch data if available
+        let seats_display = app.state.validator_epoch_data
+            .get(&v.sidechain_key)
+            .map(|epoch| format!("{:>3}", epoch.committee_seats))
+            .unwrap_or_else(|| "  -".to_string());
+
         // Standard validator format (same for Medium and Large)
         let mut spans = vec![
             Span::styled(ours, Style::default().fg(theme.ours())),
@@ -625,17 +690,37 @@ fn render_validators(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
         ];
 
         if val_cols.show_status {
-            spans.push(Span::styled(format!("{:<15}", status), Style::default().fg(if v.is_ours { theme.success() } else { theme.muted() })));
+            spans.push(Span::styled(format!("{:<12}", status), Style::default().fg(if v.is_ours { theme.success() } else { theme.muted() })));
             spans.push(Span::raw("  "));
         }
 
-        spans.push(Span::styled(format!("{:>5} blocks", v.total_blocks), Style::default().fg(theme.text())));
+        // Add seats column
+        let seats_style = if app.state.validator_epoch_data.get(&v.sidechain_key).map(|e| e.committee_seats > 0).unwrap_or(false) {
+            Style::default().fg(theme.success())
+        } else {
+            Style::default().fg(theme.muted())
+        };
+        spans.push(Span::styled(seats_display, seats_style));
+        spans.push(Span::styled(" seats", Style::default().fg(theme.muted())));
+        spans.push(Span::raw("  "));
+
+        // Show epoch blocks (not total) - consistent with seats being per-epoch
+        let epoch_blocks = app.state.validator_epoch_blocks
+            .get(&v.sidechain_key)
+            .copied()
+            .unwrap_or(0);
+        spans.push(Span::styled(format!("{:>4} blocks", epoch_blocks), Style::default().fg(theme.text())));
 
         ListItem::new(Line::from(spans))
     }).collect();
 
     let filter_text = if app.show_ours_only { " (ours)" } else { "" };
-    let title = format!("Validators ({} total{}) - [F] filter, j/k or ↑/↓ scroll", validators.len(), filter_text);
+    let epoch_label = if app.state.sidechain_epoch > 0 {
+        format!(" epoch {}", app.state.sidechain_epoch)
+    } else {
+        String::new()
+    };
+    let title = format!("Validators ({} total{}{}) - [F] filter, j/k or ↑/↓ scroll", validators.len(), filter_text, epoch_label);
 
     let validators_list = List::new(validator_items)
         .block(Block::default()
@@ -725,6 +810,10 @@ fn render_peers(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout)
             ("○", theme.muted())    // Behind
         };
 
+        // Connection direction: ↑ = outbound (we dialed), ↓ = inbound (they dialed)
+        let direction = if peer.is_outbound { "↑" } else { "↓" };
+        let direction_color = if peer.is_outbound { theme.muted() } else { theme.success() };
+
         // Format address if available
         let addr_display = peer.address.as_ref()
             .map(|a| format!("  {}", a))
@@ -732,6 +821,7 @@ fn render_peers(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout)
 
         let line = Line::from(vec![
             Span::styled(sync_status.0, Style::default().fg(sync_status.1)),
+            Span::styled(direction, Style::default().fg(direction_color)),
             Span::raw(" "),
             Span::styled(peer_id_display, Style::default().fg(theme.secondary())),
             Span::raw("  "),
@@ -805,6 +895,14 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
         ListItem::new(Line::from(vec![
             Span::styled("    ↓ / j     ", Style::default().fg(theme.text())),
             Span::raw("Scroll down"),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled("    PgUp / K  ", Style::default().fg(theme.text())),
+            Span::raw("Page up (10 items)"),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled("    PgDn / J  ", Style::default().fg(theme.text())),
+            Span::raw("Page down (10 items)"),
         ])),
         ListItem::new(Line::from("")),
         ListItem::new(Line::from(vec![
@@ -880,11 +978,11 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
         ])),
         ListItem::new(Line::from(vec![
             Span::styled("    Sidechain epoch  ", Style::default().fg(theme.text())),
-            Span::raw("2-hour cycle, determines committee election"),
+            Span::raw("Committee election cycle (2h preview, TBD mainnet)"),
         ])),
         ListItem::new(Line::from(vec![
             Span::styled("    Mainchain epoch  ", Style::default().fg(theme.text())),
-            Span::raw("24-hour Cardano epoch cycle"),
+            Span::raw("Cardano epoch (24h preview, 5d preprod/mainnet)"),
         ])),
         ListItem::new(Line::from(vec![
             Span::styled("    Grandpa ✓        ", Style::default().fg(theme.text())),
@@ -896,16 +994,29 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
         ])),
     ];
 
+    let item_count = help_items.len();
+
     let help_list = List::new(help_items)
         .block(Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled("Help - Use j/k or ↑/↓ to scroll", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))))
+            .title(Span::styled("Help - Use j/k/J/K or ↑/↓ to scroll", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))))
         .highlight_style(Style::default().bg(theme.highlight()).add_modifier(Modifier::BOLD).fg(theme.text()));
 
     let mut list_state = ListState::default();
     list_state.select(Some(app.selected_index));
     f.render_stateful_widget(help_list, area, &mut list_state);
+
+    // Render scrollbar
+    let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+        .begin_symbol(Some("↑"))
+        .end_symbol(Some("↓"));
+
+    let mut scrollbar_state = ScrollbarState::new(item_count)
+        .position(app.selected_index);
+
+    // Render scrollbar in the same area (it will appear on the right edge)
+    f.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
 }
 
 /// Format bytes into human-readable string (KB, MB, GB)

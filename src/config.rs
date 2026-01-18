@@ -27,6 +27,9 @@ pub struct Config {
 
     #[serde(default)]
     pub daemon: DaemonConfig,
+
+    #[serde(default)]
+    pub chain: ChainConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,6 +42,18 @@ pub struct RpcConfig {
 
     #[serde(default = "default_timeout")]
     pub timeout_ms: u64,
+
+    /// Maximum retry attempts for transient failures (0 = no retries)
+    #[serde(default = "default_max_retries")]
+    pub max_retries: u32,
+
+    /// Initial delay between retries in milliseconds
+    #[serde(default = "default_retry_initial_delay")]
+    pub retry_initial_delay_ms: u64,
+
+    /// Maximum delay between retries in milliseconds
+    #[serde(default = "default_retry_max_delay")]
+    pub retry_max_delay_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,6 +115,48 @@ pub struct DaemonConfig {
     pub enable_syslog: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChainConfig {
+    /// Network preset: "preview", "preprod", or "mainnet"
+    /// Determines epoch durations and timing parameters
+    #[serde(default = "default_network")]
+    pub network: String,
+
+    /// Optional: Override genesis timestamp (milliseconds since Unix epoch)
+    /// If not set, uses the network preset default (when available)
+    #[serde(default)]
+    pub genesis_timestamp_ms: Option<u64>,
+}
+
+impl Default for ChainConfig {
+    fn default() -> Self {
+        Self {
+            network: default_network(),
+            genesis_timestamp_ms: None,
+        }
+    }
+}
+
+impl ChainConfig {
+    /// Get the ChainTiming for this configuration
+    pub fn timing(&self) -> crate::midnight::ChainTiming {
+        let network = crate::midnight::Network::from_str(&self.network)
+            .unwrap_or(crate::midnight::Network::Preview);
+        let mut timing = crate::midnight::ChainTiming::for_network(network);
+
+        // Override genesis if specified
+        if let Some(genesis) = self.genesis_timestamp_ms {
+            timing.genesis_timestamp_ms = Some(genesis);
+        }
+
+        timing
+    }
+}
+
+fn default_network() -> String {
+    "preview".to_string()
+}
+
 // Default values
 fn default_rpc_url() -> String {
     "http://localhost:9944".to_string()
@@ -135,6 +192,18 @@ fn default_refresh_interval() -> u64 {
     6000 // Match Midnight block interval of 6 seconds
 }
 
+fn default_max_retries() -> u32 {
+    3
+}
+
+fn default_retry_initial_delay() -> u64 {
+    1000 // 1 second
+}
+
+fn default_retry_max_delay() -> u64 {
+    30000 // 30 seconds
+}
+
 
 impl Default for RpcConfig {
     fn default() -> Self {
@@ -142,6 +211,21 @@ impl Default for RpcConfig {
             url: default_rpc_url(),
             metrics_url: default_metrics_url(),
             timeout_ms: default_timeout(),
+            max_retries: default_max_retries(),
+            retry_initial_delay_ms: default_retry_initial_delay(),
+            retry_max_delay_ms: default_retry_max_delay(),
+        }
+    }
+}
+
+impl RpcConfig {
+    /// Convert to RetryConfig for use with RpcClient
+    pub fn retry_config(&self) -> crate::rpc::RetryConfig {
+        crate::rpc::RetryConfig {
+            max_retries: self.max_retries,
+            initial_delay_ms: self.retry_initial_delay_ms,
+            max_delay_ms: self.retry_max_delay_ms,
+            backoff_multiplier: 2.0,
         }
     }
 }
@@ -230,9 +314,6 @@ impl Config {
         // 3. Install location (/opt/midnight/mvm/config/config.toml)
         paths.push(PathBuf::from("/opt/midnight/mvm/config/config.toml"));
 
-        // 4. System config directory (/etc/mvm/config.toml) - legacy
-        paths.push(PathBuf::from("/etc/mvm/config.toml"));
-
         paths
     }
 
@@ -280,6 +361,11 @@ impl Config {
         if let Ok(expected_ip) = std::env::var("MVM_EXPECTED_IP") {
             self.view.expected_ip = Some(expected_ip);
         }
+
+        // Chain
+        if let Ok(network) = std::env::var("MVM_NETWORK") {
+            self.chain.network = network;
+        }
     }
 
     /// Validate configuration
@@ -297,7 +383,8 @@ impl Config {
         Ok(())
     }
 
-    /// Get example configuration as TOML string
+    /// Get example configuration as TOML string (for programmatic access)
+    #[allow(dead_code)]
     pub fn example_toml() -> String {
         toml::to_string_pretty(&Config::default()).unwrap_or_else(|_| "# Error generating example".to_string())
     }

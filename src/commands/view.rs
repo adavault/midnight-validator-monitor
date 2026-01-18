@@ -63,8 +63,8 @@ Tip: If you installed MVM, the database should be at /opt/midnight/mvm/data/mvm.
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend).context("Failed to create terminal")?;
 
-    // Initialize app
-    let mut app = App::new();
+    // Initialize app with network-specific timing
+    let mut app = App::new().with_chain_timing(config.chain.timing());
 
     // Set node name from config if specified
     if let Some(ref name) = config.validator.name {
