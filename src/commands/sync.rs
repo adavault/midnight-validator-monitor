@@ -389,19 +389,21 @@ async fn sync_single_block(
 
     let header = &signed_block.block.header;
 
-    // Determine the actual epoch for this block by querying at the block hash
-    let mainchain_epoch = match get_sidechain_status_at_block(rpc, &hash).await {
+    // Determine the actual epochs for this block by querying at the block hash
+    let (mainchain_epoch, sidechain_epoch) = match get_sidechain_status_at_block(rpc, &hash).await {
         Ok(status) => {
-            let epoch = status.mainchain.epoch;
-            debug!("Block {} is from epoch {}", block_number, epoch);
-            epoch
+            debug!(
+                "Block {} is from mainchain epoch {}, sidechain epoch {}",
+                block_number, status.mainchain.epoch, status.sidechain.epoch
+            );
+            (status.mainchain.epoch, status.sidechain.epoch)
         }
         Err(e) => {
             warn!(
                 "Failed to get epoch for block {} (hash {}): {}. Using epoch 0.",
                 block_number, hash, e
             );
-            0
+            (0, 0)
         }
     };
 
@@ -546,6 +548,7 @@ async fn sync_single_block(
         extrinsics_root: header.extrinsics_root.clone(),
         slot_number: slot,
         epoch: mainchain_epoch,
+        sidechain_epoch,
         timestamp: chrono::Utc::now().timestamp(), // TODO: extract from extrinsics
         is_finalized: false,
         author_key,

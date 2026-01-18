@@ -10,7 +10,10 @@ pub struct BlockRecord {
     pub state_root: String,
     pub extrinsics_root: String,
     pub slot_number: u64,
+    /// Mainchain epoch (24h on preview, 5 days on mainnet)
     pub epoch: u64,
+    /// Sidechain epoch (2h on preview, 10h on mainnet) - determines committee rotation
+    pub sidechain_epoch: u64,
     pub timestamp: i64,
     pub is_finalized: bool,
     pub author_key: Option<String>,
@@ -34,8 +37,8 @@ pub fn insert_block(conn: &Connection, block: &BlockRecord) -> Result<()> {
     conn.execute(
         "INSERT OR REPLACE INTO blocks
          (block_number, block_hash, parent_hash, state_root, extrinsics_root,
-          slot_number, epoch, timestamp, is_finalized, author_key, extrinsics_count, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+          slot_number, epoch, sidechain_epoch, timestamp, is_finalized, author_key, extrinsics_count, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             block.block_number as i64,
             &block.block_hash,
@@ -44,6 +47,7 @@ pub fn insert_block(conn: &Connection, block: &BlockRecord) -> Result<()> {
             &block.extrinsics_root,
             block.slot_number as i64,
             block.epoch as i64,
+            block.sidechain_epoch as i64,
             block.timestamp,
             block.is_finalized as i32,
             &block.author_key,
@@ -58,7 +62,7 @@ pub fn insert_block(conn: &Connection, block: &BlockRecord) -> Result<()> {
 pub fn get_block(conn: &Connection, block_number: u64) -> Result<Option<BlockRecord>> {
     let mut stmt = conn.prepare(
         "SELECT block_number, block_hash, parent_hash, state_root, extrinsics_root,
-                slot_number, epoch, timestamp, is_finalized, author_key, extrinsics_count
+                slot_number, epoch, sidechain_epoch, timestamp, is_finalized, author_key, extrinsics_count
          FROM blocks WHERE block_number = ?1",
     )?;
 
@@ -71,10 +75,11 @@ pub fn get_block(conn: &Connection, block_number: u64) -> Result<Option<BlockRec
             extrinsics_root: row.get(4)?,
             slot_number: row.get::<_, i64>(5)? as u64,
             epoch: row.get::<_, i64>(6)? as u64,
-            timestamp: row.get(7)?,
-            is_finalized: row.get::<_, i32>(8)? != 0,
-            author_key: row.get(9)?,
-            extrinsics_count: row.get::<_, i32>(10)? as u32,
+            sidechain_epoch: row.get::<_, i64>(7)? as u64,
+            timestamp: row.get(8)?,
+            is_finalized: row.get::<_, i32>(9)? != 0,
+            author_key: row.get(10)?,
+            extrinsics_count: row.get::<_, i32>(11)? as u32,
         })
     });
 
@@ -181,7 +186,7 @@ pub fn get_blocks_in_range(
     let limit_clause = limit.map_or(String::new(), |l| format!(" LIMIT {}", l));
     let sql = format!(
         "SELECT block_number, block_hash, parent_hash, state_root, extrinsics_root,
-                slot_number, epoch, timestamp, is_finalized, author_key, extrinsics_count
+                slot_number, epoch, sidechain_epoch, timestamp, is_finalized, author_key, extrinsics_count
          FROM blocks WHERE block_number >= ?1 AND block_number <= ?2
          ORDER BY block_number ASC{}",
         limit_clause
@@ -197,10 +202,11 @@ pub fn get_blocks_in_range(
             extrinsics_root: row.get(4)?,
             slot_number: row.get::<_, i64>(5)? as u64,
             epoch: row.get::<_, i64>(6)? as u64,
-            timestamp: row.get(7)?,
-            is_finalized: row.get::<_, i32>(8)? != 0,
-            author_key: row.get(9)?,
-            extrinsics_count: row.get::<_, i32>(10)? as u32,
+            sidechain_epoch: row.get::<_, i64>(7)? as u64,
+            timestamp: row.get(8)?,
+            is_finalized: row.get::<_, i32>(9)? != 0,
+            author_key: row.get(10)?,
+            extrinsics_count: row.get::<_, i32>(11)? as u32,
         })
     })?;
 
@@ -363,6 +369,7 @@ mod tests {
             extrinsics_root: "0xdef".to_string(),
             slot_number: 100000,
             epoch: 100,
+            sidechain_epoch: 1200,
             timestamp: 1234567890,
             is_finalized: false,
             author_key: Some("0xvalidator".to_string()),
@@ -375,6 +382,7 @@ mod tests {
         assert_eq!(retrieved.block_hash, "0x123");
         assert_eq!(retrieved.slot_number, 100000);
         assert_eq!(retrieved.epoch, 100);
+        assert_eq!(retrieved.sidechain_epoch, 1200);
     }
 
     #[test]
@@ -407,6 +415,7 @@ mod tests {
                 extrinsics_root: "0x".to_string(),
                 slot_number: i * 100,
                 epoch: 1,
+                sidechain_epoch: 12,
                 timestamp: 1234567890 + i as i64,
                 is_finalized: false,
                 author_key: None,

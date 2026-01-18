@@ -4,6 +4,8 @@ use anyhow::Result;
 /// SQL schema for MVM database
 pub const SCHEMA: &str = r#"
 -- Synchronized block headers
+-- Note: 'epoch' is mainchain epoch (24h on preview, 5 days on mainnet)
+-- 'sidechain_epoch' is sidechain epoch (2h on preview, 10h on mainnet)
 CREATE TABLE IF NOT EXISTS blocks (
     block_number INTEGER PRIMARY KEY,
     block_hash TEXT NOT NULL UNIQUE,
@@ -12,6 +14,7 @@ CREATE TABLE IF NOT EXISTS blocks (
     extrinsics_root TEXT NOT NULL,
     slot_number INTEGER NOT NULL,
     epoch INTEGER NOT NULL,
+    sidechain_epoch INTEGER NOT NULL DEFAULT 0,
     timestamp INTEGER NOT NULL,
     is_finalized INTEGER DEFAULT 0,
     author_key TEXT,
@@ -22,6 +25,7 @@ CREATE TABLE IF NOT EXISTS blocks (
 CREATE INDEX IF NOT EXISTS idx_blocks_hash ON blocks(block_hash);
 CREATE INDEX IF NOT EXISTS idx_blocks_slot ON blocks(slot_number);
 CREATE INDEX IF NOT EXISTS idx_blocks_epoch ON blocks(epoch);
+CREATE INDEX IF NOT EXISTS idx_blocks_sidechain_epoch ON blocks(sidechain_epoch);
 CREATE INDEX IF NOT EXISTS idx_blocks_author ON blocks(author_key);
 CREATE INDEX IF NOT EXISTS idx_blocks_timestamp ON blocks(timestamp);
 

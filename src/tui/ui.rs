@@ -58,7 +58,7 @@ fn render_title_bar(f: &mut Frame, app: &App, area: Rect, _layout: &ResponsiveLa
     // Left side: title and current view
     let left_text = vec![
         Span::styled("Midnight Validator Monitor", Style::default().fg(theme.title()).add_modifier(Modifier::BOLD)),
-        Span::styled(" v0.6.0", Style::default().fg(theme.muted())),
+        Span::styled(format!(" v{}", env!("CARGO_PKG_VERSION")), Style::default().fg(theme.muted())),
         Span::raw("  |  "),
         Span::styled(
             match app.view_mode {
@@ -527,7 +527,7 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
             Span::raw("  "),
             Span::styled(format!("slot {:>12}", block.slot_number), Style::default().fg(theme.muted())),
             Span::raw("  "),
-            Span::styled(format!("epoch {:>4}", block.epoch), Style::default().fg(theme.epoch())),
+            Span::styled(format!("epoch {:>6}", block.sidechain_epoch), Style::default().fg(theme.epoch())),
             Span::raw("  "),
             Span::styled(format!("{} ", finalized), Style::default().fg(theme.success())),
             Span::styled("author: ", Style::default().fg(theme.muted())),
@@ -571,7 +571,7 @@ fn render_blocks(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout
         }
 
         if block_cols.show_epoch {
-            spans.push(Span::styled(format!("epoch {:>4}", block.epoch), Style::default().fg(theme.epoch())));
+            spans.push(Span::styled(format!("epoch {:>6}", block.sidechain_epoch), Style::default().fg(theme.epoch())));
             spans.push(Span::raw("  "));
         }
 

@@ -180,6 +180,7 @@ mod tests {
             extrinsics_root: "0xext".to_string(),
             slot_number: 10000,
             epoch: 10,
+            sidechain_epoch: 120,
             timestamp: 1234567890,
             is_finalized: false,
             author_key: None,

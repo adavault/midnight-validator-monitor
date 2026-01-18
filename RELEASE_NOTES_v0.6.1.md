@@ -4,9 +4,30 @@
 
 ## Overview
 
-Version 0.6.1 is a bug fix release that corrects the expected block prediction calculation and fixes a critical bug where validator ownership status was lost after epoch changes.
+Version 0.6.1 is a bug fix release that addresses several issues:
+- Fixed expected block prediction being 2x too high
+- Fixed validator ownership status being lost after epoch changes
+- Fixed TUI version display being hardcoded
+- Added sidechain epoch tracking to blocks (displays correct epoch in TUI)
+
+**Breaking Change:** Database schema updated - requires database recreation (see Upgrade Instructions).
 
 ## Bug Fixes
+
+### Fixed: Recent Blocks Showing Mainchain Epoch Instead of Sidechain Epoch
+
+The "Recent Blocks" panel in the TUI was displaying the mainchain epoch (24h cycles) instead of the sidechain epoch (2h cycles). Since sidechain epochs determine committee rotation and are more relevant for block production monitoring, the display now shows sidechain epoch.
+
+**Changes:**
+- Added `sidechain_epoch` column to blocks table
+- Sync command now captures both mainchain and sidechain epochs per block
+- TUI displays sidechain epoch in block listings
+
+### Fixed: TUI Version Display Hardcoded
+
+The version number in the TUI title bar was hardcoded to "v0.6.0" instead of reading from Cargo.toml.
+
+**Fix:** Now uses `env!("CARGO_PKG_VERSION")` to display the correct version.
 
 ### Fixed: Validator "is_ours" Status Lost After Epoch Changes
 
@@ -55,20 +76,38 @@ The sidechain epoch timing is:
 
 ## Upgrade Instructions
 
-Simply rebuild and restart:
+This release includes a database schema change. You must recreate the database:
 
 ```bash
+# Stop the sync daemon
+sudo systemctl stop mvm-sync
+
+# Remove the old database
+rm /opt/midnight/mvm/data/mvm.db
+
+# Rebuild the binary
 cargo build --release
-sudo systemctl restart mvm-sync  # if running as daemon
+cp target/release/mvm /opt/midnight/mvm/bin/mvm
+
+# Restart sync (will recreate database and re-sync)
+sudo systemctl start mvm-sync
+
+# Re-register your validator keys (after some blocks have synced)
+mvm keys --keystore /path/to/keystore --db-path /opt/midnight/mvm/data/mvm.db verify
 ```
 
-No database migrations required.
+See `docs/COMPATIBILITY.md` for our pre-v1.0 compatibility policy.
 
 ## Files Changed
 
 - `Cargo.toml` - Version bump to 0.6.1
 - `src/tui/app.rs` - Fixed expected block calculation constants
+- `src/tui/ui.rs` - Dynamic version display, show sidechain_epoch
 - `src/db/validators.rs` - Fixed is_ours preservation in upsert
+- `src/db/blocks.rs` - Added sidechain_epoch field to BlockRecord
+- `src/db/schema.rs` - Added sidechain_epoch column to blocks table
+- `src/commands/sync.rs` - Capture and store sidechain_epoch
+- `docs/COMPATIBILITY.md` - New compatibility policy documentation
 
 ## Contributors
 
