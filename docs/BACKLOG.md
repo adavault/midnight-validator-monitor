@@ -67,3 +67,77 @@ Benefits over current RPC approach:
 - [ ] Notification system for missed blocks
 - [ ] Web UI alternative to TUI
 - [ ] REST API for external integrations
+
+## v0.9 Release Plan
+
+### Block Detail Drill-Down
+Add ability to select a block in Blocks view and see full details via modal popup.
+
+**Interaction:**
+- Navigate to block with j/k
+- Press Enter to open detail popup
+- Press Escape to close
+
+**Detail popup shows:**
+- Full block hash, parent hash
+- State root, extrinsics root
+- Slot number, epoch (sidechain + mainchain)
+- Timestamp
+- Author (sidechain key + label if known)
+- Extrinsics count and list
+- Finalization status
+
+**Implementation:**
+- Add `selected_index` to Blocks view state
+- Add `DetailMode` enum to track popup state
+- Render popup as overlay using ratatui layered rendering
+- Query full block data from DB when opening
+
+### Validator Performance Drill-Down
+Add ability to select a validator in Performance view and drill into epoch-by-epoch performance.
+
+**Interaction:**
+- Navigate to validator with j/k
+- Press Enter to push detail view onto view stack
+- Press Escape/Backspace to pop back to Performance view
+
+**Detail view shows:**
+- Validator info (keys, label, registration status)
+- Table of epochs with columns:
+  - Epoch number
+  - Seats allocated (from committee_snapshots)
+  - Blocks produced
+  - Expected vs actual ratio
+- Scrollable list of epochs
+- Summary stats (total blocks, avg per epoch, best/worst epochs)
+
+**Implementation:**
+- Add view stack to App state (`Vec<ViewMode>` or dedicated struct)
+- Add `ValidatorDetail` view mode
+- Query committee_snapshots for seat allocation per epoch
+- Query blocks grouped by epoch for production counts
+- May need new DB query: `get_validator_epoch_performance(sidechain_key)`
+
+### State Management Refactor
+Both features require enhanced state management:
+
+```rust
+struct AppState {
+    // Existing...
+
+    // Selection state per view
+    selected_block: Option<usize>,
+    selected_validator: Option<usize>,
+
+    // Detail/popup state
+    detail_mode: Option<DetailMode>,
+
+    // View stack for drill-down navigation
+    view_stack: Vec<ViewMode>,
+}
+
+enum DetailMode {
+    BlockPopup(u64),           // block_number
+    ValidatorDetail(String),   // sidechain_key
+}
+```
