@@ -8,10 +8,11 @@ A production-ready Rust CLI tool for monitoring and managing Midnight blockchain
 
 - **Status Monitoring**: Node health, sync status, peer count, block production
 - **Block Synchronization**: Continuous sync daemon with systemd integration
-- **Interactive TUI**: Real-time monitoring dashboard with multiple views
+- **Interactive TUI**: Real-time monitoring dashboard with multiple views and sparkline visualization
 - **Data Queries**: Query synced blocks, validator performance, and detect gaps
 - **Key Management**: Verify keystore loading and registration status
 - **Configuration**: TOML-based config with environment variable overrides
+- **Shell Completions**: Tab completion for bash, zsh, fish, powershell, elvish
 - **Daemon Mode**: Graceful shutdown, PID management, auto-restart
 
 ## Installation
@@ -228,7 +229,8 @@ mvm view --rpc-url http://localhost:9944 --db-path ./mvm.db
 
 **Controls:**
 - `1-5` - Switch views
-- `j/k` or `↑/↓` - Scroll up/down
+- `j/k` or `↑/↓` - Scroll up/down (single line)
+- `J/K` or `PgUp/PgDn` - Scroll up/down (page)
 - `f` - Toggle "ours only" filter
 - `t` - Toggle theme (Midnight/Midday)
 - `?/h/F1` - Show help
@@ -334,6 +336,7 @@ src/
 │   ├── keystore.rs      # Substrate keystore loading
 │   ├── registration.rs  # Validator registration checks
 │   ├── scale.rs         # SCALE decoding for AuraApi_authorities
+│   ├── timing.rs        # Network timing and epoch calculations
 │   └── validators.rs    # Validator set and committee management
 ├── tui/
 │   ├── app.rs           # TUI application state
@@ -426,12 +429,31 @@ sudo ./scripts/uninstall.sh
 - `README.md` - This file, main usage documentation
 - `DEPLOYMENT.md` - Detailed deployment guide with systemd setup
 - `CLAUDE.md` - Architecture and implementation details for developers
-- `RELEASE_NOTES_v0.6.0.md` - Current release notes
+- `RELEASE_NOTES_v0.7.0.md` - Current release notes
+- `docs/BACKLOG.md` - Future feature plans and known issues
+- `docs/BLOCK_ATTRIBUTION.md` - Block author attribution design
 - `docs/archive/` - Historical planning and research documents
 
 ## Changelog
 
-### v0.6.0 (Current)
+### v0.7.0 (Current)
+- Sparkline block production visualization on dashboard
+- Shell completions for bash, zsh, fish, powershell, elvish (`mvm completions <shell>`)
+- Page scrolling with J/K (uppercase) or PageUp/PageDown
+- Help screen scrollbar indicator
+- Block timestamps calculated from slot number (accurate historical times)
+- Network timing module for epoch calculations
+- Security review completed
+- Fixed config paths and updated example configuration
+
+### v0.6.1
+- Fixed expected block prediction (was 2x too high)
+- Fixed validator "is_ours" status being lost after epoch changes
+- Fixed block author attribution on pruned nodes
+- Added external IP filtering via `view.expected_ip` config option
+- Dynamic TUI version display
+
+### v0.6.0
 - New Peers view (key 5) showing connected peers with sync status and IP addresses
 - Dashboard enhancements: external IP, peer ID, node version, Grandpa voter status
 - Separate sidechain (2h) and mainchain (24h) epoch progress bars
