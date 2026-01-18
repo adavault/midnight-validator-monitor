@@ -35,6 +35,8 @@ pub struct App {
     pub last_update: Instant,
     /// Color theme
     pub theme: Theme,
+    /// Expected IP for filtering external addresses (from config)
+    pub expected_ip: Option<String>,
 }
 
 /// Epoch progress information
@@ -212,6 +214,7 @@ impl App {
             state: AppState::default(),
             last_update: Instant::now(),
             theme: Theme::default(),
+            expected_ip: None,
         }
     }
 
@@ -381,16 +384,16 @@ impl App {
                 }
             }
 
-            // Extract external address - first public IP with port (only once, as order can vary)
+            // Extract external addresses - collect all unique public IPs
             // Use flag to prevent re-fetching since array order varies between RPC calls
             if !self.state.external_ip_fetched {
                 self.state.external_ip_fetched = true;  // Mark as attempted regardless of result
 
                 if let Some(external) = network_state.get("externalAddresses").and_then(|v| v.as_array()) {
-                    // Find first public IP
-                    let public_ip = external.iter()
+                    // Collect all public IPs (not just the first one)
+                    let mut public_ips: Vec<String> = external.iter()
                         .filter_map(|addr| addr.as_str())
-                        .find_map(|addr| {
+                        .filter_map(|addr| {
                             // Parse multiaddr format like /ip4/82.69.29.148/tcp/30333
                             if addr.starts_with("/ip4/") {
                                 let parts: Vec<&str> = addr.split('/').collect();
@@ -416,10 +419,20 @@ impl App {
                                 }
                             }
                             None
-                        });
+                        })
+                        .collect();
 
-                    if let Some(ip) = public_ip {
-                        self.state.external_ips = vec![ip];
+                    // Deduplicate and sort for consistent display
+                    public_ips.sort();
+                    public_ips.dedup();
+
+                    // Filter by expected IP if configured
+                    if let Some(ref expected) = self.expected_ip {
+                        public_ips.retain(|addr| addr.starts_with(expected));
+                    }
+
+                    if !public_ips.is_empty() {
+                        self.state.external_ips = public_ips;
                     }
                 }
             }

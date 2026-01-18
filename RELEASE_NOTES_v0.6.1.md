@@ -9,6 +9,8 @@ Version 0.6.1 is a bug fix release that addresses several issues:
 - Fixed validator ownership status being lost after epoch changes
 - Fixed TUI version display being hardcoded
 - Added sidechain epoch tracking to blocks (displays correct epoch in TUI)
+- Fixed block author attribution on pruned nodes (was attributing incorrectly)
+- Improved `mvm keys verify` messaging when validator not yet in database
 
 **Breaking Change:** Database schema updated - requires database recreation (see Upgrade Instructions).
 
@@ -65,6 +67,56 @@ This Epoch: 1 blocks (expected: ~2.4)
 This Epoch: 1 blocks (expected: ~1.2)
 ```
 
+### Fixed: Block Author Attribution on Pruned Nodes
+
+When syncing historical blocks on a pruned node (non-archive), the sync command was incorrectly attributing blocks to validators using the current committee instead of the historical committee. This caused wrong validators to be credited with blocks they didn't produce.
+
+**Root Cause:**
+Non-archive nodes prune historical state (typically keeping ~256 blocks). When historical state is unavailable, the code fell back to the current committee, but committees change each sidechain epoch (2 hours). Using the wrong committee means `slot % committee.len()` points to a different validator.
+
+**Fix:**
+- When historical state is pruned, blocks are now stored with `author_key = NULL` instead of incorrect attribution
+- Added safe start block detection with binary search to find oldest block with available state
+- Added startup warning when syncing from blocks older than available state
+- See `docs/BLOCK_ATTRIBUTION.md` for full design documentation
+
+**Before (incorrect):**
+```
+Block 3357362 authored by validator 0xabc123... (wrong validator)
+```
+
+**After (correct):**
+```
+WARN Historical state pruned for epoch 1170 - blocks will be stored without author attribution
+Block 3357362 stored without author (state pruned)
+```
+
+### Improved: `mvm keys verify` Messaging
+
+When running `mvm keys verify` and the validator is not yet in the database, the command now:
+- Creates the validator record automatically (if registered)
+- Shows clear messaging about what happened
+- No longer tells users to "run mvm sync" when sync won't help
+
+### Fixed: External IP Display Showing Incorrect Addresses
+
+The TUI's external IP display was showing peer-reported relay addresses instead of the node's actual external IP. This happened because libp2p's `externalAddresses` includes all discovered addresses (configured + peer-reported).
+
+**Fix:**
+Added `view.expected_ip` config option to filter external addresses:
+
+```toml
+[view]
+expected_ip = "203.0.113.10"  # Your actual external IP
+```
+
+Or via environment variable:
+```bash
+MVM_EXPECTED_IP="203.0.113.10" mvm view
+```
+
+See `docs/EXTERNAL_IP_RESEARCH.md` for detailed findings on this issue.
+
 ### Technical Details
 
 The sidechain epoch timing is:
@@ -101,13 +153,19 @@ See `docs/COMPATIBILITY.md` for our pre-v1.0 compatibility policy.
 ## Files Changed
 
 - `Cargo.toml` - Version bump to 0.6.1
-- `src/tui/app.rs` - Fixed expected block calculation constants
+- `src/config.rs` - Added `view.expected_ip` config option
+- `src/tui/app.rs` - Fixed expected block calculation, external IP filtering
 - `src/tui/ui.rs` - Dynamic version display, show sidechain_epoch
 - `src/db/validators.rs` - Fixed is_ours preservation in upsert
 - `src/db/blocks.rs` - Added sidechain_epoch field to BlockRecord
 - `src/db/schema.rs` - Added sidechain_epoch column to blocks table
-- `src/commands/sync.rs` - Capture and store sidechain_epoch
+- `src/commands/sync.rs` - Capture sidechain_epoch, safe attribution, pruning detection
+- `src/commands/view.rs` - Pass expected_ip config to TUI
+- `src/commands/keys.rs` - Improved validator creation and messaging
 - `docs/COMPATIBILITY.md` - New compatibility policy documentation
+- `docs/BLOCK_ATTRIBUTION.md` - New block attribution design documentation
+- `docs/EXTERNAL_IP_RESEARCH.md` - External IP detection research and solution
+- `docs/BACKLOG.md` - Future research items
 
 ## Contributors
 

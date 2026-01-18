@@ -80,6 +80,11 @@ pub struct SyncConfig {
 pub struct ViewConfig {
     #[serde(default = "default_refresh_interval")]
     pub refresh_interval_ms: u64,
+
+    /// Expected external IP address for filtering peer-reported addresses
+    /// Only addresses matching this IP will be displayed
+    #[serde(default)]
+    pub expected_ip: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -165,6 +170,7 @@ impl Default for ViewConfig {
     fn default() -> Self {
         Self {
             refresh_interval_ms: default_refresh_interval(),
+            expected_ip: None,
         }
     }
 }
@@ -268,6 +274,11 @@ impl Config {
         // Daemon
         if let Ok(pid_file) = std::env::var("MVM_PID_FILE") {
             self.daemon.pid_file = Some(pid_file);
+        }
+
+        // View
+        if let Ok(expected_ip) = std::env::var("MVM_EXPECTED_IP") {
+            self.view.expected_ip = Some(expected_ip);
         }
     }
 

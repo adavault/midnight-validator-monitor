@@ -71,6 +71,11 @@ Tip: If you installed MVM, the database should be at /opt/midnight/mvm/data/mvm.
         app.state.node_name = name.clone();
     }
 
+    // Set expected IP for external address filtering
+    if let Some(ref ip) = config.view.expected_ip {
+        app.expected_ip = Some(ip.clone());
+    }
+
     // Do initial update
     if let Err(e) = app.update(&rpc, &metrics, &db).await {
         error!("Initial update failed: {}", e);

@@ -129,6 +129,21 @@ Tip: Make sure your Midnight node is running and RPC is enabled.
         if finalized_only { "finalized" } else { "chain tip" }
     );
 
+    // Detect if historical state is available for author attribution
+    if let Some(safe_start) = detect_safe_start_block(&rpc, chain_tip).await {
+        if start_from < safe_start {
+            warn!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            warn!("Historical state is pruned before block {}", safe_start);
+            warn!("Blocks {} to {} will be synced WITHOUT author attribution", start_from, safe_start - 1);
+            warn!("Block data will be complete, but author_key will be NULL for these blocks.");
+            warn!("For full attribution history, use an archive node (--state-pruning archive)");
+            warn!("See docs/BLOCK_ATTRIBUTION.md for details");
+            warn!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        } else {
+            info!("Historical state available - full author attribution enabled");
+        }
+    }
+
     // Initial sync: catch up to chain tip
     let mut current_block = start_from;
     let target = if finalized_only {
@@ -327,14 +342,86 @@ async fn get_block(rpc: &RpcClient, hash: &str) -> Result<SignedBlock> {
     rpc.call("chain_getBlock", vec![hash]).await
 }
 
+/// Detect the oldest block that has state available for committee queries.
+///
+/// Non-archive nodes prune historical state. This function uses binary search
+/// to find the approximate boundary between pruned and available state.
+///
+/// Returns the oldest block number where state is available, or None if all state
+/// is available (archive node) or detection failed.
+async fn detect_safe_start_block(rpc: &RpcClient, chain_tip: u64) -> Option<u64> {
+    // Most pruned nodes keep ~256 blocks of state
+    // We'll check a few sample points to detect if pruning is in effect
+
+    // First, check if we're on an archive node by testing an old block
+    let test_old_block = chain_tip.saturating_sub(1000);
+    if test_old_block == 0 {
+        return None; // Chain is too short to need pruning detection
+    }
+
+    // Get hash for the test block
+    let hash = match get_block_hash(rpc, test_old_block).await {
+        Ok(h) => h,
+        Err(_) => return None,
+    };
+
+    // Try to query committee at this old block
+    match ValidatorSet::fetch_committee_at_block(rpc, Some(&hash)).await {
+        Ok(_) => {
+            // State is available for old blocks - likely an archive node
+            debug!("Historical state available at block {} - archive node detected", test_old_block);
+            None
+        }
+        Err(e) => {
+            let err_str = format!("{:?}", e);
+            if err_str.contains("State already discarded") || err_str.contains("UnknownBlock") {
+                // State is pruned - do binary search to find the boundary
+                debug!("State pruned at block {}, searching for safe start...", test_old_block);
+
+                // Binary search between test_old_block and chain_tip
+                let mut low = test_old_block;
+                let mut high = chain_tip;
+
+                while high - low > 10 {
+                    let mid = (low + high) / 2;
+                    let mid_hash = match get_block_hash(rpc, mid).await {
+                        Ok(h) => h,
+                        Err(_) => break,
+                    };
+
+                    match ValidatorSet::fetch_committee_at_block(rpc, Some(&mid_hash)).await {
+                        Ok(_) => {
+                            // State available at mid, search lower
+                            high = mid;
+                        }
+                        Err(_) => {
+                            // State pruned at mid, search higher
+                            low = mid;
+                        }
+                    }
+                }
+
+                // Return slightly above high to ensure we're in safe territory
+                Some(high + 1)
+            } else {
+                // Different error - can't determine pruning status
+                debug!("Could not determine pruning status: {}", e);
+                None
+            }
+        }
+    }
+}
+
 /// Committee cache entry with the block hash used to fetch it
 struct CommitteeCache {
+    /// The validator set (committee + candidates) for this epoch
+    /// If used_fallback is true, this should NOT be used for attribution
     validator_set: ValidatorSet,
     /// Block hash used to fetch this committee (for reference/debugging)
     #[allow(dead_code)]
     fetched_at_block: String,
     /// True if we had to fall back to current committee due to pruned state
-    #[allow(dead_code)]
+    /// When true, attribution is skipped because it would be inaccurate
     used_fallback: bool,
 }
 
@@ -410,22 +497,31 @@ async fn sync_single_block(
     // Fetch or retrieve cached committee for this epoch
     // IMPORTANT: When fetching the committee, we must query at a block hash from
     // that epoch to get the correct historical committee (committees change each epoch)
+    //
+    // If historical state is pruned, we skip attribution entirely rather than
+    // attribute incorrectly using the current committee. See docs/BLOCK_ATTRIBUTION.md
     let validator_set = if let Some(cached) = committee_cache.get(&mainchain_epoch) {
-        // Already cached - use the previously fetched committee for this epoch
-        Some(&cached.validator_set)
+        // Already cached - check if this was a fallback (pruned state)
+        if cached.used_fallback {
+            // State was pruned for this epoch - skip attribution
+            None
+        } else {
+            // Historical state was available - use for accurate attribution
+            Some(&cached.validator_set)
+        }
     } else if mainchain_epoch > 0 {
         // Fetch and cache committee for this epoch AT THIS BLOCK HASH
         // This ensures we get the committee that was active when this block was produced
-        // Uses fallback to current committee if historical state is pruned
         match ValidatorSet::fetch_with_committee_or_fallback(rpc, mainchain_epoch, &hash).await {
             Ok((vs, used_fallback)) => {
                 if used_fallback {
-                    info!(
-                        "Using current committee for epoch {} (historical state pruned) - {} candidates, {} seats",
-                        mainchain_epoch,
-                        vs.candidate_count(),
-                        vs.committee_size()
+                    // Historical state is pruned - log warning and skip attribution
+                    warn!(
+                        "Historical state pruned for epoch {} - blocks will be stored without author attribution. \
+                         See docs/BLOCK_ATTRIBUTION.md for details.",
+                        mainchain_epoch
                     );
+                    // Don't store committee snapshot - it would be inaccurate for this epoch
                 } else {
                     debug!(
                         "Fetched validator set for epoch {} at block {} ({} candidates, {} committee seats)",
@@ -434,17 +530,15 @@ async fn sync_single_block(
                         vs.candidate_count(),
                         vs.committee_size()
                     );
-                }
-
-                // Store committee snapshot for this epoch (even if fallback was used)
-                // Note: If fallback was used, this may not be the exact committee for this epoch
-                if let Err(e) = db.store_committee_snapshot(mainchain_epoch, &vs.committee) {
-                    warn!(
-                        "Failed to store committee snapshot for epoch {}: {}",
-                        mainchain_epoch, e
-                    );
-                } else {
-                    debug!("Stored committee snapshot for epoch {}", mainchain_epoch);
+                    // Only store committee snapshot when we have accurate historical data
+                    if let Err(e) = db.store_committee_snapshot(mainchain_epoch, &vs.committee) {
+                        warn!(
+                            "Failed to store committee snapshot for epoch {}: {}",
+                            mainchain_epoch, e
+                        );
+                    } else {
+                        debug!("Stored committee snapshot for epoch {}", mainchain_epoch);
+                    }
                 }
 
                 committee_cache.insert(
@@ -455,7 +549,13 @@ async fn sync_single_block(
                         used_fallback,
                     },
                 );
-                committee_cache.get(&mainchain_epoch).map(|c| &c.validator_set)
+
+                // Only return validator set for attribution if state wasn't pruned
+                if used_fallback {
+                    None
+                } else {
+                    committee_cache.get(&mainchain_epoch).map(|c| &c.validator_set)
+                }
             }
             Err(e) => {
                 warn!(

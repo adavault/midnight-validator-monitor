@@ -309,10 +309,7 @@ async fn run_verify(keys: &ValidatorKeys, rpc_url: &str, db_path: &PathBuf, time
                 }
             }
             None => {
-                info!("  Validator not found in database");
-                info!("  Run 'mvm sync' to populate validator data");
-
-                // Still try to mark the validator as ours for future syncs
+                // Validator not in database yet - create record if registered
                 let registration_status = match &key_status.registration {
                     Some(crate::midnight::RegistrationStatus::Permissioned) => {
                         Some("permissioned".to_string())
@@ -335,7 +332,12 @@ async fn run_verify(keys: &ValidatorKeys, rpc_url: &str, db_path: &PathBuf, time
                         total_blocks: 0,
                     };
                     db.upsert_validator(&validator_record)?;
-                    debug!("Created validator record and marked as ours");
+                    info!("  ✓ Validator record created and marked as ours");
+                    info!("  No blocks produced yet in synced range");
+                    info!("  Block stats will appear once your validator produces blocks");
+                } else {
+                    info!("  Validator not found in database");
+                    info!("  Register your validator first, then run this command again");
                 }
             }
         }
