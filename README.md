@@ -1,6 +1,6 @@
 # Midnight Validator Monitor (MVM)
 
-A production-ready Rust CLI tool for monitoring and managing Midnight blockchain validator nodes.
+A Rust CLI tool for monitoring and managing Midnight blockchain validator nodes.
 
 ![MVM Dashboard](assets/screenshots/dashboard.png)
 
