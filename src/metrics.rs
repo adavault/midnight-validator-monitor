@@ -2,10 +2,95 @@ use anyhow::{Context, Result};
 use reqwest::Client;
 use std::collections::HashMap;
 
-/// Client for fetching Prometheus metrics
+/// Client for fetching Prometheus metrics from Substrate node
 pub struct MetricsClient {
     client: Client,
     endpoint: String,
+}
+
+/// Client for fetching metrics from node_exporter
+pub struct NodeExporterClient {
+    client: Client,
+    endpoint: String,
+}
+
+/// Metrics from node_exporter (system-level metrics)
+#[derive(Debug, Default, Clone)]
+pub struct NodeExporterMetrics {
+    /// System load average (1 minute)
+    pub load1: f64,
+    /// Total system memory in bytes
+    pub memory_total_bytes: u64,
+    /// Available system memory in bytes
+    pub memory_available_bytes: u64,
+    /// Root filesystem total size in bytes
+    pub disk_total_bytes: u64,
+    /// Root filesystem available space in bytes
+    pub disk_available_bytes: u64,
+}
+
+impl NodeExporterClient {
+    pub fn new(endpoint: &str) -> Self {
+        Self {
+            client: Client::new(),
+            endpoint: endpoint.to_string(),
+        }
+    }
+
+    /// Fetch and parse node_exporter metrics
+    pub async fn fetch_metrics(&self) -> Result<NodeExporterMetrics> {
+        let response = self
+            .client
+            .get(&self.endpoint)
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .await
+            .context("Failed to fetch node_exporter metrics")?;
+
+        let body = response
+            .text()
+            .await
+            .context("Failed to read node_exporter metrics body")?;
+
+        Ok(parse_node_exporter_metrics(&body))
+    }
+}
+
+/// Parse node_exporter Prometheus metrics (system-wide metrics)
+fn parse_node_exporter_metrics(body: &str) -> NodeExporterMetrics {
+    let mut metrics = NodeExporterMetrics::default();
+    let parsed = parse_prometheus_text(body);
+
+    // System load average (1 minute)
+    if let Some(value) = find_metric(&parsed, "node_load1", None) {
+        metrics.load1 = value;
+    }
+
+    // System memory
+    if let Some(value) = find_metric(&parsed, "node_memory_MemTotal_bytes", None) {
+        metrics.memory_total_bytes = value as u64;
+    }
+    if let Some(value) = find_metric(&parsed, "node_memory_MemAvailable_bytes", None) {
+        metrics.memory_available_bytes = value as u64;
+    }
+
+    // Root filesystem (mountpoint="/")
+    if let Some(value) = find_metric(
+        &parsed,
+        "node_filesystem_size_bytes",
+        Some(&[("mountpoint", "/")]),
+    ) {
+        metrics.disk_total_bytes = value as u64;
+    }
+    if let Some(value) = find_metric(
+        &parsed,
+        "node_filesystem_avail_bytes",
+        Some(&[("mountpoint", "/")]),
+    ) {
+        metrics.disk_available_bytes = value as u64;
+    }
+
+    metrics
 }
 
 /// Parsed Prometheus metrics relevant to block production
@@ -33,6 +118,20 @@ pub struct BlockProductionMetrics {
     pub process_start_time: f64,
     /// Is this node a Grandpa voter
     pub grandpa_voter: bool,
+
+    // Peer connection metrics (Prometheus-based, more accurate than RPC)
+    /// Total inbound connections opened
+    pub connections_in_opened: u64,
+    /// Total inbound connections closed
+    pub connections_in_closed: u64,
+    /// Total outbound connections opened
+    pub connections_out_opened: u64,
+    /// Total outbound connections closed
+    pub connections_out_closed: u64,
+    /// Number of discovered peers
+    pub peers_discovered: u64,
+    /// Number of pending connections
+    pub pending_connections: u64,
 }
 
 impl MetricsClient {
@@ -129,6 +228,41 @@ fn parse_metrics(body: &str) -> BlockProductionMetrics {
     // Grandpa voter status - infer from prevotes cast (if > 0, we're a voter)
     if let Some(value) = find_metric(&parsed, "substrate_finality_grandpa_prevotes_total", None) {
         metrics.grandpa_voter = value > 0.0;
+    }
+
+    // Peer connection metrics (more accurate than RPC-based counting)
+    if let Some(value) = find_metric(
+        &parsed,
+        "substrate_sub_libp2p_connections_opened_total",
+        Some(&[("direction", "in")]),
+    ) {
+        metrics.connections_in_opened = value as u64;
+    }
+    // Use sum_metric for closed connections since they have multiple reason labels
+    metrics.connections_in_closed = sum_metric(
+        &parsed,
+        "substrate_sub_libp2p_connections_closed_total",
+        Some(&[("direction", "in")]),
+    ) as u64;
+
+    if let Some(value) = find_metric(
+        &parsed,
+        "substrate_sub_libp2p_connections_opened_total",
+        Some(&[("direction", "out")]),
+    ) {
+        metrics.connections_out_opened = value as u64;
+    }
+    // Use sum_metric for closed connections since they have multiple reason labels
+    metrics.connections_out_closed = sum_metric(
+        &parsed,
+        "substrate_sub_libp2p_connections_closed_total",
+        Some(&[("direction", "out")]),
+    ) as u64;
+    if let Some(value) = find_metric(&parsed, "substrate_sub_libp2p_peerset_num_discovered", None) {
+        metrics.peers_discovered = value as u64;
+    }
+    if let Some(value) = find_metric(&parsed, "substrate_sub_libp2p_pending_connections", None) {
+        metrics.pending_connections = value as u64;
     }
 
     metrics
@@ -232,4 +366,47 @@ fn find_metric(
     }
 
     None
+}
+
+/// Sum all metric values matching the label filters
+/// Used for metrics with multiple label dimensions (e.g., connections_closed has both direction and reason)
+fn sum_metric(
+    parsed: &HashMap<String, Vec<(HashMap<String, String>, f64)>>,
+    name: &str,
+    label_filters: Option<&[(&str, &str)]>,
+) -> f64 {
+    let entries = match parsed.get(name) {
+        Some(e) => e,
+        None => return 0.0,
+    };
+
+    entries.iter()
+        .filter(|(labels, _)| {
+            match label_filters {
+                Some(filters) => filters.iter().all(|(k, v)| {
+                    labels.get(*k).map(|lv| lv == *v).unwrap_or(false)
+                }),
+                None => true,
+            }
+        })
+        .map(|(_, value)| *value)
+        .sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_peers_discovered() {
+        let body = r#"
+# HELP substrate_sub_libp2p_peerset_num_discovered Number of nodes stored in the peerset manager
+# TYPE substrate_sub_libp2p_peerset_num_discovered gauge
+substrate_sub_libp2p_peerset_num_discovered{chain="testnet-02"} 109
+substrate_sub_libp2p_pending_connections{chain="testnet-02"} 5
+"#;
+        let metrics = parse_metrics(body);
+        assert_eq!(metrics.peers_discovered, 109);
+        assert_eq!(metrics.pending_connections, 5);
+    }
 }

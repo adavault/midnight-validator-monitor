@@ -1,7 +1,7 @@
 //! Application state management for TUI
 
 use crate::db::{BlockRecord, Database, ValidatorRecord, ValidatorEpochRecord};
-use crate::metrics::MetricsClient;
+use crate::metrics::{MetricsClient, NodeExporterClient};
 use crate::midnight::{ChainTiming, ValidatorSet};
 use crate::rpc::{RpcClient, SidechainStatus};
 use crate::tui::Theme;
@@ -135,9 +135,11 @@ pub struct AppState {
     pub validator_epoch_blocks: HashMap<String, u64>,
 
     // Block production sparkline (for dashboard)
-    /// Block counts per sidechain epoch for our validators (last 12 epochs = 24h)
-    /// Index 0 = oldest, index 11 = most recent (left to right in sparkline)
+    /// Block counts per sidechain epoch for our validators (last 24 epochs = 48h)
+    /// Index 0 = oldest, index 23 = most recent (left to right in sparkline)
     pub our_blocks_sparkline: Vec<u64>,
+    /// Total committee seats for our validators over the sparkline period
+    pub sparkline_total_seats: u64,
 
     // Status
     pub last_error: Option<String>,
@@ -158,6 +160,17 @@ pub struct AppState {
     pub external_ips: Vec<String>,
     pub external_ip_fetched: bool,  // Flag to prevent re-fetching (IP order varies)
     pub connected_peers: Vec<PeerInfo>,
+
+    // Prometheus-based peer metrics (supplemental info)
+    pub peers_discovered: u64,
+    pub pending_connections: u64,
+
+    // System resource metrics (from node_exporter)
+    pub system_load1: f64,
+    pub system_memory_used_bytes: u64,
+    pub system_memory_total_bytes: u64,
+    pub system_disk_used_bytes: u64,
+    pub system_disk_total_bytes: u64,
 }
 
 /// Information about a connected peer
@@ -208,6 +221,7 @@ impl Default for AppState {
             validator_epoch_data: HashMap::new(),
             validator_epoch_blocks: HashMap::new(),
             our_blocks_sparkline: Vec::new(),
+            sparkline_total_seats: 0,
             last_error: None,
             update_duration: Duration::from_secs(0),
             is_loading: true,
@@ -221,6 +235,13 @@ impl Default for AppState {
             external_ips: Vec::new(),
             external_ip_fetched: false,
             connected_peers: Vec::new(),
+            peers_discovered: 0,
+            pending_connections: 0,
+            system_load1: 0.0,
+            system_memory_used_bytes: 0,
+            system_memory_total_bytes: 0,
+            system_disk_used_bytes: 0,
+            system_disk_total_bytes: 0,
         }
     }
 }
@@ -248,7 +269,7 @@ impl App {
     }
 
     /// Update application state from RPC and database
-    pub async fn update(&mut self, rpc: &RpcClient, metrics: &MetricsClient, db: &Database) -> Result<()> {
+    pub async fn update(&mut self, rpc: &RpcClient, metrics: &MetricsClient, node_exporter: Option<&NodeExporterClient>, db: &Database) -> Result<()> {
         let start = Instant::now();
 
         // Fetch RPC data
@@ -265,6 +286,11 @@ impl App {
 
         // Fetch metrics data (non-critical, don't fail on error)
         self.fetch_metrics_data(metrics).await;
+
+        // Fetch node_exporter metrics if configured (non-critical)
+        if let Some(ne) = node_exporter {
+            self.fetch_node_exporter_data(ne).await;
+        }
 
         // Fetch database data
         let db_ok = match self.fetch_db_data(db) {
@@ -698,7 +724,8 @@ impl App {
             }
         }
 
-        // Fetch sparkline data for our validators (block production over last 12 sidechain epochs = 24h)
+        // Fetch sparkline data for our validators (block production over last 24 sidechain epochs = 48h)
+        let num_buckets = 24; // 24 epochs = 48h on preview, 10 days on mainnet
         if !self.state.our_validators.is_empty() {
             let author_keys: Vec<String> = self.state.our_validators
                 .iter()
@@ -707,7 +734,6 @@ impl App {
 
             // Use sidechain epoch duration for buckets (2h for preview, 10h for mainnet)
             let bucket_secs = (self.chain_timing.sidechain_epoch_ms / 1000) as i64;
-            let num_buckets = 12; // 12 epochs = 24h on preview, 5 days on mainnet
 
             match db.get_block_counts_bucketed(&author_keys, bucket_secs, num_buckets) {
                 Ok(counts) => {
@@ -718,8 +744,20 @@ impl App {
                     self.state.our_blocks_sparkline = vec![0; num_buckets];
                 }
             }
+
+            // Fetch total seats for the sparkline period
+            match db.get_total_seats_for_epochs(&author_keys, self.state.sidechain_epoch, num_buckets) {
+                Ok(seats) => {
+                    self.state.sparkline_total_seats = seats;
+                }
+                Err(e) => {
+                    tracing::debug!("Failed to fetch sparkline seats: {}", e);
+                    self.state.sparkline_total_seats = 0;
+                }
+            }
         } else {
-            self.state.our_blocks_sparkline = vec![0; 12];
+            self.state.our_blocks_sparkline = vec![0; num_buckets];
+            self.state.sparkline_total_seats = 0;
         }
 
         Ok(())
@@ -741,6 +779,31 @@ impl App {
                     .map(|d| d.as_secs_f64())
                     .unwrap_or(0.0);
                 self.state.uptime_secs = (now - m.process_start_time) as u64;
+            }
+
+            // Prometheus provides additional peer network info (don't override RPC counts)
+            self.state.peers_discovered = m.peers_discovered;
+            self.state.pending_connections = m.pending_connections;
+        }
+    }
+
+    async fn fetch_node_exporter_data(&mut self, node_exporter: &NodeExporterClient) {
+        // Node exporter metrics are non-critical - don't fail the update if unavailable
+        if let Ok(m) = node_exporter.fetch_metrics().await {
+            self.state.system_load1 = m.load1;
+
+            // Calculate memory used = total - available
+            if m.memory_total_bytes > 0 {
+                self.state.system_memory_total_bytes = m.memory_total_bytes;
+                self.state.system_memory_used_bytes = m.memory_total_bytes
+                    .saturating_sub(m.memory_available_bytes);
+            }
+
+            // Calculate disk used = total - available
+            if m.disk_total_bytes > 0 {
+                self.state.system_disk_total_bytes = m.disk_total_bytes;
+                self.state.system_disk_used_bytes = m.disk_total_bytes
+                    .saturating_sub(m.disk_available_bytes);
             }
         }
     }
@@ -779,8 +842,8 @@ impl App {
 
     /// Scroll down in current view
     pub fn scroll_down(&mut self) {
-        // Help screen has 42 items (count of ListItems in render_help)
-        const HELP_ITEM_COUNT: usize = 44;
+        // Help screen item count (count of ListItems in render_help)
+        const HELP_ITEM_COUNT: usize = 56;
 
         let max_index = match self.view_mode {
             ViewMode::Blocks => self.state.recent_blocks.len().saturating_sub(1),
@@ -812,7 +875,7 @@ impl App {
     /// Scroll down by a page (10 items)
     pub fn scroll_page_down(&mut self) {
         const PAGE_SIZE: usize = 10;
-        const HELP_ITEM_COUNT: usize = 44;
+        const HELP_ITEM_COUNT: usize = 56;
 
         let max_index = match self.view_mode {
             ViewMode::Blocks => self.state.recent_blocks.len().saturating_sub(1),

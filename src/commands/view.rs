@@ -1,7 +1,7 @@
 //! View command - interactive TUI for real-time monitoring
 
 use crate::db::Database;
-use crate::metrics::MetricsClient;
+use crate::metrics::{MetricsClient, NodeExporterClient};
 use crate::rpc::RpcClient;
 use crate::tui::{App, Event, EventHandler};
 use anyhow::{Context, Result};
@@ -46,6 +46,8 @@ pub async fn run(args: ViewArgs) -> Result<()> {
     // Connect to RPC, metrics, and database BEFORE initializing terminal
     let rpc = RpcClient::with_timeout(&rpc_url, config.rpc.timeout_ms);
     let metrics = MetricsClient::new(&config.rpc.metrics_url);
+    let node_exporter = config.rpc.node_exporter_url.as_ref()
+        .map(|url| NodeExporterClient::new(url));
     let db = Database::open(&db_path)
         .context(format!("Failed to open database at {}.
 
@@ -77,7 +79,7 @@ Tip: If you installed MVM, the database should be at /opt/midnight/mvm/data/mvm.
     }
 
     // Do initial update
-    if let Err(e) = app.update(&rpc, &metrics, &db).await {
+    if let Err(e) = app.update(&rpc, &metrics, node_exporter.as_ref(), &db).await {
         error!("Initial update failed: {}", e);
     }
 
@@ -85,7 +87,7 @@ Tip: If you installed MVM, the database should be at /opt/midnight/mvm/data/mvm.
     let event_handler = EventHandler::new(Duration::from_millis(1000));
 
     // Run the TUI loop (data refresh at configured interval)
-    let res = run_tui(&mut terminal, &mut app, &rpc, &metrics, &db, &event_handler, refresh_interval).await;
+    let res = run_tui(&mut terminal, &mut app, &rpc, &metrics, node_exporter.as_ref(), &db, &event_handler, refresh_interval).await;
 
     // Restore terminal (always, even on error)
     let _ = disable_raw_mode();
@@ -110,6 +112,7 @@ async fn run_tui(
     app: &mut App,
     rpc: &RpcClient,
     metrics: &MetricsClient,
+    node_exporter: Option<&NodeExporterClient>,
     db: &Database,
     event_handler: &EventHandler,
     data_refresh_interval_ms: u64,
@@ -130,7 +133,7 @@ async fn run_tui(
             Event::Tick | Event::Resize => {
                 // Only fetch new data at the configured refresh interval
                 if app.last_update.elapsed() >= data_refresh_interval {
-                    if let Err(e) = app.update(rpc, metrics, db).await {
+                    if let Err(e) = app.update(rpc, metrics, node_exporter, db).await {
                         error!("Update failed: {}", e);
                     }
                 }

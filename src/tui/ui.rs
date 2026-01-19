@@ -258,22 +258,25 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         return;
     }
 
-    // Create epoch progress bar (fixed width, no truncation)
+    // Create epoch progress bars (full width for epochs)
     let epoch_progress = &app.state.epoch_progress;
-    let progress_width = 20;
-    let filled = ((epoch_progress.progress_percent / 100.0) * progress_width as f64) as usize;
-    let progress_bar: String = format!(
+    let epoch_bar_width = 30;  // Wider bars for full-width epoch rows
+    let sidechain_filled = ((epoch_progress.progress_percent / 100.0) * epoch_bar_width as f64) as usize;
+    let sidechain_bar: String = format!(
         "{}{}",
-        "━".repeat(filled.min(progress_width)),
-        "░".repeat(progress_width.saturating_sub(filled))
+        "━".repeat(sidechain_filled.min(epoch_bar_width)),
+        "░".repeat(epoch_bar_width.saturating_sub(sidechain_filled))
+    );
+    let mainchain_filled = ((epoch_progress.mainchain_progress_percent / 100.0) * epoch_bar_width as f64) as usize;
+    let mainchain_bar: String = format!(
+        "{}{}",
+        "━".repeat(mainchain_filled.min(epoch_bar_width)),
+        "░".repeat(epoch_bar_width.saturating_sub(mainchain_filled))
     );
 
     // Build sync progress bar
     let sync = &app.state.sync_progress;
-    let sync_bar_width = match layout.size {
-        ScreenSize::Medium => 20,
-        ScreenSize::Large => 25,
-    };
+    let sync_bar_width = 20;
     let sync_filled = ((sync.sync_percent / 100.0) * sync_bar_width as f64) as usize;
     let sync_bar: String = format!(
         "{}{}",
@@ -286,132 +289,140 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         ("⟳", theme.warning())
     };
 
-    // Standard network status with enhanced info (same for Medium and Large)
-    // Line 1: Block number first (most important), then peers
-    let mut network_text = vec![
-        Line::from(vec![
-            Span::styled("Block: ", Style::default().fg(theme.muted())),
-            Span::styled(format!("#{}", app.state.chain_tip), Style::default().fg(theme.block_number())),
-            Span::styled(
-                if app.state.chain_tip == app.state.finalized_block { " (finalized)" } else { "" },
-                Style::default().fg(theme.success())
-            ),
-            Span::raw("      "),
-            Span::styled("Peers: ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{}", app.state.peer_count), Style::default().fg(theme.text())),
-            Span::styled(format!(" (↑{} ↓{})", app.state.peers_outbound, app.state.peers_inbound), Style::default().fg(theme.muted())),
-        ]),
-    ];
-
-    // Calculate MVM sync percentage (highest synced block vs chain tip)
-    // Use the most recent block number from our DB, not the count
+    // Calculate MVM sync percentage
     let mvm_last_block = app.state.recent_blocks.first()
         .map(|b| b.block_number)
         .unwrap_or(0);
     let mvm_sync_pct = if app.state.chain_tip > 0 && mvm_last_block > 0 {
         (mvm_last_block as f64 / app.state.chain_tip as f64) * 100.0
     } else if app.state.total_blocks > 0 {
-        100.0 // Have blocks but can't calculate - assume synced
+        100.0
     } else {
         0.0
     };
     let mvm_synced = mvm_sync_pct >= 99.9;
     let mvm_status = if mvm_synced {
-        format!("{} blocks (100%)", app.state.total_blocks)
+        format!("{} blocks", app.state.total_blocks)
     } else {
-        format!("{} blocks ({:.1}%)", app.state.total_blocks, mvm_sync_pct)
+        format!("{} ({:.1}%)", app.state.total_blocks, mvm_sync_pct)
     };
     let mvm_color = if mvm_synced { theme.text() } else { theme.warning() };
 
-    // Node sync status line
+    // Prepare common values
+    let uptime = format_uptime(app.state.uptime_secs);
+    let bandwidth_in = format_bytes(app.state.bandwidth_in);
+    let bandwidth_out = format_bytes(app.state.bandwidth_out);
+    let grandpa_icon = if app.state.grandpa_voter { "✓" } else { "○" };
+    let grandpa_color = if app.state.grandpa_voter { theme.success() } else { theme.muted() };
+
+    // Two-column layout with fixed positions
+    // Column 1: 14-char label + value padded to 22 chars = 36 chars total
+    // Column 2: 14-char label + value
+
+    // Format block display
+    let block_str = if app.state.chain_tip == app.state.finalized_block {
+        format!("#{} (fin)", app.state.chain_tip)
+    } else {
+        format!("#{}", app.state.chain_tip)
+    };
+
+    // Row 1: Block + Uptime
+    let mut network_text = vec![
+        Line::from(vec![
+            Span::styled("Block:        ", Style::default().fg(theme.muted())),
+            Span::styled(format!("{:<22}", block_str), Style::default().fg(theme.block_number())),
+            Span::styled("Uptime:       ", Style::default().fg(theme.muted())),
+            Span::styled(uptime, Style::default().fg(theme.text())),
+        ]),
+    ];
+
+    // Row 2: Node sync + MVM sync
     if sync.is_synced {
         network_text.push(Line::from(vec![
-            Span::styled("Node: ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{} Synced", sync_icon), Style::default().fg(sync_color)),
-            Span::raw("       "),
-            Span::styled("MVM: ", Style::default().fg(theme.muted())),
+            Span::styled("Node:         ", Style::default().fg(theme.muted())),
+            Span::styled(format!("{:<22}", format!("{} Synced", sync_icon)), Style::default().fg(sync_color)),
+            Span::styled("MVM:          ", Style::default().fg(theme.muted())),
             Span::styled(mvm_status, Style::default().fg(mvm_color)),
         ]));
     } else {
+        let sync_display = format!("{} {:.1}%", sync_bar, sync.sync_percent);
         network_text.push(Line::from(vec![
-            Span::styled("Node:          ", Style::default().fg(theme.muted())),
-            Span::styled(sync_bar.clone(), Style::default().fg(theme.warning())),
-            Span::styled(format!(" {:.1}%", sync.sync_percent), Style::default().fg(theme.text())),
-            Span::styled(format!("  ({} behind)", sync.blocks_remaining), Style::default().fg(theme.muted())),
-            Span::raw("     "),
-            Span::styled("MVM: ", Style::default().fg(theme.muted())),
+            Span::styled("Node:         ", Style::default().fg(theme.muted())),
+            Span::styled(format!("{:<22}", sync_display), Style::default().fg(theme.warning())),
+            Span::styled("MVM:          ", Style::default().fg(theme.muted())),
             Span::styled(mvm_status, Style::default().fg(mvm_color)),
         ]));
     }
 
-    // Build mainchain progress bar
-    let mainchain_filled = ((epoch_progress.mainchain_progress_percent / 100.0) * progress_width as f64) as usize;
-    let mainchain_progress_bar: String = format!(
-        "{}{}",
-        "━".repeat(mainchain_filled.min(progress_width)),
-        "░".repeat(progress_width.saturating_sub(mainchain_filled))
-    );
-
+    // Row 3: Sidechain epoch (full width with longer bar)
     network_text.push(Line::from(vec![
-        Span::styled("Sidechain:  ", Style::default().fg(theme.muted())),
-        Span::styled(format!("epoch {:>5}", app.state.sidechain_epoch), Style::default().fg(theme.epoch())),
-        Span::raw("  "),
-        Span::styled(progress_bar.clone(), Style::default().fg(theme.primary())),
-        Span::styled(format!(" {:.1}%", epoch_progress.progress_percent), Style::default().fg(theme.text())),
-    ]));
-    network_text.push(Line::from(vec![
-        Span::styled("Mainchain:   ", Style::default().fg(theme.muted())),
-        Span::styled(format!("epoch {:>5}", app.state.mainchain_epoch), Style::default().fg(theme.epoch())),
-        Span::raw("  "),
-        Span::styled(mainchain_progress_bar, Style::default().fg(theme.primary())),
-        Span::styled(format!(" {:.1}%", epoch_progress.mainchain_progress_percent), Style::default().fg(theme.text())),
+        Span::styled("Sidechain:    ", Style::default().fg(theme.muted())),
+        Span::styled(format!("epoch {:<6}", app.state.sidechain_epoch), Style::default().fg(theme.epoch())),
+        Span::styled(sidechain_bar, Style::default().fg(theme.primary())),
+        Span::styled(format!(" {:>5.1}%", epoch_progress.progress_percent), Style::default().fg(theme.text())),
     ]));
 
-    // Node metrics line - bandwidth, uptime, grandpa status
-    let bandwidth_in = format_bytes(app.state.bandwidth_in);
-    let bandwidth_out = format_bytes(app.state.bandwidth_out);
-    let uptime = format_uptime(app.state.uptime_secs);
-    let grandpa_icon = if app.state.grandpa_voter { "✓" } else { "○" };
-    let grandpa_color = if app.state.grandpa_voter { theme.success() } else { theme.muted() };
-
+    // Row 4: Mainchain epoch (full width with longer bar)
     network_text.push(Line::from(vec![
-        Span::styled("Bandwidth: ", Style::default().fg(theme.muted())),
-        Span::styled(format!("↓{} ↑{}", bandwidth_in, bandwidth_out), Style::default().fg(theme.text())),
-        Span::raw("    "),
-        Span::styled("Uptime: ", Style::default().fg(theme.muted())),
-        Span::styled(uptime, Style::default().fg(theme.text())),
-        Span::raw("    "),
-        Span::styled("Grandpa: ", Style::default().fg(theme.muted())),
+        Span::styled("Mainchain:    ", Style::default().fg(theme.muted())),
+        Span::styled(format!("epoch {:<6}", app.state.mainchain_epoch), Style::default().fg(theme.epoch())),
+        Span::styled(mainchain_bar, Style::default().fg(theme.primary())),
+        Span::styled(format!(" {:>5.1}%", epoch_progress.mainchain_progress_percent), Style::default().fg(theme.text())),
+    ]));
+
+    // Row 5: Bandwidth + Peers (network I/O grouped)
+    // Use separate spans to avoid Unicode width issues with padding
+    let bw_value = format!("{} / {}", bandwidth_in, bandwidth_out);
+    network_text.push(Line::from(vec![
+        Span::styled("Bandwidth:    ", Style::default().fg(theme.muted())),
+        Span::styled("↓↑ ", Style::default().fg(theme.muted())),
+        Span::styled(format!("{:<19}", bw_value), Style::default().fg(theme.text())),
+        Span::styled("Peers:        ", Style::default().fg(theme.muted())),
+        Span::styled(format!("{} ", app.state.peer_count), Style::default().fg(theme.text())),
+        Span::styled(format!("(out {} in {})", app.state.peers_outbound, app.state.peers_inbound), Style::default().fg(theme.muted())),
+    ]));
+
+    // Row 6: Tx Pool + Grandpa
+    let txpool_str = format!("{} ready", app.state.txpool_ready);
+    network_text.push(Line::from(vec![
+        Span::styled("Tx Pool:      ", Style::default().fg(theme.muted())),
+        Span::styled(format!("{:<22}", txpool_str), Style::default().fg(theme.text())),
+        Span::styled("Grandpa:      ", Style::default().fg(theme.muted())),
         Span::styled(grandpa_icon, Style::default().fg(grandpa_color)),
     ]));
 
-    // Transaction pool line
-    network_text.push(Line::from(vec![
-        Span::styled("Tx Pool: ", Style::default().fg(theme.muted())),
-        Span::styled(format!("{} ready", app.state.txpool_ready), Style::default().fg(theme.text())),
-        Span::raw("    "),
-        Span::styled("Validations: ", Style::default().fg(theme.muted())),
-        Span::styled(format!("{}", app.state.txpool_validations), Style::default().fg(theme.text())),
-    ]));
+    // Row 7: System resources (from node_exporter if configured)
+    if app.state.system_memory_total_bytes > 0 {
+        let mem_used = format_bytes(app.state.system_memory_used_bytes);
+        let mem_total = format_bytes(app.state.system_memory_total_bytes);
+        let disk_used = format_bytes(app.state.system_disk_used_bytes);
+        let disk_total = format_bytes(app.state.system_disk_total_bytes);
 
-    // Network identity line (external IP and peer ID)
+        // Single compact row: Mem used/total | Disk used/total | Load
+        network_text.push(Line::from(vec![
+            Span::styled("System:       ", Style::default().fg(theme.muted())),
+            Span::styled(format!("Mem {}/{}  ", mem_used, mem_total), Style::default().fg(theme.text())),
+            Span::styled(format!("Disk {}/{}  ", disk_used, disk_total), Style::default().fg(theme.text())),
+            Span::styled(format!("Load {:.2}", app.state.system_load1), Style::default().fg(theme.text())),
+        ]));
+    }
+
+    // Row 8: Network identity (external IP + peer ID)
     let external_ip = if app.state.external_ips.is_empty() {
         "unknown".to_string()
     } else {
         app.state.external_ips.join(", ")
     };
-    let peer_id_display = if app.state.local_peer_id.len() > 20 {
-        format!("{}...{}", &app.state.local_peer_id[..8], &app.state.local_peer_id[app.state.local_peer_id.len()-6..])
+    let peer_id_display = if app.state.local_peer_id.len() > 16 {
+        format!("{}...{}", &app.state.local_peer_id[..8], &app.state.local_peer_id[app.state.local_peer_id.len()-4..])
     } else if app.state.local_peer_id.is_empty() {
         "unknown".to_string()
     } else {
         app.state.local_peer_id.clone()
     };
     network_text.push(Line::from(vec![
-        Span::styled("External IP: ", Style::default().fg(theme.muted())),
-        Span::styled(external_ip, Style::default().fg(theme.text())),
-        Span::raw("    "),
-        Span::styled("Peer ID: ", Style::default().fg(theme.muted())),
+        Span::styled("Identity:     ", Style::default().fg(theme.muted())),
+        Span::styled(format!("{:<22}", external_ip), Style::default().fg(theme.text())),
         Span::styled(peer_id_display, Style::default().fg(theme.secondary())),
     ]));
 
@@ -440,6 +451,9 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         } else {
             "?"
         };
+        let perf_color = if performance_indicator == "✓" { theme.success() }
+            else if performance_indicator == "!" { theme.warning() }
+            else { theme.muted() };
 
         // Panel height (9) fits 1 validator with all 3 keys (4 header + 3 key lines + 2 border)
         let max_validators = 1;
@@ -451,17 +465,13 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
             ("✗", theme.warning())
         };
 
-        // Committee status text (same for Medium and Large)
+        // Committee status - compact format
         let committee_status = if app.state.committee_elected {
-            if app.state.committee_seats > 1 {
-                format!("{} Elected ({} seats in {} member committee)", committee_icon, app.state.committee_seats, app.state.committee_size)
-            } else {
-                format!("{} Elected ({} seat in {} member committee)", committee_icon, app.state.committee_seats, app.state.committee_size)
-            }
+            format!("{} Elected ({} / {})", committee_icon, app.state.committee_seats, app.state.committee_size)
         } else if app.state.committee_size > 0 {
-            format!("{} Not elected this epoch", committee_icon)
+            format!("{} Not elected", committee_icon)
         } else {
-            "? Checking committee...".to_string()
+            "? Checking...".to_string()
         };
 
         // Format node version (trim git hash for display)
@@ -473,68 +483,87 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
             &app.state.node_version
         };
 
+        // Two-column layout: 14-char label + 18-char value = 32 chars, then second column
+        let version_str = format!("v{}", version_display);
+        let blocks_str = format!("{} blocks", total_our_blocks);
+        let epoch_str = format!("{} blocks", epoch_blocks);
+
+        // Sparkline performance coloring: green >= 90%, warning 70-90%, error < 70%
+        let sparkline_blocks: u64 = app.state.our_blocks_sparkline.iter().sum();
+        let sparkline_seats = app.state.sparkline_total_seats;
+        let sparkline_ratio = if sparkline_seats > 0 {
+            sparkline_blocks as f64 / sparkline_seats as f64
+        } else {
+            1.0 // No seats = no missed blocks
+        };
+        let sparkline_color = if sparkline_ratio >= 0.9 {
+            theme.primary()  // Good performance (>= 90%)
+        } else if sparkline_ratio >= 0.7 {
+            theme.warning()  // Moderate issues (70-90%)
+        } else {
+            theme.error()    // Significant issues (< 70%)
+        };
+
         let mut lines = vec![
+            // Row 1: Version + Committee
             Line::from(vec![
-                Span::styled("Node: ", Style::default().fg(theme.muted())),
-                Span::styled(format!("v{}", version_display), Style::default().fg(theme.text())),
-                Span::raw("    "),
-                Span::styled("Committee: ", Style::default().fg(theme.muted())),
+                Span::styled("Version:      ", Style::default().fg(theme.muted())),
+                Span::styled(format!("{:<18}", version_str), Style::default().fg(theme.text())),
+                Span::styled("Committee:    ", Style::default().fg(theme.muted())),
                 Span::styled(committee_status, Style::default().fg(committee_color)),
             ]),
+            // Row 2: All-time blocks + Share
             Line::from(vec![
-                Span::styled("All-Time Blocks: ", Style::default().fg(theme.muted())),
-                Span::styled(format!("{}", total_our_blocks), Style::default().fg(theme.success())),
-                Span::raw("      "),
-                Span::styled("Share: ", Style::default().fg(theme.muted())),
+                Span::styled("All-Time:     ", Style::default().fg(theme.muted())),
+                Span::styled(format!("{:<18}", blocks_str), Style::default().fg(theme.success())),
+                Span::styled("Share:        ", Style::default().fg(theme.muted())),
                 Span::styled(format!("{:.3}%", share), Style::default().fg(theme.success())),
             ]),
+            // Row 3: This epoch + Expected
             Line::from(vec![
-                Span::styled("This Epoch: ", Style::default().fg(theme.muted())),
-                Span::styled(format!("{}", epoch_blocks), Style::default().fg(theme.primary())),
-                Span::styled(format!(" blocks  (expected: ~{:.1})", expected_blocks), Style::default().fg(theme.muted())),
-                Span::raw("  "),
-                Span::styled(performance_indicator, Style::default().fg(
-                    if performance_indicator == "✓" { theme.success() }
-                    else if performance_indicator == "!" { theme.warning() }
-                    else { theme.muted() }
-                )),
+                Span::styled("This Epoch:   ", Style::default().fg(theme.muted())),
+                Span::styled(format!("{:<18}", epoch_str), Style::default().fg(theme.primary())),
+                Span::styled("Expected:     ", Style::default().fg(theme.muted())),
+                Span::styled(format!("~{:.1} ", expected_blocks), Style::default().fg(theme.text())),
+                Span::styled(performance_indicator, Style::default().fg(perf_color)),
             ]),
-            // Sparkline showing block production over last 12 sidechain epochs (24h)
+            // Row 4: Sparkline (48h trend, spans both columns)
             Line::from(vec![
-                Span::styled("Last 24h:   ", Style::default().fg(theme.muted())),
-                Span::styled(sparkline_bars(&app.state.our_blocks_sparkline), Style::default().fg(theme.primary())),
+                Span::styled("Last 48h:     ", Style::default().fg(theme.muted())),
+                Span::styled(sparkline_bars(&app.state.our_blocks_sparkline), Style::default().fg(sparkline_color)),
                 Span::styled(
-                    format!("  (total: {})", app.state.our_blocks_sparkline.iter().sum::<u64>()),
-                    Style::default().fg(theme.muted())
+                    format!("  ({} blocks / {} seats)", sparkline_blocks, sparkline_seats),
+                    Style::default().fg(sparkline_color)
                 ),
             ]),
         ];
 
-        // Show validators with all three public keys (same for Medium and Large)
+        // Show validators with all three public keys (14-char labels)
         for v in app.state.our_validators.iter().take(max_validators) {
             let sidechain_display = key_mode.format(&v.sidechain_key);
             let label = v.label.as_ref().map(|l| format!(" ({})", l)).unwrap_or_default();
 
+            // Row 5: Sidechain key
             lines.push(Line::from(vec![
-                Span::styled("  ★ Sidechain: ", Style::default().fg(theme.ours())),
+                Span::styled("* Sidechain:  ", Style::default().fg(theme.ours())),
                 Span::styled(sidechain_display.clone(), Style::default().fg(theme.secondary())),
                 Span::styled(label.clone(), Style::default().fg(theme.muted())),
             ]));
 
-            // Show AURA key if available
+            // Row 6: AURA key
             if let Some(ref aura_key) = v.aura_key {
                 let aura_display = key_mode.format(aura_key);
                 lines.push(Line::from(vec![
-                    Span::styled("    AURA:      ", Style::default().fg(theme.muted())),
+                    Span::styled("  AURA:       ", Style::default().fg(theme.muted())),
                     Span::styled(aura_display, Style::default().fg(theme.text())),
                 ]));
             }
 
-            // Show Grandpa key if available
+            // Row 7: Grandpa key
             if let Some(ref grandpa_key) = v.grandpa_key {
                 let grandpa_display = key_mode.format(grandpa_key);
                 lines.push(Line::from(vec![
-                    Span::styled("    Grandpa:   ", Style::default().fg(theme.muted())),
+                    Span::styled("  Grandpa:    ", Style::default().fg(theme.muted())),
                     Span::styled(grandpa_display, Style::default().fg(theme.text())),
                 ]));
             }
@@ -542,7 +571,7 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
 
         if app.state.our_validators_count > max_validators as u64 {
             lines.push(Line::from(vec![
-                Span::styled(format!("  +{} more", app.state.our_validators_count - max_validators as u64), Style::default().fg(theme.muted())),
+                Span::styled(format!("  +{} more validators", app.state.our_validators_count - max_validators as u64), Style::default().fg(theme.muted())),
             ]));
         }
 
@@ -832,17 +861,25 @@ fn render_peers(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout)
         ListItem::new(line)
     }).collect();
 
-    // Show external IP and our peer ID at top of title
-    let external_ip = if app.state.external_ips.is_empty() {
-        "unknown".to_string()
-    } else {
-        app.state.external_ips.join(", ")
-    };
-    let title = format!(
-        "Connected Peers ({}) - External IP: {} - j/k or ↑/↓ scroll",
+    // Build enhanced title with Prometheus-based metrics
+    let mut title_parts = vec![format!(
+        "Peers: {} (↑{} ↓{})",
         app.state.connected_peers.len(),
-        external_ip
-    );
+        app.state.peers_outbound,
+        app.state.peers_inbound
+    )];
+
+    // Add discovered peers if available
+    if app.state.peers_discovered > 0 {
+        title_parts.push(format!("Discovered: {}", app.state.peers_discovered));
+    }
+
+    // Add pending connections if any
+    if app.state.pending_connections > 0 {
+        title_parts.push(format!("Pending: {}", app.state.pending_connections));
+    }
+
+    let title = format!("{} - j/k or ↑/↓ scroll", title_parts.join(" | "));
 
     let peers_list = List::new(peer_items)
         .block(Block::default()
@@ -991,6 +1028,50 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
         ListItem::new(Line::from(vec![
             Span::styled("    This Epoch       ", Style::default().fg(theme.text())),
             Span::raw("Blocks produced in current sidechain epoch"),
+        ])),
+        ListItem::new(Line::from("")),
+        ListItem::new(Line::from(vec![
+            Span::styled("  Glossary:", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled("    Extrinsics       ", Style::default().fg(theme.text())),
+            Span::raw("Transactions or calls submitted to the blockchain"),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled("    Sidechain Epoch  ", Style::default().fg(theme.text())),
+            Span::raw("Committee rotation period (2h preview, TBD mainnet)"),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled("    Mainchain Epoch  ", Style::default().fg(theme.text())),
+            Span::raw("Cardano epoch alignment (24h preview, 5d mainnet)"),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled("    Committee        ", Style::default().fg(theme.text())),
+            Span::raw("Validators selected for block production each epoch"),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled("    Seats            ", Style::default().fg(theme.text())),
+            Span::raw("Weighted positions in the committee (stake-based)"),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled("    AURA             ", Style::default().fg(theme.text())),
+            Span::raw("Block authoring consensus mechanism"),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled("    Grandpa          ", Style::default().fg(theme.text())),
+            Span::raw("Block finalization protocol (GHOST-based)"),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled("    Finalized        ", Style::default().fg(theme.text())),
+            Span::raw("Irreversible blocks confirmed by 2/3+ validators"),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled("    Slot             ", Style::default().fg(theme.text())),
+            Span::raw("6-second time window for block production"),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled("    State Pruning    ", Style::default().fg(theme.text())),
+            Span::raw("Removal of old blockchain state to save disk space"),
         ])),
     ];
 

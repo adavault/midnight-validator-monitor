@@ -567,6 +567,52 @@ pub fn has_validator_epoch_snapshot(conn: &Connection, sidechain_epoch: u64) -> 
     Ok(count > 0)
 }
 
+/// Get total committee seats for specified validators over the last N epochs
+///
+/// Returns the sum of committee_seats for all specified sidechain_keys
+/// across epochs from (current_epoch - num_epochs + 1) to current_epoch inclusive.
+pub fn get_total_seats_for_epochs(
+    conn: &Connection,
+    sidechain_keys: &[String],
+    current_epoch: u64,
+    num_epochs: usize,
+) -> Result<u64> {
+    if sidechain_keys.is_empty() || num_epochs == 0 {
+        return Ok(0);
+    }
+
+    let start_epoch = current_epoch.saturating_sub(num_epochs as u64 - 1);
+
+    // Build IN clause for multiple sidechain keys
+    let placeholders: Vec<String> = (0..sidechain_keys.len())
+        .map(|i| format!("?{}", i + 3))
+        .collect();
+    let in_clause = placeholders.join(", ");
+
+    let query = format!(
+        "SELECT COALESCE(SUM(committee_seats), 0) FROM validator_epochs
+         WHERE sidechain_epoch >= ?1 AND sidechain_epoch <= ?2
+         AND sidechain_key IN ({})",
+        in_clause
+    );
+
+    let mut stmt = conn.prepare(&query)?;
+
+    // Build params: start_epoch, current_epoch, then all sidechain_keys
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![
+        Box::new(start_epoch as i64),
+        Box::new(current_epoch as i64),
+    ];
+    for key in sidechain_keys {
+        params.push(Box::new(key.clone()));
+    }
+
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    let total: i64 = stmt.query_row(param_refs.as_slice(), |row| row.get(0))?;
+
+    Ok(total as u64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

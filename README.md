@@ -8,7 +8,8 @@ A production-ready Rust CLI tool for monitoring and managing Midnight blockchain
 
 - **Status Monitoring**: Node health, sync status, peer count, block production
 - **Block Synchronization**: Continuous sync daemon with systemd integration
-- **Interactive TUI**: Real-time monitoring dashboard with multiple views and sparkline visualization
+- **Interactive TUI**: Real-time monitoring dashboard with multiple views, 48h sparkline, and performance alerts
+- **System Monitoring**: Optional node_exporter integration for Memory, Disk, and Load metrics
 - **Data Queries**: Query synced blocks, validator performance, and detect gaps
 - **Key Management**: Verify keystore loading and registration status
 - **Configuration**: TOML-based config with environment variable overrides
@@ -58,6 +59,8 @@ Edit `/opt/midnight/mvm/config/config.toml`:
 ```toml
 [rpc]
 url = "http://localhost:9944"
+# Optional: node_exporter for system metrics (Memory, Disk, Load)
+node_exporter_url = "http://localhost:9100/metrics"
 
 [database]
 path = "/opt/midnight/mvm/data/mvm.db"
@@ -436,7 +439,15 @@ sudo ./scripts/uninstall.sh
 
 ## Changelog
 
-### v0.7.0 (Current)
+### v0.8.0 (Current)
+- **48-hour sparkline** with blocks/seats performance tracking and color-coded alerts
+- **System resource monitoring** via optional node_exporter integration (Memory, Disk, Load)
+- **Help screen glossary** with 10 Substrate/Midnight term definitions
+- Improved dashboard layout with better column alignment
+- Full-width epoch progress bars (30 characters)
+- Bandwidth and Peers grouped together in Network Status panel
+
+### v0.7.0
 - Sparkline block production visualization on dashboard
 - Shell completions for bash, zsh, fish, powershell, elvish (`mvm completions <shell>`)
 - Page scrolling with J/K (uppercase) or PageUp/PageDown

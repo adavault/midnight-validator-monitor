@@ -64,13 +64,13 @@ impl ResponsiveLayout {
     }
 
     /// Get the dashboard layout constraints
-    /// Heights are fixed based on content: Network Status (7 lines + 2 border = 9),
-    /// Our Validator (6 lines for 1 validator with 3 keys + 2 border = 8)
+    /// Heights are fixed based on content: Network Status (8 lines + 2 border = 10),
+    /// Our Validator (7 lines for 1 validator with 3 keys + 2 border = 9)
     pub fn dashboard_layout(&self, area: Rect) -> Vec<Rect> {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(9),  // Network status: 7 content lines + 2 border
+                Constraint::Length(10), // Network status: 8 content lines + 2 border
                 Constraint::Length(9),  // Our validator: 4 header + 3 keys + 2 border
                 Constraint::Min(0),     // Recent blocks: fills remaining space
             ])

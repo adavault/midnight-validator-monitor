@@ -40,6 +40,12 @@ pub struct RpcConfig {
     #[serde(default = "default_metrics_url")]
     pub metrics_url: String,
 
+    /// Optional node_exporter URL for system metrics (memory, FDs, CPU)
+    /// If set, MVM will fetch process metrics from this endpoint
+    /// Example: "http://localhost:9100/metrics"
+    #[serde(default)]
+    pub node_exporter_url: Option<String>,
+
     #[serde(default = "default_timeout")]
     pub timeout_ms: u64,
 
@@ -210,6 +216,7 @@ impl Default for RpcConfig {
         Self {
             url: default_rpc_url(),
             metrics_url: default_metrics_url(),
+            node_exporter_url: None,
             timeout_ms: default_timeout(),
             max_retries: default_max_retries(),
             retry_initial_delay_ms: default_retry_initial_delay(),
@@ -325,6 +332,9 @@ impl Config {
         }
         if let Ok(metrics_url) = std::env::var("MVM_METRICS_URL") {
             self.rpc.metrics_url = metrics_url;
+        }
+        if let Ok(node_exporter_url) = std::env::var("MVM_NODE_EXPORTER_URL") {
+            self.rpc.node_exporter_url = Some(node_exporter_url);
         }
 
         // Database

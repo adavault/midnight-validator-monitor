@@ -152,6 +152,15 @@ impl Database {
         blocks::has_validator_epoch_snapshot(&self.conn, sidechain_epoch)
     }
 
+    pub fn get_total_seats_for_epochs(
+        &self,
+        sidechain_keys: &[String],
+        current_epoch: u64,
+        num_epochs: usize,
+    ) -> Result<u64> {
+        blocks::get_total_seats_for_epochs(&self.conn, sidechain_keys, current_epoch, num_epochs)
+    }
+
     // Sync status operations
     pub fn get_sync_status(&self) -> Result<SyncStatusRecord> {
         blocks::get_sync_status(&self.conn)
