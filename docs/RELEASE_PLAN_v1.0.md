@@ -81,6 +81,11 @@ From `docs/ROADMAP.md`, v1.0 should deliver:
 - [ ] Ensure graceful handling of network parameter changes
 - [ ] Test install/upgrade path on fresh system
 
+### Security Hardening
+- [ ] Review `docs/SECURITY_AUDIT_2026-01-19.md` findings
+- [ ] Add `strip = true` and `panic = "abort"` to Cargo.toml release profile
+- [ ] Add `PRAGMA foreign_keys=ON` to database initialization
+
 ### Stability
 - [ ] Fix all open bugs (Issues #4, #6, #7, #8, #9, #10)
 - [ ] Add error handling for edge cases discovered in testing
@@ -91,10 +96,11 @@ From `docs/ROADMAP.md`, v1.0 should deliver:
 
 ## Implementation Order
 
-### Phase 1: Quick UI Fixes (30 mins)
+### Phase 1: Quick Fixes (30 mins)
 1. Issue #7 - tDUST -> tADA label fix
 2. Issue #9 - Validator popup justification
 3. Issue #10 - Block popup justification
+4. Security hardening - Cargo.toml + database pragma (from security audit)
 
 ### Phase 2: Bug Investigation (2-3 hours)
 1. Issue #4 - Investigate `is_ours` flag persistence
@@ -123,6 +129,8 @@ From `docs/ROADMAP.md`, v1.0 should deliver:
 | `src/tui/app.rs` | Issue #7 (tADA label), Issue #4 (is_ours persistence) |
 | `src/tui/ui.rs` | Issues #9, #10 (popup justification) |
 | `src/db/blocks.rs` | Issues #6, #8 (blocks/seats queries) |
+| `src/db/mod.rs` | Security: Add `PRAGMA foreign_keys=ON` |
+| `Cargo.toml` | Security: Add `strip` and `panic` to release profile |
 | `docs/ROADMAP.md` | Update current status |
 | `README.md` | Add troubleshooting section |
 
@@ -133,6 +141,7 @@ From `docs/ROADMAP.md`, v1.0 should deliver:
 v1.0 is ready when:
 - [ ] All 6 open GitHub issues are closed
 - [ ] No known bugs
+- [ ] Security audit recommendations implemented (see `docs/SECURITY_AUDIT_2026-01-19.md`)
 - [ ] Documentation is current and complete
 - [ ] Works correctly with mainnet timing parameters
 - [ ] Clean install process verified on fresh system
