@@ -22,8 +22,12 @@ pub struct CandidateRegistration {
     pub aura_pub_key: String,
     pub grandpa_pub_key: String,
     pub is_valid: bool,
-    #[serde(skip)]
+    #[serde(default)]
     pub mainchain_pub_key: Option<String>,
+    /// Stake delegation amount in lovelace (if available from RPC)
+    #[serde(default)]
+    #[serde(alias = "stake", alias = "stakeAmount", alias = "stakeDelegation")]
+    pub stake_delegation: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -40,6 +44,8 @@ pub struct Validator {
     pub aura_key: String,
     pub grandpa_key: String,
     pub is_permissioned: bool,
+    /// Stake delegation in lovelace (only for dynamic registrations)
+    pub stake_lovelace: Option<u64>,
 }
 
 /// Ordered validator set for a specific epoch
@@ -167,7 +173,7 @@ impl ValidatorSet {
 
         let mut validators = Vec::new();
 
-        // Add permissioned candidates
+        // Add permissioned candidates (no stake for permissioned)
         for candidate in params.permissioned_candidates {
             if candidate.is_valid {
                 validators.push(Validator {
@@ -175,11 +181,12 @@ impl ValidatorSet {
                     aura_key: normalize_hex(&candidate.aura_public_key),
                     grandpa_key: normalize_hex(&candidate.grandpa_public_key),
                     is_permissioned: true,
+                    stake_lovelace: None,
                 });
             }
         }
 
-        // Add registered candidates
+        // Add registered candidates (may have stake delegation)
         for registrations in params.candidate_registrations.values() {
             for reg in registrations {
                 if reg.is_valid {
@@ -188,6 +195,7 @@ impl ValidatorSet {
                         aura_key: normalize_hex(&reg.aura_pub_key),
                         grandpa_key: normalize_hex(&reg.grandpa_pub_key),
                         is_permissioned: false,
+                        stake_lovelace: reg.stake_delegation,
                     });
                 }
             }
@@ -387,18 +395,21 @@ mod tests {
                 aura_key: "0x111".to_string(),
                 grandpa_key: "0x111".to_string(),
                 is_permissioned: true,
+                stake_lovelace: None,
             },
             Validator {
                 sidechain_key: "0xbbb".to_string(),
                 aura_key: "0x222".to_string(),
                 grandpa_key: "0x222".to_string(),
                 is_permissioned: true,
+                stake_lovelace: None,
             },
             Validator {
                 sidechain_key: "0xccc".to_string(),
                 aura_key: "0x333".to_string(),
                 grandpa_key: "0x333".to_string(),
                 is_permissioned: false,
+                stake_lovelace: Some(1_000_000_000),
             },
         ];
 

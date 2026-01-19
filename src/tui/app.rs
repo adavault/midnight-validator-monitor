@@ -1,6 +1,6 @@
 //! Application state management for TUI
 
-use crate::db::{BlockRecord, Database, ValidatorRecord, ValidatorEpochRecord};
+use crate::db::{BlockRecord, Database, ValidatorRecord, ValidatorEpochRecord, ValidatorEpochHistoryRecord};
 use crate::metrics::{MetricsClient, NodeExporterClient};
 use crate::midnight::{ChainTiming, ValidatorSet};
 use crate::rpc::{RpcClient, SidechainStatus};
@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 /// View modes for the TUI
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ViewMode {
     Dashboard,
     Blocks,
@@ -18,6 +18,45 @@ pub enum ViewMode {
     Performance,
     Peers,
     Help,
+    /// Drill-down view for validator epoch history
+    ValidatorEpochDetail,
+}
+
+/// Popup content for modal overlays
+#[derive(Debug, Clone)]
+pub enum PopupContent {
+    /// Block detail popup showing full block information
+    BlockDetail { block: BlockRecord },
+    /// Peer detail popup showing peer connection details
+    PeerDetail { peer: PeerInfo },
+    /// Validator detail popup showing epoch history (from Performance view)
+    ValidatorDetail {
+        validator: ValidatorRecord,
+        epoch_history: Vec<ValidatorEpochHistoryRecord>,
+        scroll_index: usize,
+    },
+    /// Validator identity card (from Validators view)
+    ValidatorIdentity {
+        validator: ValidatorRecord,
+        aura_key: Option<String>,
+        current_epoch_seats: u32,
+        committee_size: u32,
+        blocks_this_epoch: u64,
+        stake_display: Option<String>,
+    },
+}
+
+/// Entry in the view stack for drill-down navigation
+#[derive(Debug, Clone)]
+pub struct ViewStackEntry {
+    /// The view mode to return to
+    pub view: ViewMode,
+    /// The selection index in that view
+    pub selection: usize,
+    /// Optional context (e.g., sidechain_key for validator detail)
+    /// Currently reserved for future use
+    #[allow(dead_code)]
+    pub context: Option<String>,
 }
 
 /// Application state
@@ -28,8 +67,18 @@ pub struct App {
     pub should_quit: bool,
     /// Filter to show only our validators
     pub show_ours_only: bool,
-    /// Selected index for scrollable lists
-    pub selected_index: usize,
+    /// Per-view selection indices (preserved when switching views)
+    pub view_selections: HashMap<ViewMode, usize>,
+    /// Popup overlay (Block/Peer detail)
+    pub popup: Option<PopupContent>,
+    /// View stack for drill-down navigation
+    pub view_stack: Vec<ViewStackEntry>,
+    /// Context for drill-down views (e.g., sidechain_key for validator detail)
+    pub drill_down_context: Option<String>,
+    /// Epoch history data for validator drill-down view
+    pub validator_epoch_history: Vec<ValidatorEpochHistoryRecord>,
+    /// Validator info for drill-down header
+    pub drill_down_validator: Option<ValidatorRecord>,
     /// Application state data
     pub state: AppState,
     /// Last update timestamp
@@ -253,13 +302,28 @@ impl App {
             view_mode: ViewMode::Dashboard,
             should_quit: false,
             show_ours_only: false,
-            selected_index: 0,
+            view_selections: HashMap::new(),
+            popup: None,
+            view_stack: Vec::new(),
+            drill_down_context: None,
+            validator_epoch_history: Vec::new(),
+            drill_down_validator: None,
             state: AppState::default(),
             last_update: Instant::now(),
             theme: Theme::default(),
             expected_ip: None,
             chain_timing: ChainTiming::default(),
         }
+    }
+
+    /// Get the current selection index for the active view
+    pub fn selected_index(&self) -> usize {
+        *self.view_selections.get(&self.view_mode).unwrap_or(&0)
+    }
+
+    /// Set the selection index for the current view
+    pub fn set_selected_index(&mut self, index: usize) {
+        self.view_selections.insert(self.view_mode, index);
     }
 
     /// Set chain timing configuration
@@ -808,8 +872,18 @@ impl App {
         }
     }
 
-    /// Switch to next view
+    /// Switch to next view (skips drill-down views)
     pub fn next_view(&mut self) {
+        // Close popup if open
+        if self.popup.is_some() {
+            self.popup = None;
+            return;
+        }
+        // If in a drill-down view, pop back first
+        if self.view_mode == ViewMode::ValidatorEpochDetail {
+            self.pop_view();
+            return;
+        }
         self.view_mode = match self.view_mode {
             ViewMode::Dashboard => ViewMode::Blocks,
             ViewMode::Blocks => ViewMode::Validators,
@@ -817,12 +891,23 @@ impl App {
             ViewMode::Performance => ViewMode::Peers,
             ViewMode::Peers => ViewMode::Help,
             ViewMode::Help => ViewMode::Dashboard,
+            ViewMode::ValidatorEpochDetail => ViewMode::Performance, // Should not happen
         };
-        self.selected_index = 0;
+        // Selection is preserved in view_selections HashMap
     }
 
-    /// Switch to previous view
+    /// Switch to previous view (skips drill-down views)
     pub fn previous_view(&mut self) {
+        // Close popup if open
+        if self.popup.is_some() {
+            self.popup = None;
+            return;
+        }
+        // If in a drill-down view, pop back first
+        if self.view_mode == ViewMode::ValidatorEpochDetail {
+            self.pop_view();
+            return;
+        }
         self.view_mode = match self.view_mode {
             ViewMode::Dashboard => ViewMode::Help,
             ViewMode::Blocks => ViewMode::Dashboard,
@@ -830,22 +915,30 @@ impl App {
             ViewMode::Performance => ViewMode::Validators,
             ViewMode::Peers => ViewMode::Performance,
             ViewMode::Help => ViewMode::Peers,
+            ViewMode::ValidatorEpochDetail => ViewMode::Performance, // Should not happen
         };
-        self.selected_index = 0;
+        // Selection is preserved in view_selections HashMap
     }
 
-    /// Switch to specific view
+    /// Switch to specific view (does not affect drill-down views)
     pub fn set_view(&mut self, view: ViewMode) {
+        // Close popup if open
+        if self.popup.is_some() {
+            self.popup = None;
+        }
+        // Clear view stack when explicitly switching views
+        self.view_stack.clear();
+        self.drill_down_context = None;
         self.view_mode = view;
-        self.selected_index = 0;
+        // Selection is preserved in view_selections HashMap
     }
 
-    /// Scroll down in current view
-    pub fn scroll_down(&mut self) {
+    /// Get max scroll index for current view
+    fn max_scroll_index(&self) -> usize {
         // Help screen item count (count of ListItems in render_help)
-        const HELP_ITEM_COUNT: usize = 56;
+        const HELP_ITEM_COUNT: usize = 60; // Updated for new keybindings
 
-        let max_index = match self.view_mode {
+        match self.view_mode {
             ViewMode::Blocks => self.state.recent_blocks.len().saturating_sub(1),
             ViewMode::Validators => {
                 if self.show_ours_only {
@@ -854,57 +947,234 @@ impl App {
                     self.state.validators.len().saturating_sub(1)
                 }
             }
-            ViewMode::Performance => self.state.validators.len().saturating_sub(1),
+            ViewMode::Performance => {
+                if self.show_ours_only {
+                    self.state.our_validators.len().saturating_sub(1)
+                } else {
+                    self.state.validators.len().saturating_sub(1)
+                }
+            }
             ViewMode::Peers => self.state.connected_peers.len().saturating_sub(1),
             ViewMode::Help => HELP_ITEM_COUNT.saturating_sub(1),
+            ViewMode::ValidatorEpochDetail => self.validator_epoch_history.len().saturating_sub(1),
             _ => 0,
-        };
+        }
+    }
 
-        if self.selected_index < max_index {
-            self.selected_index += 1;
+    /// Scroll down in current view
+    pub fn scroll_down(&mut self) {
+        let current = self.selected_index();
+        let max_index = self.max_scroll_index();
+
+        if current < max_index {
+            self.set_selected_index(current + 1);
         }
     }
 
     /// Scroll up in current view
     pub fn scroll_up(&mut self) {
-        if self.selected_index > 0 {
-            self.selected_index -= 1;
+        let current = self.selected_index();
+        if current > 0 {
+            self.set_selected_index(current - 1);
         }
     }
 
     /// Scroll down by a page (10 items)
     pub fn scroll_page_down(&mut self) {
         const PAGE_SIZE: usize = 10;
-        const HELP_ITEM_COUNT: usize = 56;
+        let current = self.selected_index();
+        let max_index = self.max_scroll_index();
 
-        let max_index = match self.view_mode {
-            ViewMode::Blocks => self.state.recent_blocks.len().saturating_sub(1),
-            ViewMode::Validators => {
-                if self.show_ours_only {
-                    self.state.our_validators.len().saturating_sub(1)
-                } else {
-                    self.state.validators.len().saturating_sub(1)
-                }
-            }
-            ViewMode::Performance => self.state.validators.len().saturating_sub(1),
-            ViewMode::Peers => self.state.connected_peers.len().saturating_sub(1),
-            ViewMode::Help => HELP_ITEM_COUNT.saturating_sub(1),
-            _ => 0,
-        };
-
-        self.selected_index = (self.selected_index + PAGE_SIZE).min(max_index);
+        self.set_selected_index((current + PAGE_SIZE).min(max_index));
     }
 
     /// Scroll up by a page (10 items)
     pub fn scroll_page_up(&mut self) {
         const PAGE_SIZE: usize = 10;
-        self.selected_index = self.selected_index.saturating_sub(PAGE_SIZE);
+        let current = self.selected_index();
+        self.set_selected_index(current.saturating_sub(PAGE_SIZE));
     }
 
     /// Toggle "ours only" filter
     pub fn toggle_ours_filter(&mut self) {
         self.show_ours_only = !self.show_ours_only;
-        self.selected_index = 0;
+        self.set_selected_index(0);
+    }
+
+    // ========================================
+    // Popup Management
+    // ========================================
+
+    /// Open block detail popup
+    pub fn open_block_popup(&mut self) {
+        let index = self.selected_index();
+        if index < self.state.recent_blocks.len() {
+            let block = self.state.recent_blocks[index].clone();
+            self.popup = Some(PopupContent::BlockDetail { block });
+        }
+    }
+
+    /// Open peer detail popup
+    pub fn open_peer_popup(&mut self) {
+        let index = self.selected_index();
+        if index < self.state.connected_peers.len() {
+            let peer = self.state.connected_peers[index].clone();
+            self.popup = Some(PopupContent::PeerDetail { peer });
+        }
+    }
+
+    /// Open validator identity popup (from Validators view)
+    pub fn open_validator_identity_popup(&mut self) {
+        let validators = if self.show_ours_only {
+            &self.state.our_validators
+        } else {
+            &self.state.validators
+        };
+
+        let index = self.selected_index();
+        if index >= validators.len() {
+            return;
+        }
+
+        let validator = validators[index].clone();
+        let sidechain_key = &validator.sidechain_key;
+
+        // Get epoch data for this validator
+        let epoch_data = self.state.validator_epoch_data.get(sidechain_key);
+        let current_epoch_seats = epoch_data.map(|d| d.committee_seats).unwrap_or(0);
+        let committee_size = epoch_data.map(|d| d.committee_size).unwrap_or(0);
+        let aura_key = epoch_data.map(|d| d.aura_key.clone());
+
+        // Get blocks this epoch
+        let blocks_this_epoch = self.state.validator_epoch_blocks
+            .get(sidechain_key)
+            .copied()
+            .unwrap_or(0);
+
+        // Format stake if available
+        let stake_display = epoch_data.and_then(|d| d.stake_lovelace).map(|stake| {
+            // Convert lovelace to tDUST (1 tDUST = 1,000,000 lovelace)
+            let tdust = stake as f64 / 1_000_000.0;
+            if tdust >= 1_000_000.0 {
+                format!("{:.2}M tDUST", tdust / 1_000_000.0)
+            } else if tdust >= 1_000.0 {
+                format!("{:.2}K tDUST", tdust / 1_000.0)
+            } else {
+                format!("{:.2} tDUST", tdust)
+            }
+        });
+
+        self.popup = Some(PopupContent::ValidatorIdentity {
+            validator,
+            aura_key,
+            current_epoch_seats,
+            committee_size,
+            blocks_this_epoch,
+            stake_display,
+        });
+    }
+
+    /// Close any open popup
+    pub fn close_popup(&mut self) {
+        self.popup = None;
+    }
+
+    /// Check if a popup is open
+    pub fn has_popup(&self) -> bool {
+        self.popup.is_some()
+    }
+
+    // ========================================
+    // Validator Detail Popup
+    // ========================================
+
+    /// Open validator detail popup
+    pub fn open_validator_popup(&mut self, db: &Database) {
+        let validators = if self.show_ours_only {
+            &self.state.our_validators
+        } else {
+            &self.state.validators
+        };
+
+        let index = self.selected_index();
+        if index >= validators.len() {
+            return;
+        }
+
+        let validator = validators[index].clone();
+        let sidechain_key = validator.sidechain_key.clone();
+
+        // Load epoch history from database
+        let epoch_history = match db.get_validator_epoch_history(&sidechain_key, 50) {
+            Ok(history) => history,
+            Err(e) => {
+                tracing::warn!("Failed to load validator epoch history: {}", e);
+                Vec::new()
+            }
+        };
+
+        // Open as popup
+        self.popup = Some(PopupContent::ValidatorDetail {
+            validator,
+            epoch_history,
+            scroll_index: 0,
+        });
+    }
+
+    /// Scroll down within validator detail popup
+    pub fn popup_scroll_down(&mut self) {
+        if let Some(PopupContent::ValidatorDetail { epoch_history, scroll_index, .. }) = &mut self.popup {
+            let max_index = epoch_history.len().saturating_sub(1);
+            if *scroll_index < max_index {
+                *scroll_index += 1;
+            }
+        }
+    }
+
+    /// Scroll up within validator detail popup
+    pub fn popup_scroll_up(&mut self) {
+        if let Some(PopupContent::ValidatorDetail { scroll_index, .. }) = &mut self.popup {
+            if *scroll_index > 0 {
+                *scroll_index -= 1;
+            }
+        }
+    }
+
+    /// Page down within validator detail popup
+    pub fn popup_page_down(&mut self) {
+        if let Some(PopupContent::ValidatorDetail { epoch_history, scroll_index, .. }) = &mut self.popup {
+            let max_index = epoch_history.len().saturating_sub(1);
+            *scroll_index = (*scroll_index + 10).min(max_index);
+        }
+    }
+
+    /// Page up within validator detail popup
+    pub fn popup_page_up(&mut self) {
+        if let Some(PopupContent::ValidatorDetail { scroll_index, .. }) = &mut self.popup {
+            *scroll_index = scroll_index.saturating_sub(10);
+        }
+    }
+
+    // ========================================
+    // View Stack Management (Legacy - kept for potential future use)
+    // ========================================
+
+    /// Pop back to the previous view in the stack
+    #[allow(dead_code)]
+    pub fn pop_view(&mut self) {
+        if let Some(entry) = self.view_stack.pop() {
+            self.view_mode = entry.view;
+            self.set_selected_index(entry.selection);
+            self.drill_down_context = None;
+            self.drill_down_validator = None;
+            self.validator_epoch_history.clear();
+        }
+    }
+
+    /// Check if we can pop back (view stack is not empty)
+    #[allow(dead_code)]
+    pub fn can_pop(&self) -> bool {
+        !self.view_stack.is_empty()
     }
 
     /// Toggle theme

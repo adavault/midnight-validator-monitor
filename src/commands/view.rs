@@ -126,7 +126,7 @@ async fn run_tui(
         // Handle events
         match event_handler.next()? {
             Event::Key(key) => {
-                if !crate::tui::event::handle_key_event(key, app) {
+                if !crate::tui::event::handle_key_event(key, app, Some(db)) {
                     break;
                 }
             }

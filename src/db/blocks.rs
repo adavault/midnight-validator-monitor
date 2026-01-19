@@ -567,6 +567,57 @@ pub fn has_validator_epoch_snapshot(conn: &Connection, sidechain_epoch: u64) -> 
     Ok(count > 0)
 }
 
+/// Validator epoch history record for drill-down view
+#[derive(Debug, Clone)]
+pub struct ValidatorEpochHistoryRecord {
+    pub epoch: u64,
+    pub seats: u32,
+    pub committee_size: u32,
+    pub blocks_produced: u64,
+}
+
+/// Get validator epoch-by-epoch history for drill-down view
+///
+/// Returns a list of epochs with the validator's seats and blocks produced,
+/// ordered by epoch descending (most recent first).
+pub fn get_validator_epoch_history(
+    conn: &Connection,
+    sidechain_key: &str,
+    limit: usize,
+) -> Result<Vec<ValidatorEpochHistoryRecord>> {
+    // Query validator_epochs for seats info, then join with blocks count
+    let sql = "
+        SELECT
+            ve.sidechain_epoch,
+            ve.committee_seats,
+            ve.committee_size,
+            COALESCE(bc.block_count, 0) as blocks_produced
+        FROM validator_epochs ve
+        LEFT JOIN (
+            SELECT sidechain_epoch, COUNT(*) as block_count
+            FROM blocks
+            WHERE author_key = ?1
+            GROUP BY sidechain_epoch
+        ) bc ON ve.sidechain_epoch = bc.sidechain_epoch
+        WHERE ve.sidechain_key = ?1
+        ORDER BY ve.sidechain_epoch DESC
+        LIMIT ?2
+    ";
+
+    let mut stmt = conn.prepare(sql)?;
+    let rows = stmt.query_map(params![sidechain_key, limit as i64], |row| {
+        Ok(ValidatorEpochHistoryRecord {
+            epoch: row.get::<_, i64>(0)? as u64,
+            seats: row.get::<_, i64>(1)? as u32,
+            committee_size: row.get::<_, i64>(2)? as u32,
+            blocks_produced: row.get::<_, i64>(3)? as u64,
+        })
+    })?;
+
+    rows.collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
 /// Get total committee seats for specified validators over the last N epochs
 ///
 /// Returns the sum of committee_seats for all specified sidechain_keys

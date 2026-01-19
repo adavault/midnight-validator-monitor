@@ -232,12 +232,13 @@ mvm view --rpc-url http://localhost:9944 --db-path ./mvm.db
 
 **Controls:**
 - `1-5` - Switch views
+- `Enter` - Open detail popup (Blocks/Validators/Performance/Peers views)
 - `j/k` or `↑/↓` - Scroll up/down (single line)
 - `J/K` or `PgUp/PgDn` - Scroll up/down (page)
 - `f` - Toggle "ours only" filter
 - `t` - Toggle theme (Midnight/Midday)
 - `?/h/F1` - Show help
-- `q/Esc` - Quit
+- `Esc` - Close popup / `q` - Quit
 
 ### config - Configuration management
 
@@ -432,14 +433,29 @@ sudo ./scripts/uninstall.sh
 - `README.md` - This file, main usage documentation
 - `DEPLOYMENT.md` - Detailed deployment guide with systemd setup
 - `CLAUDE.md` - Architecture and implementation details for developers
-- `RELEASE_NOTES_v0.7.0.md` - Current release notes
+- `RELEASE_NOTES_v0.9.0.md` - Current release notes
 - `docs/BACKLOG.md` - Future feature plans and known issues
 - `docs/BLOCK_ATTRIBUTION.md` - Block author attribution design
 - `docs/archive/` - Historical planning and research documents
 
 ## Changelog
 
-### v0.8.0 (Current)
+### v0.9.0 (Current)
+- **Drill-down detail popups** for all list views (press Enter):
+  - Blocks: Full block details (hash, parent, state root, extrinsics, author)
+  - Validators: Identity card with registration, keys, seats, blocks, stake
+  - Performance: Scrollable epoch-by-epoch history table
+  - Peers: Connection details (peer ID, addresses, sync status)
+- **Dashboard reorganization**:
+  - Node sync status moved to top row with Uptime
+  - New Finalized field showing finalized block and lag from tip
+  - GRANDPA voter status moved to Our Validator panel (with Committee)
+  - MVM sync and Node version moved to status bar
+- **Theme icons**: ☽ Moon for Midnight, ☀ Sun for Midday in status bar
+- **Validators view sorting**: Permissioned first, then by seats descending
+- Per-view selection state preserved when switching views
+
+### v0.8.0
 - **48-hour sparkline** with blocks/seats performance tracking and color-coded alerts
 - **System resource monitoring** via optional node_exporter integration (Memory, Disk, Load)
 - **Help screen glossary** with 10 Substrate/Midnight term definitions

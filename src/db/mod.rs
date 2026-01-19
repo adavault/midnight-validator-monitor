@@ -2,7 +2,7 @@ mod blocks;
 mod schema;
 mod validators;
 
-pub use blocks::*;
+pub use blocks::{BlockRecord, SyncStatusRecord, ValidatorEpochRecord, ValidatorEpochHistoryRecord};
 pub use schema::init_schema;
 pub use validators::*;
 
@@ -159,6 +159,14 @@ impl Database {
         num_epochs: usize,
     ) -> Result<u64> {
         blocks::get_total_seats_for_epochs(&self.conn, sidechain_keys, current_epoch, num_epochs)
+    }
+
+    pub fn get_validator_epoch_history(
+        &self,
+        sidechain_key: &str,
+        limit: usize,
+    ) -> Result<Vec<blocks::ValidatorEpochHistoryRecord>> {
+        blocks::get_validator_epoch_history(&self.conn, sidechain_key, limit)
     }
 
     // Sync status operations

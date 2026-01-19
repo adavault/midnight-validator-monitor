@@ -472,7 +472,7 @@ fn capture_validator_epoch_snapshot(
             committee_seats: seats,
             committee_size,
             is_permissioned: candidate.is_permissioned,
-            stake_lovelace: None, // Stake not available via RPC
+            stake_lovelace: candidate.stake_lovelace,
             captured_at: timestamp,
         };
 
