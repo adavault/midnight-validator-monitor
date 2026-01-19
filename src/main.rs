@@ -47,6 +47,9 @@ enum Commands {
     /// Manage configuration
     Config(commands::ConfigArgs),
 
+    /// Install MVM as a system service
+    Install(commands::InstallArgs),
+
     /// Generate shell completions
     Completions {
         /// Shell to generate completions for
@@ -91,6 +94,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Config(args)) => {
             commands::config::run(args).await?;
+        }
+        Some(Commands::Install(args)) => {
+            commands::install::run(args).await?;
         }
         Some(Commands::Completions { shell }) => {
             let mut cmd = Cli::command();

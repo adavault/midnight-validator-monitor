@@ -753,35 +753,8 @@ fn render_validators(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
     let key_mode = layout.key_display_length();
     let val_cols = layout.validator_list_columns();
 
-    // Clone and sort validators: permissioned first, then by seats descending
-    let mut validators: Vec<_> = if app.show_ours_only {
-        app.state.our_validators.clone()
-    } else {
-        app.state.validators.clone()
-    };
-
-    validators.sort_by(|a, b| {
-        let a_permissioned = a.registration_status.as_deref() == Some("permissioned");
-        let b_permissioned = b.registration_status.as_deref() == Some("permissioned");
-
-        // Permissioned first
-        match (a_permissioned, b_permissioned) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => {
-                // Within same category, sort by seats descending
-                let a_seats = app.state.validator_epoch_data
-                    .get(&a.sidechain_key)
-                    .map(|e| e.committee_seats)
-                    .unwrap_or(0);
-                let b_seats = app.state.validator_epoch_data
-                    .get(&b.sidechain_key)
-                    .map(|e| e.committee_seats)
-                    .unwrap_or(0);
-                b_seats.cmp(&a_seats)
-            }
-        }
-    });
+    // Use the shared sorted validator list
+    let validators = app.get_sorted_validators();
 
     let validator_items: Vec<ListItem> = validators.iter().map(|v| {
         let status = v.registration_status.as_deref().unwrap_or("unknown");

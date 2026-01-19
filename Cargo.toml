@@ -1,6 +1,6 @@
 [package]
 name = "midnight-validator-monitor"
-version = "0.9.0"
+version = "0.9.1"
 edition = "2021"
 description = "A monitoring tool for Midnight blockchain validators"
 authors = []
@@ -42,6 +42,7 @@ directories = "5.0"
 
 # System information
 hostname = "0.3"
+libc = "0.2"
 
 [profile.release]
 opt-level = 3

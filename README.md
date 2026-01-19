@@ -20,19 +20,34 @@ A production-ready Rust CLI tool for monitoring and managing Midnight blockchain
 
 ### Quick Install (Recommended)
 
-Requires Rust 1.70+
+Download the binary from [GitHub Releases](https://github.com/adavault/midnight-validator-monitor/releases) and install:
 
 ```bash
-# Build release binary
-cargo build --release
+# Download latest release
+gh release download --pattern mvm -R adavault/midnight-validator-monitor
 
-# Install as system service
-sudo ./scripts/install.sh
+# Make executable and install
+chmod +x mvm
+sudo ./mvm install
 ```
 
 This installs to `/opt/midnight/mvm/` and creates systemd services running as your user.
 
-### Manual Build Only
+### Build from Source
+
+Requires Rust 1.70+
+
+```bash
+# Clone and build
+git clone https://github.com/adavault/midnight-validator-monitor.git
+cd midnight-validator-monitor
+cargo build --release
+
+# Install as system service
+sudo ./target/release/mvm install
+```
+
+### Manual Build Only (No System Install)
 
 ```bash
 cargo build --release
@@ -260,6 +275,29 @@ mvm config paths
 
 Configuration priority: CLI flags > Environment variables > Config file > Defaults
 
+### install - Install as system service
+
+Self-installing command that sets up MVM as a system service. No separate scripts needed.
+
+```bash
+# Install (requires sudo)
+sudo mvm install
+
+# Uninstall (keeps data by default)
+sudo mvm install uninstall
+
+# Uninstall and remove all data
+sudo mvm install uninstall --remove-data
+```
+
+The install command:
+- Creates `/opt/midnight/mvm/{bin,data,config}` directories
+- Copies the binary to `/opt/midnight/mvm/bin/mvm`
+- Creates symlink at `/usr/local/bin/mvm`
+- Writes systemd service files (`mvm-sync`, `mvm-status`)
+- Generates default configuration
+- Reloads systemd
+
 ## Output Examples
 
 ### status command
@@ -433,14 +471,19 @@ sudo ./scripts/uninstall.sh
 - `README.md` - This file, main usage documentation
 - `DEPLOYMENT.md` - Detailed deployment guide with systemd setup
 - `CLAUDE.md` - Architecture and implementation details for developers
-- `RELEASE_NOTES_v0.9.0.md` - Current release notes
+- `RELEASE_NOTES_v0.9.1.md` - Current release notes
 - `docs/BACKLOG.md` - Future feature plans and known issues
 - `docs/BLOCK_ATTRIBUTION.md` - Block author attribution design
 - `docs/archive/` - Historical planning and research documents
 
 ## Changelog
 
-### v0.9.0 (Current)
+### v0.9.1 (Current)
+- **Self-installing binary**: `sudo mvm install` sets up everything (directories, systemd services, config)
+- **Uninstall command**: `sudo mvm install uninstall` for clean removal
+- No external scripts required - single binary installation
+
+### v0.9.0
 - **Drill-down detail popups** for all list views (press Enter):
   - Blocks: Full block details (hash, parent, state root, extrinsics, author)
   - Validators: Identity card with registration, keys, seats, blocks, stake

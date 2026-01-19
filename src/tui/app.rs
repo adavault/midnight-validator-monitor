@@ -1001,6 +1001,33 @@ impl App {
         self.set_selected_index(0);
     }
 
+    /// Get validators sorted for display (permissioned first, then by seats desc)
+    /// This is the single source of truth for validator ordering
+    pub fn get_sorted_validators(&self) -> Vec<ValidatorRecord> {
+        let mut validators: Vec<_> = if self.show_ours_only {
+            self.state.our_validators.clone()
+        } else {
+            self.state.validators.clone()
+        };
+
+        let epoch_data = &self.state.validator_epoch_data;
+        validators.sort_by(|a, b| {
+            let a_perm = a.registration_status.as_deref() == Some("permissioned");
+            let b_perm = b.registration_status.as_deref() == Some("permissioned");
+            match (a_perm, b_perm) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => {
+                    let a_seats = epoch_data.get(&a.sidechain_key).map(|e| e.committee_seats).unwrap_or(0);
+                    let b_seats = epoch_data.get(&b.sidechain_key).map(|e| e.committee_seats).unwrap_or(0);
+                    b_seats.cmp(&a_seats).then_with(|| a.sidechain_key.cmp(&b.sidechain_key))
+                }
+            }
+        });
+
+        validators
+    }
+
     // ========================================
     // Popup Management
     // ========================================
@@ -1025,11 +1052,8 @@ impl App {
 
     /// Open validator identity popup (from Validators view)
     pub fn open_validator_identity_popup(&mut self) {
-        let validators = if self.show_ours_only {
-            &self.state.our_validators
-        } else {
-            &self.state.validators
-        };
+        // Use the same sorted list as render_validators
+        let validators = self.get_sorted_validators();
 
         let index = self.selected_index();
         if index >= validators.len() {
@@ -1088,13 +1112,15 @@ impl App {
     // Validator Detail Popup
     // ========================================
 
-    /// Open validator detail popup
+    /// Open validator detail popup (from Performance view)
     pub fn open_validator_popup(&mut self, db: &Database) {
-        let validators = if self.show_ours_only {
-            &self.state.our_validators
+        // Use the same sorting as render_performance: by total_blocks descending
+        let mut validators: Vec<_> = if self.show_ours_only {
+            self.state.our_validators.clone()
         } else {
-            &self.state.validators
+            self.state.validators.clone()
         };
+        validators.sort_by(|a, b| b.total_blocks.cmp(&a.total_blocks));
 
         let index = self.selected_index();
         if index >= validators.len() {
