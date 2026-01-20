@@ -664,6 +664,176 @@ pub fn get_total_seats_for_epochs(
     Ok(total as u64)
 }
 
+/// Committee selection statistics for a validator
+#[derive(Debug, Clone, Default)]
+pub struct CommitteeSelectionStats {
+    /// Total epochs tracked in database for this validator
+    pub epochs_tracked: u64,
+    /// Number of epochs where validator was selected (seats > 0)
+    pub times_selected: u64,
+    /// Total committee seats received across all epochs
+    pub total_seats: u64,
+    /// Most recent epoch where validator was selected
+    pub last_selected_epoch: Option<u64>,
+    /// Current epoch being tracked
+    pub current_epoch: u64,
+    /// Whether validator is currently in committee
+    pub currently_in_committee: bool,
+    /// Validator's stake rank among dynamic validators (1 = highest stake)
+    pub stake_rank: Option<u32>,
+    /// Total number of dynamic validators
+    pub total_dynamic_validators: u32,
+    /// Validator's stake as percentage of dynamic pool
+    pub stake_share_percent: Option<f64>,
+    /// Percentage of committee seats held by permissioned validators
+    pub permissioned_seats_percent: f64,
+}
+
+impl CommitteeSelectionStats {
+    /// Calculate selection rate as a string (e.g., "3 of 22 epochs")
+    pub fn selection_rate_display(&self) -> String {
+        format!("{} of {} epochs", self.times_selected, self.epochs_tracked)
+    }
+
+    /// Calculate average epochs between selections
+    pub fn avg_epochs_between_selections(&self) -> Option<f64> {
+        if self.times_selected <= 1 {
+            None
+        } else {
+            Some(self.epochs_tracked as f64 / self.times_selected as f64)
+        }
+    }
+
+    /// Calculate epochs since last selection
+    pub fn epochs_since_selection(&self) -> Option<u64> {
+        self.last_selected_epoch.map(|last| self.current_epoch.saturating_sub(last))
+    }
+
+    /// Calculate average seats per selected epoch
+    pub fn avg_seats_when_selected(&self) -> Option<f64> {
+        if self.times_selected == 0 {
+            None
+        } else {
+            Some(self.total_seats as f64 / self.times_selected as f64)
+        }
+    }
+}
+
+/// Get committee selection statistics for a validator
+pub fn get_committee_selection_stats(
+    conn: &Connection,
+    sidechain_key: &str,
+    current_epoch: u64,
+) -> Result<CommitteeSelectionStats> {
+    // Query selection history summary
+    let mut stmt = conn.prepare(
+        "SELECT
+            COUNT(*) as epochs_tracked,
+            SUM(CASE WHEN committee_seats > 0 THEN 1 ELSE 0 END) as times_selected,
+            COALESCE(SUM(committee_seats), 0) as total_seats,
+            MAX(CASE WHEN committee_seats > 0 THEN sidechain_epoch ELSE NULL END) as last_selected
+         FROM validator_epochs
+         WHERE sidechain_key = ?1"
+    )?;
+
+    let (epochs_tracked, times_selected, total_seats, last_selected): (i64, i64, i64, Option<i64>) =
+        stmt.query_row(params![sidechain_key], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })?;
+
+    // Check if currently in committee
+    let currently_in_committee: bool = conn.query_row(
+        "SELECT committee_seats > 0 FROM validator_epochs
+         WHERE sidechain_key = ?1 AND sidechain_epoch = ?2",
+        params![sidechain_key, current_epoch as i64],
+        |row| row.get(0)
+    ).unwrap_or(false);
+
+    // Get stake rank and dynamic validator info
+    let (stake_rank, total_dynamic, stake_share) = get_stake_rank_info(conn, sidechain_key, current_epoch)?;
+
+    // Get committee structure (permissioned vs dynamic)
+    let permissioned_percent = get_permissioned_seats_percent(conn, current_epoch)?;
+
+    Ok(CommitteeSelectionStats {
+        epochs_tracked: epochs_tracked as u64,
+        times_selected: times_selected as u64,
+        total_seats: total_seats as u64,
+        last_selected_epoch: last_selected.map(|e| e as u64),
+        current_epoch,
+        currently_in_committee,
+        stake_rank,
+        total_dynamic_validators: total_dynamic,
+        stake_share_percent: stake_share,
+        permissioned_seats_percent: permissioned_percent,
+    })
+}
+
+/// Get stake rank info for a validator among dynamic validators
+fn get_stake_rank_info(
+    conn: &Connection,
+    sidechain_key: &str,
+    current_epoch: u64,
+) -> Result<(Option<u32>, u32, Option<f64>)> {
+    // Get validator's stake
+    let validator_stake: Option<i64> = conn.query_row(
+        "SELECT stake_lovelace FROM validator_epochs
+         WHERE sidechain_key = ?1 AND sidechain_epoch = ?2 AND is_permissioned = 0",
+        params![sidechain_key, current_epoch as i64],
+        |row| row.get(0)
+    ).ok().flatten();
+
+    // Get total dynamic validators and total stake
+    let (total_dynamic, total_stake): (i64, i64) = conn.query_row(
+        "SELECT COUNT(*), COALESCE(SUM(stake_lovelace), 0) FROM validator_epochs
+         WHERE sidechain_epoch = ?1 AND is_permissioned = 0 AND stake_lovelace IS NOT NULL",
+        params![current_epoch as i64],
+        |row| Ok((row.get(0)?, row.get(1)?))
+    ).unwrap_or((0, 0));
+
+    if let Some(stake) = validator_stake {
+        // Calculate rank (how many have higher stake + 1)
+        let higher_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM validator_epochs
+             WHERE sidechain_epoch = ?1 AND is_permissioned = 0
+             AND stake_lovelace > ?2 AND stake_lovelace IS NOT NULL",
+            params![current_epoch as i64, stake],
+            |row| row.get(0)
+        ).unwrap_or(0);
+
+        let rank = (higher_count + 1) as u32;
+        let share = if total_stake > 0 {
+            Some((stake as f64 / total_stake as f64) * 100.0)
+        } else {
+            None
+        };
+
+        Ok((Some(rank), total_dynamic as u32, share))
+    } else {
+        Ok((None, total_dynamic as u32, None))
+    }
+}
+
+/// Get percentage of committee seats held by permissioned validators
+fn get_permissioned_seats_percent(conn: &Connection, current_epoch: u64) -> Result<f64> {
+    let result: (i64, i64) = conn.query_row(
+        "SELECT
+            COALESCE(SUM(CASE WHEN is_permissioned = 1 THEN committee_seats ELSE 0 END), 0),
+            COALESCE(SUM(committee_seats), 0)
+         FROM validator_epochs
+         WHERE sidechain_epoch = ?1",
+        params![current_epoch as i64],
+        |row| Ok((row.get(0)?, row.get(1)?))
+    ).unwrap_or((0, 0));
+
+    let (permissioned_seats, total_seats) = result;
+    if total_seats > 0 {
+        Ok((permissioned_seats as f64 / total_seats as f64) * 100.0)
+    } else {
+        Ok(0.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

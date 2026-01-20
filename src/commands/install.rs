@@ -265,10 +265,12 @@ pid_file = "{}/mvm-sync.pid"
 fn install_systemd_services(user: &str) -> Result<()> {
     println!("==> Installing systemd services");
 
+    let version = env!("CARGO_PKG_VERSION");
+
     // mvm-sync.service
     let sync_service = format!(
         r#"[Unit]
-Description=Midnight Validator Monitor - Block Sync Daemon
+Description=Midnight Validator Monitor v{} - Block Sync Daemon
 After=network-online.target
 Wants=network-online.target
 
@@ -286,7 +288,7 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 "#,
-        user, INSTALL_BASE, DATA_DIR, BIN_DIR, DATA_DIR
+        version, user, INSTALL_BASE, DATA_DIR, BIN_DIR, DATA_DIR
     );
 
     fs::write(format!("{}/mvm-sync.service", SYSTEMD_DIR), sync_service)
@@ -295,7 +297,7 @@ WantedBy=multi-user.target
     // mvm-status.service
     let status_service = format!(
         r#"[Unit]
-Description=Midnight Validator Monitor - Status Check
+Description=Midnight Validator Monitor v{} - Status Check
 After=network-online.target
 
 [Service]
@@ -307,7 +309,7 @@ ExecStart={}/mvm status --once
 StandardOutput=journal
 StandardError=journal
 "#,
-        user, INSTALL_BASE, DATA_DIR, BIN_DIR
+        version, user, INSTALL_BASE, DATA_DIR, BIN_DIR
     );
 
     fs::write(

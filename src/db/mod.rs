@@ -2,8 +2,8 @@ mod blocks;
 mod schema;
 mod validators;
 
-pub use blocks::{BlockRecord, SyncStatusRecord, ValidatorEpochRecord, ValidatorEpochHistoryRecord};
-pub use schema::init_schema;
+pub use blocks::{BlockRecord, SyncStatusRecord, ValidatorEpochRecord, ValidatorEpochHistoryRecord, CommitteeSelectionStats};
+pub use schema::{init_schema, CURRENT_SCHEMA_VERSION};
 pub use validators::*;
 
 use anyhow::{Context, Result};
@@ -27,8 +27,11 @@ impl Database {
         let conn = Connection::open(path)
             .with_context(|| format!("Failed to open database at {}", path.display()))?;
 
-        // Initialize schema
+        // Initialize schema (creates tables if they don't exist)
         init_schema(&conn)?;
+
+        // Run migrations to bring database up to current version
+        schema::run_migrations(&conn)?;
 
         // Enable WAL mode for better performance and foreign key enforcement
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;")?;
@@ -41,7 +44,20 @@ impl Database {
     pub fn open_in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         init_schema(&conn)?;
+        schema::run_migrations(&conn)?;
         Ok(Self { conn })
+    }
+
+    /// Get the schema version of this database
+    #[allow(dead_code)]
+    pub fn schema_version(&self) -> Result<u32> {
+        schema::get_schema_version(&self.conn)
+    }
+
+    /// Get a metadata value from the database
+    #[allow(dead_code)]
+    pub fn get_meta(&self, key: &str) -> Result<Option<String>> {
+        schema::get_meta(&self.conn, key)
     }
 
     /// Get a reference to the underlying connection
@@ -167,6 +183,14 @@ impl Database {
         limit: usize,
     ) -> Result<Vec<blocks::ValidatorEpochHistoryRecord>> {
         blocks::get_validator_epoch_history(&self.conn, sidechain_key, limit)
+    }
+
+    pub fn get_committee_selection_stats(
+        &self,
+        sidechain_key: &str,
+        current_epoch: u64,
+    ) -> Result<CommitteeSelectionStats> {
+        blocks::get_committee_selection_stats(&self.conn, sidechain_key, current_epoch)
     }
 
     // Sync status operations

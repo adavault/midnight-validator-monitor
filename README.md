@@ -391,16 +391,6 @@ src/
 └── metrics.rs           # Prometheus metrics parser
 ```
 
-Additional files:
-```
-scripts/
-├── install.sh           # System installation script
-└── uninstall.sh         # Uninstallation script
-systemd/
-├── mvm-sync.service     # Continuous sync daemon
-├── mvm-status.service   # One-shot health check
-└── mvm-status.timer     # Periodic health check timer
-```
 
 ## Database Schema
 
@@ -446,24 +436,25 @@ sudo systemctl restart mvm-sync
 ### Upgrading
 
 ```bash
-# Stop services
-sudo systemctl stop mvm-sync
-
-# Build and install new version
+# Build new version
 cargo build --release
-sudo ./scripts/install.sh
 
-# Restart services
-sudo systemctl start mvm-sync
+# Reinstall (stops services, copies binary, restarts)
+sudo ./target/release/mvm install
 
 # Verify
 mvm --version
+systemctl status mvm-sync
 ```
 
 ### Uninstallation
 
 ```bash
-sudo ./scripts/uninstall.sh
+# Keep data (database, config)
+sudo mvm install uninstall
+
+# Remove everything including data
+sudo mvm install uninstall --remove-data
 ```
 
 ## Documentation

@@ -73,7 +73,11 @@ async fn main() -> Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
-    info!("Starting Midnight Validator Monitor");
+    info!(
+        "Starting Midnight Validator Monitor v{} (schema v{})",
+        env!("CARGO_PKG_VERSION"),
+        crate::db::CURRENT_SCHEMA_VERSION
+    );
 
     // Handle commands - default to status if no command given
     match cli.command {

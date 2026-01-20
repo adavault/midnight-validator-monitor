@@ -11,11 +11,14 @@ Get MVM running in 5 minutes.
 
 ```bash
 # Clone and build
-git clone https://github.com/user/midnight-validator-monitor.git
+git clone https://github.com/adavault/midnight-validator-monitor.git
 cd midnight-validator-monitor
 cargo build --release
 
-# Copy binary to your PATH
+# Install as system service (recommended)
+sudo ./target/release/mvm install
+
+# Or just copy binary to your PATH for local use
 sudo cp target/release/mvm /usr/local/bin/
 ```
 
@@ -73,8 +76,8 @@ This marks your validator in the database so the TUI shows your blocks and perfo
 For 24/7 monitoring, use the systemd integration:
 
 ```bash
-# Install as system service
-sudo ./scripts/install.sh
+# Install as system service (if not done already)
+sudo ./target/release/mvm install
 
 # Start the sync daemon
 sudo systemctl start mvm-sync

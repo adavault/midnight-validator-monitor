@@ -1,5 +1,6 @@
 //! UI rendering for TUI
 
+use crate::db::CommitteeSelectionStats;
 use crate::tui::layout::ResponsiveLayout;
 use crate::tui::{App, ScreenSize, ViewMode};
 use ratatui::{
@@ -1261,8 +1262,8 @@ fn render_popup(f: &mut Frame, app: &App, popup: &PopupContent) {
         PopupContent::ValidatorDetail { validator, epoch_history, scroll_index } => {
             render_validator_detail_popup(f, app, validator, epoch_history, *scroll_index);
         }
-        PopupContent::ValidatorIdentity { validator, aura_key, current_epoch_seats, committee_size, blocks_this_epoch, stake_display } => {
-            render_validator_identity_popup(f, app, validator, aura_key.as_deref(), *current_epoch_seats, *committee_size, *blocks_this_epoch, stake_display.as_deref());
+        PopupContent::ValidatorIdentity { validator, aura_key, current_epoch_seats, committee_size, blocks_this_epoch, stake_display, selection_stats } => {
+            render_validator_identity_popup(f, app, validator, aura_key.as_deref(), *current_epoch_seats, *committee_size, *blocks_this_epoch, stake_display.as_deref(), selection_stats.as_ref());
         }
     }
 }
@@ -1493,11 +1494,12 @@ fn render_validator_identity_popup(
     committee_size: u32,
     blocks_this_epoch: u64,
     stake_display: Option<&str>,
+    selection_stats: Option<&CommitteeSelectionStats>,
 ) {
     use ratatui::widgets::Clear;
 
     let theme = app.theme;
-    let area = centered_popup(76, 60, 55, f.size());
+    let area = centered_popup(76, 60, 75, f.size());
 
     // Clear the area behind the popup
     f.render_widget(Clear, area);
@@ -1602,6 +1604,112 @@ fn render_validator_identity_popup(
         ),
         Span::styled(" (all time)", Style::default().fg(theme.muted())),
     ]));
+
+    // Committee selection statistics (if available)
+    if let Some(stats) = selection_stats {
+        content.push(Line::from(""));
+        content.push(Line::from(vec![
+            Span::styled(" ── Selection History ──", Style::default().fg(theme.secondary()).add_modifier(Modifier::BOLD)),
+        ]));
+        content.push(Line::from(""));
+
+        // Selection rate
+        content.push(Line::from(vec![
+            Span::styled(" Selected:       ", Style::default().fg(theme.muted())),
+            Span::styled(
+                stats.selection_rate_display(),
+                Style::default().fg(if stats.times_selected > 0 { theme.success() } else { theme.warning() }),
+            ),
+        ]));
+
+        // Total seats received
+        content.push(Line::from(vec![
+            Span::styled(" Total Seats:    ", Style::default().fg(theme.muted())),
+            Span::styled(
+                format!("{}", stats.total_seats),
+                Style::default().fg(theme.text()),
+            ),
+            if let Some(avg) = stats.avg_seats_when_selected() {
+                Span::styled(format!(" ({:.1} avg when selected)", avg), Style::default().fg(theme.muted()))
+            } else {
+                Span::raw("")
+            },
+        ]));
+
+        // Average epochs between selections
+        if let Some(avg_gap) = stats.avg_epochs_between_selections() {
+            content.push(Line::from(vec![
+                Span::styled(" Avg Gap:        ", Style::default().fg(theme.muted())),
+                Span::styled(
+                    format!("{:.1} epochs between selections", avg_gap),
+                    Style::default().fg(theme.text()),
+                ),
+            ]));
+        }
+
+        // Last selected
+        if let Some(last_epoch) = stats.last_selected_epoch {
+            let epochs_ago = stats.epochs_since_selection().unwrap_or(0);
+            content.push(Line::from(vec![
+                Span::styled(" Last Selected:  ", Style::default().fg(theme.muted())),
+                Span::styled(
+                    format!("Epoch {}", last_epoch),
+                    Style::default().fg(theme.text()),
+                ),
+                Span::styled(
+                    if epochs_ago == 0 {
+                        " (current)".to_string()
+                    } else {
+                        format!(" ({} epochs ago)", epochs_ago)
+                    },
+                    Style::default().fg(theme.muted()),
+                ),
+            ]));
+        }
+
+        // Current status
+        content.push(Line::from(vec![
+            Span::styled(" Status:         ", Style::default().fg(theme.muted())),
+            Span::styled(
+                if stats.currently_in_committee { "In Committee" } else { "Not Selected" },
+                Style::default().fg(if stats.currently_in_committee { theme.success() } else { theme.warning() }),
+            ),
+        ]));
+
+        // Stake rank (for dynamic validators)
+        if let Some(rank) = stats.stake_rank {
+            content.push(Line::from(""));
+            content.push(Line::from(vec![
+                Span::styled(" Stake Rank:     ", Style::default().fg(theme.muted())),
+                Span::styled(
+                    format!("#{} of {} dynamic validators", rank, stats.total_dynamic_validators),
+                    Style::default().fg(theme.text()),
+                ),
+            ]));
+            if let Some(share) = stats.stake_share_percent {
+                content.push(Line::from(vec![
+                    Span::styled(" Stake Share:    ", Style::default().fg(theme.muted())),
+                    Span::styled(
+                        format!("{:.2}% of dynamic pool", share),
+                        Style::default().fg(theme.text()),
+                    ),
+                ]));
+            }
+        }
+
+        // Committee structure note
+        if stats.permissioned_seats_percent > 0.0 {
+            content.push(Line::from(vec![
+                Span::styled(" Committee:      ", Style::default().fg(theme.muted())),
+                Span::styled(
+                    format!("~{:.0}% permissioned, ~{:.0}% dynamic",
+                        stats.permissioned_seats_percent,
+                        100.0 - stats.permissioned_seats_percent),
+                    Style::default().fg(theme.muted()),
+                ),
+            ]));
+        }
+    }
 
     content.push(Line::from(""));
     content.push(Line::from(vec![

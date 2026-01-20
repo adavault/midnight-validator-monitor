@@ -9,10 +9,10 @@
 cargo build --release
 
 # Install (requires sudo)
-sudo ./scripts/install.sh
+sudo ./target/release/mvm install
 ```
 
-The installation script will:
+The install command will:
 - Install to `/opt/midnight/mvm/`
 - Create systemd services running as your user
 - Create symlink at `/usr/local/bin/mvm`
@@ -147,14 +147,14 @@ The `mvm` commands use the following priority for database path:
 MVM searches for config files in this order:
 1. `./mvm.toml` (current directory)
 2. `~/.config/mvm/config.toml` (user config)
-3. `/opt/midnight/mvm/config/config.toml` (system install - created by install.sh)
+3. `/opt/midnight/mvm/config/config.toml` (system install - created by `mvm install`)
 4. `/etc/mvm/config.toml` (legacy location)
 
 ### Common Scenarios
 
 **System installation (recommended):**
 ```bash
-# After running ./scripts/install.sh, the config file is automatically created
+# After running `sudo mvm install`, the config file is automatically created
 # at /opt/midnight/mvm/config/config.toml with correct paths
 mvm view  # Just works! Uses config from /opt/midnight/mvm/config/config.toml
 ```
@@ -205,14 +205,18 @@ sudo setfacl -R -m u:$USER:rx /path/to/keystore
 ## Uninstall
 
 ```bash
-sudo ./scripts/uninstall.sh
+# Keep data (database, config)
+sudo mvm install uninstall
+
+# Remove everything including data
+sudo mvm install uninstall --remove-data
 ```
 
 This will:
 - Stop and disable systemd services
 - Remove service files
-- Remove binary
-- Optionally remove data directory (prompts for confirmation)
+- Remove binary and symlink
+- Optionally remove data directory (with `--remove-data` flag)
 
 ## Troubleshooting
 
@@ -287,26 +291,15 @@ sqlite3 /opt/midnight/mvm/data/mvm.db ".backup /path/to/backup/mvm.db.$(date +%Y
 ## Upgrading
 
 ```bash
-# Stop services
-sudo systemctl stop mvm-sync
-sudo systemctl stop mvm-status.timer
-
 # Build new version
 cargo build --release
 
-# Install new binary
-sudo cp target/release/mvm /opt/midnight/mvm/bin/mvm
-
-# Or run the install script (recommended - updates systemd files too)
-sudo ./scripts/install.sh
-
-# Restart services
-sudo systemctl start mvm-sync
-sudo systemctl start mvm-status.timer
+# Reinstall (stops services, copies binary, updates systemd files, restarts)
+sudo ./target/release/mvm install
 
 # Verify
 sudo systemctl status mvm-sync
 mvm --version
 ```
 
-No database migrations required - v0.3.0 is compatible with v0.2.0 databases.
+Database migrations are handled automatically on startup if needed.

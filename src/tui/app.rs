@@ -1,6 +1,6 @@
 //! Application state management for TUI
 
-use crate::db::{BlockRecord, Database, ValidatorRecord, ValidatorEpochRecord, ValidatorEpochHistoryRecord};
+use crate::db::{BlockRecord, Database, ValidatorRecord, ValidatorEpochRecord, ValidatorEpochHistoryRecord, CommitteeSelectionStats};
 use crate::metrics::{MetricsClient, NodeExporterClient};
 use crate::midnight::{ChainTiming, ValidatorSet};
 use crate::rpc::{RpcClient, SidechainStatus};
@@ -43,6 +43,7 @@ pub enum PopupContent {
         committee_size: u32,
         blocks_this_epoch: u64,
         stake_display: Option<String>,
+        selection_stats: Option<CommitteeSelectionStats>,
     },
 }
 
@@ -1051,7 +1052,8 @@ impl App {
     }
 
     /// Open validator identity popup (from Validators view)
-    pub fn open_validator_identity_popup(&mut self) {
+    /// If database is provided, also loads committee selection statistics
+    pub fn open_validator_identity_popup(&mut self, db: Option<&Database>) {
         // Use the same sorted list as render_validators
         let validators = self.get_sorted_validators();
 
@@ -1088,6 +1090,12 @@ impl App {
             }
         });
 
+        // Load committee selection statistics if database is available
+        let selection_stats = db.and_then(|database| {
+            database.get_committee_selection_stats(sidechain_key, self.state.sidechain_epoch)
+                .ok()
+        });
+
         self.popup = Some(PopupContent::ValidatorIdentity {
             validator,
             aura_key,
@@ -1095,6 +1103,7 @@ impl App {
             committee_size,
             blocks_this_epoch,
             stake_display,
+            selection_stats,
         });
     }
 

@@ -109,7 +109,7 @@ pub fn handle_key_event(key: KeyEvent, app: &mut crate::tui::App, db: Option<&Da
                     app.open_block_popup();
                 }
                 ViewMode::Validators => {
-                    app.open_validator_identity_popup();
+                    app.open_validator_identity_popup(db);
                 }
                 ViewMode::Performance => {
                     if let Some(db) = db {
