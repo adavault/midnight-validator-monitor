@@ -103,7 +103,6 @@ fn render_title_bar(f: &mut Frame, app: &App, area: Rect, _layout: &ResponsiveLa
 
     let left_text = vec![
         Span::styled("Midnight Validator Monitor", Style::default().fg(theme.title()).add_modifier(Modifier::BOLD)),
-        Span::styled(format!(" v{}", env!("CARGO_PKG_VERSION")), Style::default().fg(theme.muted())),
         Span::raw("  |  "),
         Span::styled(view_label, Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
     ];
@@ -960,6 +959,29 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
     // Build help items as ListItems for scrolling support
     let help_items: Vec<ListItem> = vec![
         ListItem::new(Line::from(vec![
+            Span::styled("About", Style::default().fg(theme.title()).add_modifier(Modifier::BOLD)),
+        ])),
+        ListItem::new(Line::from("")),
+        ListItem::new(Line::from(vec![
+            Span::styled("  Version:", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled(format!("    MVM v{}", env!("CARGO_PKG_VERSION")), Style::default().fg(theme.text())),
+        ])),
+        ListItem::new(Line::from("")),
+        ListItem::new(Line::from(vec![
+            Span::styled("  Credits:", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled("    Source           ", Style::default().fg(theme.text())),
+            Span::raw("https://github.com/adavault/midnight-validator-monitor"),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled("    License          ", Style::default().fg(theme.text())),
+            Span::raw("MIT"),
+        ])),
+        ListItem::new(Line::from("")),
+        ListItem::new(Line::from(vec![
             Span::styled("Keyboard Shortcuts", Style::default().fg(theme.title()).add_modifier(Modifier::BOLD)),
         ])),
         ListItem::new(Line::from("")),
@@ -1065,6 +1087,10 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
         ListItem::new(Line::from(vec![
             Span::styled("    [5] Peers       ", Style::default().fg(theme.text())),
             Span::raw("Connected peers with sync status and IPs"),
+        ])),
+        ListItem::new(Line::from("")),
+        ListItem::new(Line::from(vec![
+            Span::styled("Reference", Style::default().fg(theme.title()).add_modifier(Modifier::BOLD)),
         ])),
         ListItem::new(Line::from("")),
         ListItem::new(Line::from(vec![

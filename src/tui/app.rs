@@ -936,7 +936,7 @@ impl App {
     /// Get max scroll index for current view
     fn max_scroll_index(&self) -> usize {
         // Help screen item count (count of ListItems in render_help)
-        const HELP_ITEM_COUNT: usize = 60; // Updated for new keybindings
+        const HELP_ITEM_COUNT: usize = 73; // About + Keyboard Shortcuts + Reference sections
 
         match self.view_mode {
             ViewMode::Blocks => self.state.recent_blocks.len().saturating_sub(1),
