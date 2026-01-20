@@ -503,9 +503,11 @@ async fn sync_block_range(
 ) -> Result<u64> {
     let mut synced = 0;
 
-    // Cache committees per epoch (multiple epochs may exist in a range)
+    // Cache committees per SIDECHAIN epoch (committees rotate every ~2h on preview, ~10h on mainnet)
     // We store (validator_set, block_hash_used) so we can fetch the committee
-    // at the correct historical point for each epoch
+    // at the correct historical point for each epoch.
+    // NOTE: Previously this was keyed by mainchain_epoch (24h/5d) which caused incorrect
+    // attribution when multiple sidechain epochs fell within the same mainchain epoch.
     let mut committee_cache: HashMap<u64, CommitteeCache> = HashMap::new();
 
     // Track sidechain epochs where we've captured validator epoch snapshots
@@ -570,13 +572,14 @@ async fn sync_single_block(
         }
     };
 
-    // Fetch or retrieve cached committee for this epoch
-    // IMPORTANT: When fetching the committee, we must query at a block hash from
-    // that epoch to get the correct historical committee (committees change each epoch)
+    // Fetch or retrieve cached committee for this SIDECHAIN epoch
+    // IMPORTANT: Committees rotate every sidechain epoch (~2h preview, ~10h mainnet),
+    // NOT every mainchain epoch. We must query at a block hash from the correct
+    // sidechain epoch to get the committee that was active when this block was produced.
     //
     // If historical state is pruned, we skip attribution entirely rather than
     // attribute incorrectly using the current committee. See docs/BLOCK_ATTRIBUTION.md
-    let validator_set = if let Some(cached) = committee_cache.get(&mainchain_epoch) {
+    let validator_set = if let Some(cached) = committee_cache.get(&sidechain_epoch) {
         // Already cached - check if this was a fallback (pruned state)
         if cached.used_fallback {
             // State was pruned for this epoch - skip attribution
@@ -585,40 +588,43 @@ async fn sync_single_block(
             // Historical state was available - use for accurate attribution
             Some(&cached.validator_set)
         }
-    } else if mainchain_epoch > 0 {
-        // Fetch and cache committee for this epoch AT THIS BLOCK HASH
+    } else if sidechain_epoch > 0 && mainchain_epoch > 0 {
+        // Fetch and cache committee for this SIDECHAIN epoch AT THIS BLOCK HASH
         // This ensures we get the committee that was active when this block was produced
+        // Note: We pass mainchain_epoch to fetch_candidates (for AriadneParameters RPC)
+        // but cache by sidechain_epoch since that's when committees rotate
         match ValidatorSet::fetch_with_committee_or_fallback(rpc, mainchain_epoch, &hash).await {
             Ok((vs, used_fallback)) => {
                 if used_fallback {
                     // Historical state is pruned - log warning and skip attribution
                     warn!(
-                        "Historical state pruned for epoch {} - blocks will be stored without author attribution. \
+                        "Historical state pruned for sidechain epoch {} - blocks will be stored without author attribution. \
                          See docs/BLOCK_ATTRIBUTION.md for details.",
-                        mainchain_epoch
+                        sidechain_epoch
                     );
                     // Don't store committee snapshot - it would be inaccurate for this epoch
                 } else {
                     debug!(
-                        "Fetched validator set for epoch {} at block {} ({} candidates, {} committee seats)",
-                        mainchain_epoch,
+                        "Fetched validator set for sidechain epoch {} at block {} ({} candidates, {} committee seats)",
+                        sidechain_epoch,
                         hash,
                         vs.candidate_count(),
                         vs.committee_size()
                     );
                     // Only store committee snapshot when we have accurate historical data
-                    if let Err(e) = db.store_committee_snapshot(mainchain_epoch, &vs.committee) {
+                    // Store by SIDECHAIN epoch since that's when committees rotate
+                    if let Err(e) = db.store_committee_snapshot(sidechain_epoch, &vs.committee) {
                         warn!(
-                            "Failed to store committee snapshot for epoch {}: {}",
-                            mainchain_epoch, e
+                            "Failed to store committee snapshot for sidechain epoch {}: {}",
+                            sidechain_epoch, e
                         );
                     } else {
-                        debug!("Stored committee snapshot for epoch {}", mainchain_epoch);
+                        debug!("Stored committee snapshot for sidechain epoch {}", sidechain_epoch);
                     }
                 }
 
                 committee_cache.insert(
-                    mainchain_epoch,
+                    sidechain_epoch,
                     CommitteeCache {
                         validator_set: vs,
                         fetched_at_block: hash.clone(),
@@ -630,13 +636,13 @@ async fn sync_single_block(
                 if used_fallback {
                     None
                 } else {
-                    committee_cache.get(&mainchain_epoch).map(|c| &c.validator_set)
+                    committee_cache.get(&sidechain_epoch).map(|c| &c.validator_set)
                 }
             }
             Err(e) => {
                 warn!(
-                    "Failed to fetch validator set for epoch {} at block {}: {}. Author attribution will be skipped.",
-                    mainchain_epoch, hash, e
+                    "Failed to fetch validator set for sidechain epoch {} at block {}: {}. Author attribution will be skipped.",
+                    sidechain_epoch, hash, e
                 );
                 None
             }

@@ -48,6 +48,8 @@ CREATE INDEX IF NOT EXISTS idx_validators_sidechain ON validators(sidechain_key)
 CREATE INDEX IF NOT EXISTS idx_validators_ours ON validators(is_ours);
 
 -- Committee snapshots (for historical committee composition)
+-- Note: 'epoch' is SIDECHAIN epoch (~2h preview, ~10h mainnet) - committees rotate each sidechain epoch
+-- Prior to v1.0, this incorrectly stored mainchain epochs - existing data may need migration
 CREATE TABLE IF NOT EXISTS committee_snapshots (
     epoch INTEGER NOT NULL,
     position INTEGER NOT NULL,

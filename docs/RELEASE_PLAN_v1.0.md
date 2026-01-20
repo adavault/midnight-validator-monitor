@@ -20,24 +20,32 @@
 - Add test case for epoch transition
 **Effort:** Medium
 
-#### Issue #6: Dashboard sparkline can show more blocks than seats
+#### Issue #6 & #8: Block attribution uses wrong committee ✅ FIXED
 **Version:** v0.9.1
-**Symptom:** Sparkline showing 4 blocks but only 3 seats over 48h period.
-**Likely Cause:** Timing mismatch when feature was implemented - historical seat data may be incomplete or blocks attributed to wrong epochs.
-**Proposed Fix:**
-- Audit `get_block_counts_bucketed()` and `get_total_seats_for_epochs()` queries
-- Ensure both use consistent epoch boundaries
-- May need to cap display at seats count or show warning indicator
-**Effort:** Medium
+**Symptom:** Sparkline showing more blocks than seats; validator detail showing 200% (2 blocks / 1 seat).
 
-#### Issue #8: Validator showing more blocks than seats in epoch
-**Symptom:** Validator showing 200% (2 blocks / 1 seat) in Epoch 245670.
-**Likely Cause:** Either block attribution error or seat counting issue for specific epoch.
-**Proposed Fix:**
-- Cross-reference with on-chain data for that epoch
-- Check if committee snapshot was correctly captured
-- May be related to #6 (same root cause)
-**Effort:** Medium (investigate with #6)
+**Root Cause (Confirmed 2026-01-20):**
+The committee cache in `sync.rs` was keyed by **mainchain epoch** (24h), but committees actually rotate every **sidechain epoch** (2h). This caused blocks to be attributed using the wrong committee when syncing multiple sidechain epochs within the same mainchain epoch.
+
+**Fix Applied (2026-01-20):**
+1. ✅ Changed `committee_cache` key from mainchain_epoch to sidechain_epoch
+2. ✅ Updated cache lookup/insert to use sidechain_epoch
+3. ✅ Committee snapshots now stored by sidechain_epoch
+4. ✅ AriadneParameters still fetched with mainchain_epoch (for candidate list)
+5. ✅ Tested: 100% author attribution working correctly
+
+**Files Changed:**
+- `src/commands/sync.rs` - Cache key and lookup changes
+- `src/db/schema.rs` - Documentation update for committee_snapshots
+
+**Migration Notes:**
+- Existing data in `committee_snapshots` table uses mainchain epochs (1181-1183)
+- New data will use sidechain epochs (245680+)
+- Historical block attributions may be incorrect
+- **Recommended:** Clear old committee_snapshots and re-sync if accurate historical data needed
+- **Alternative:** Accept that historical data before fix has errors (documented)
+
+**Effort:** ✅ Complete
 
 ### UI Polish (Low Priority)
 
@@ -158,18 +166,23 @@ From `docs/ROADMAP.md`, v1.0 should deliver:
 
 ## Implementation Order
 
-### Phase 1: Quick Fixes (30 mins)
-1. Issue #7 - tDUST -> tADA label fix
-2. Issue #9 - Validator popup justification
-3. Issue #10 - Block popup justification
-4. Security hardening - Cargo.toml + database pragma (from security audit)
+### Phase 1: Quick Fixes ✅ COMPLETED
+1. ✅ Issue #7 - tDUST -> tADA label fix
+2. ✅ Issue #9 - Validator popup justification
+3. ✅ Issue #10 - Block popup justification (also fixed peer popup)
+4. ✅ Security hardening - Cargo.toml + database pragma (from security audit)
 
-### Phase 2: Bug Investigation (2-3 hours)
-1. Issue #4 - Investigate `is_ours` flag persistence
-2. Issue #6 & #8 - Investigate blocks/seats mismatch (likely same root cause)
+### Phase 2: Bug Investigation ✅ COMPLETED
+1. ✅ Issue #4 - Investigated: No bug found; `is_ours` flag correctly preserved via `MAX(is_ours, ?5)` in upsert
+2. ✅ Issue #6 & #8 - **ROOT CAUSE FOUND**: Committee cache keyed by mainchain epoch (24h) but committees rotate every sidechain epoch (2h)
 
-### Phase 3: Bug Fixes (based on investigation)
-- Implement fixes for Phase 2 findings
+### Phase 3: Bug Fixes (Issue #6 & #8) ✅ COMPLETED
+**Fix committee cache to use sidechain epoch:**
+1. ✅ Changed `committee_cache` key from mainchain to sidechain epoch
+2. ✅ Updated cache lookup to use `sidechain_epoch`
+3. ✅ Committee snapshots now stored by sidechain_epoch (with schema doc update)
+4. ✅ Tested: 100% author attribution, correct validator counts (184 candidates, 1200 committee)
+5. Migration: Clear old data and re-sync recommended for accurate historical data
 
 ### Phase 4: New Feature - Committee Selection Statistics
 1. Add database query functions for selection history and stake ranking
@@ -194,12 +207,14 @@ From `docs/ROADMAP.md`, v1.0 should deliver:
 
 | File | Changes |
 |------|---------|
-| `src/tui/app.rs` | Issue #7 (tADA label), Issue #4 (is_ours persistence), Committee stats data fetching |
-| `src/tui/ui.rs` | Issues #9, #10 (popup justification), Committee stats popup rendering |
-| `src/db/blocks.rs` | Issues #6, #8 (blocks/seats queries) |
+| `src/tui/app.rs` | ✅ Issue #7 (tADA label), Committee stats data fetching |
+| `src/tui/ui.rs` | ✅ Issues #9, #10 (popup justification), Committee stats popup rendering |
+| `src/commands/sync.rs` | **Issues #6, #8**: Change committee cache key from mainchain to sidechain epoch |
+| `src/db/schema.rs` | Update committee_snapshots to use sidechain_epoch |
+| `src/db/blocks.rs` | Update committee snapshot functions for sidechain epoch |
 | `src/db/validators.rs` | New queries for selection history, stake ranking, committee breakdown |
-| `src/db/mod.rs` | Security: Add `PRAGMA foreign_keys=ON` |
-| `Cargo.toml` | Security: Add `strip` and `panic` to release profile |
+| `src/db/mod.rs` | ✅ Security: Add `PRAGMA foreign_keys=ON` |
+| `Cargo.toml` | ✅ Security: Add `strip` and `panic` to release profile |
 | `docs/ROADMAP.md` | Update current status |
 | `README.md` | Add troubleshooting section |
 
