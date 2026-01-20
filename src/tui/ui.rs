@@ -1520,8 +1520,10 @@ fn render_validator_identity_popup(
     };
 
     // Expected blocks this epoch (rough estimate)
+    // Slots per epoch varies by network (1200 preview, 6000 mainnet)
+    let slots_per_epoch = app.chain_timing.blocks_per_sidechain_epoch() as f64;
     let expected_blocks = if committee_size > 0 {
-        (current_epoch_seats as f64 / committee_size as f64) * 1200.0
+        (current_epoch_seats as f64 / committee_size as f64) * slots_per_epoch
     } else {
         0.0
     };
@@ -1690,9 +1692,11 @@ fn render_validator_detail_popup(
     f.render_widget(header_widget, chunks[0]);
 
     // Build table rows
+    // Slots per epoch varies by network (1200 preview, 6000 mainnet)
+    let slots_per_epoch = app.chain_timing.blocks_per_sidechain_epoch() as f64;
     let rows: Vec<Row> = epoch_history.iter().map(|record| {
         let expected = if record.committee_size > 0 {
-            (record.seats as f64 / record.committee_size as f64) * 1200.0
+            (record.seats as f64 / record.committee_size as f64) * slots_per_epoch
         } else {
             0.0
         };
@@ -1834,10 +1838,12 @@ fn render_validator_epoch_detail(f: &mut Frame, app: &App, area: Rect, layout: &
     f.render_widget(header_widget, chunks[0]);
 
     // Build table rows
+    // Slots per epoch varies by network (1200 preview, 6000 mainnet)
+    let slots_per_epoch = app.chain_timing.blocks_per_sidechain_epoch() as f64;
     let rows: Vec<Row> = app.validator_epoch_history.iter().map(|record| {
         // Calculate expected blocks: (seats / committee_size) * slots_per_epoch
         let expected = if record.committee_size > 0 {
-            (record.seats as f64 / record.committee_size as f64) * 1200.0
+            (record.seats as f64 / record.committee_size as f64) * slots_per_epoch
         } else {
             0.0
         };

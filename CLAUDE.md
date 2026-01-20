@@ -163,11 +163,12 @@ Two types of validators:
 
 **Candidates** (~185 validators): Registered validators from `sidechain_getAriadneParameters`. These are validators that MAY produce blocks.
 
-**Committee** (~1200 seats, ~50-60 unique validators): The actual block production schedule from `AuraApi_authorities`. This is an ordered list of AURA keys where:
+**Committee** (variable size, ~1200 seats on preview): The actual block production schedule from `AuraApi_authorities`. This is an ordered list of AURA keys where:
 - Block author = `committee[slot % committee.len()]`
 - Validators can have multiple seats (stake-weighted)
-- Committee changes each epoch (~2 hours)
+- Committee changes each **sidechain epoch** (2h preview, 10h mainnet)
 - Selection is stake-weighted random (not purely top-N by stake)
+- Committee size may differ between networks (preview vs mainnet)
 
 **Important**: A validator being registered with `isValid: true` does NOT guarantee they are in the committee. Committee selection is probabilistic based on stake.
 
@@ -180,9 +181,11 @@ The sync command attributes blocks to validators using:
 4. Look up validator by AURA key to get sidechain key
 5. Store sidechain key as `author_key` in blocks table
 
-**Historical State Queries**: When syncing historical blocks, the committee must be queried at that block's hash to get the correct historical committee (since committees change each epoch).
+**Historical State Queries**: When syncing historical blocks, the committee must be queried at that block's hash to get the correct historical committee (since committees change each **sidechain epoch**).
 
 **State Pruning Fallback**: Non-archive nodes prune historical state (typically keeping only ~256 blocks). When historical state is unavailable, the sync falls back to using the current committee with a warning that attribution may be inaccurate for blocks from different epochs.
+
+**Committee Caching**: The sync caches committees by **sidechain epoch** (not mainchain epoch) since that's when committees rotate. Within a single mainchain epoch (24h preview), there are ~12 sidechain epochs with different committees.
 
 ### RPC Methods Used
 Standard Substrate:
@@ -195,7 +198,7 @@ Standard Substrate:
 
 Midnight-specific:
 - `sidechain_getStatus` - Returns epoch/slot information with `nextEpochTimestamp` for both chains
-- `sidechain_getAriadneParameters` - Returns validator registration data and permissioned candidates
+- `sidechain_getAriadneParameters(mainchain_epoch)` - Returns validator registration data and permissioned candidates. **Note: Takes mainchain epoch number as parameter, not sidechain epoch.**
 
 ## Error Handling Patterns
 
