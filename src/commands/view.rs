@@ -7,7 +7,6 @@ use crate::tui::{App, Event, EventHandler};
 use anyhow::{Context, Result};
 use clap::Args;
 use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -60,7 +59,7 @@ Tip: If you installed MVM, the database should be at /opt/midnight/mvm/data/mvm.
     // Initialize terminal
     enable_raw_mode().context("Failed to enable raw mode")?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
+    execute!(stdout, EnterAlternateScreen)
         .context("Failed to enter alternate screen")?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend).context("Failed to create terminal")?;
@@ -93,8 +92,7 @@ Tip: If you installed MVM, the database should be at /opt/midnight/mvm/data/mvm.
     let _ = disable_raw_mode();
     let _ = execute!(
         terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
+        LeaveAlternateScreen
     );
     let _ = terminal.show_cursor();
 

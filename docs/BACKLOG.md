@@ -25,6 +25,7 @@ See `docs/EXTERNAL_IP_RESEARCH.md` for detailed research findings.
 - [ ] **Historical performance graphs**: Show block production over time
 - [ ] **Multiple node monitoring**: Support monitoring multiple validator nodes from single TUI
 - [ ] **Export functionality**: Export performance data to CSV/JSON
+- [ ] **Clipboard support**: Add keybinding (e.g., `y` to yank) to copy selected data to clipboard. Use `arboard` crate for cross-platform clipboard access. Useful for copying block hashes, validator keys, peer IDs, etc. Note: Mouse capture was removed in v0.9.2 to enable native terminal text selection as an interim solution.
 
 ## v0.8 Release Plan
 
