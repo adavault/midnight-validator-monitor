@@ -62,6 +62,68 @@
 - Move text back one space
 **Effort:** Small (5 mins)
 
+### New Features (Medium Priority)
+
+#### Committee Selection Statistics in Popups
+**Source:** Troubleshooting session 2026-01-20 - analyzing "GRANDPA Not voting" status
+**Context:** When a validator shows "Not voting" for GRANDPA, it's often because they weren't selected for the current epoch's committee. Users need visibility into their historical selection patterns to understand this is normal behavior.
+
+**Feature:** Add committee selection statistics to validator identity popup and/or performance view popup.
+
+**Statistics to Display:**
+1. **Committee Membership Summary**
+   - Epochs tracked (from database)
+   - Times selected for committee
+   - Total seats received
+   - Selection rate (e.g., "Selected 3 of 22 epochs")
+
+2. **Selection Rate Analysis**
+   - Expected seats/epoch (based on stake proportion)
+   - Actual seats/epoch (from historical data)
+   - Performance vs expected (e.g., "10x better than stake proportion")
+   - Average epochs between selections
+
+3. **Stake Context**
+   - Stake rank among dynamic validators (e.g., "46th of 172")
+   - Share of dynamic validator stake pool (e.g., "0.30%")
+   - Committee structure note (e.g., "~91% permissioned, ~9% dynamic")
+
+4. **Current Status**
+   - Last selected epoch
+   - Epochs since last selection
+   - Current committee status (In Committee / Not Selected)
+
+**SQL Queries Required:**
+```sql
+-- Selection history for validator
+SELECT sidechain_epoch, committee_seats, committee_size
+FROM validator_epochs
+WHERE sidechain_key = ?
+ORDER BY sidechain_epoch;
+
+-- Stake rank calculation
+SELECT COUNT(*) + 1 as rank
+FROM validator_epochs
+WHERE sidechain_epoch = ?
+  AND stake_lovelace > (SELECT stake_lovelace FROM validator_epochs WHERE sidechain_key = ? AND sidechain_epoch = ?)
+  AND stake_lovelace IS NOT NULL;
+
+-- Dynamic vs permissioned breakdown
+SELECT is_permissioned, COUNT(DISTINCT sidechain_key), SUM(committee_seats)
+FROM validator_epochs
+WHERE sidechain_epoch = ?
+GROUP BY is_permissioned;
+```
+
+**UI Location Options:**
+- Option A: Add new tab/section to validator identity popup (preferred)
+- Option B: Add to Performance view as expandable detail
+- Option C: New "Selection History" popup accessible from validator row
+
+**Effort:** Medium-Large (new queries + UI rendering)
+
+**Value:** Helps operators understand that gaps in committee selection are normal, especially for lower-stake validators. Reduces confusion when GRANDPA shows "Not voting".
+
 ---
 
 ## v1.0 Roadmap Goals
@@ -109,12 +171,18 @@ From `docs/ROADMAP.md`, v1.0 should deliver:
 ### Phase 3: Bug Fixes (based on investigation)
 - Implement fixes for Phase 2 findings
 
-### Phase 4: Documentation & Polish
+### Phase 4: New Feature - Committee Selection Statistics
+1. Add database query functions for selection history and stake ranking
+2. Design popup UI layout for statistics display
+3. Implement rendering in validator identity popup
+4. Test with various validator stake levels
+
+### Phase 5: Documentation & Polish
 1. Update ROADMAP.md status
 2. Add troubleshooting section to README
 3. Review all help text
 
-### Phase 5: Testing & Release
+### Phase 6: Testing & Release
 1. Full manual test of all features
 2. Test mainnet timing parameters
 3. Fresh install test
@@ -126,9 +194,10 @@ From `docs/ROADMAP.md`, v1.0 should deliver:
 
 | File | Changes |
 |------|---------|
-| `src/tui/app.rs` | Issue #7 (tADA label), Issue #4 (is_ours persistence) |
-| `src/tui/ui.rs` | Issues #9, #10 (popup justification) |
+| `src/tui/app.rs` | Issue #7 (tADA label), Issue #4 (is_ours persistence), Committee stats data fetching |
+| `src/tui/ui.rs` | Issues #9, #10 (popup justification), Committee stats popup rendering |
 | `src/db/blocks.rs` | Issues #6, #8 (blocks/seats queries) |
+| `src/db/validators.rs` | New queries for selection history, stake ranking, committee breakdown |
 | `src/db/mod.rs` | Security: Add `PRAGMA foreign_keys=ON` |
 | `Cargo.toml` | Security: Add `strip` and `panic` to release profile |
 | `docs/ROADMAP.md` | Update current status |
@@ -142,6 +211,7 @@ v1.0 is ready when:
 - [ ] All 6 open GitHub issues are closed
 - [ ] No known bugs
 - [ ] Security audit recommendations implemented (see `docs/SECURITY_AUDIT_2026-01-19.md`)
+- [ ] Committee selection statistics feature implemented and tested
 - [ ] Documentation is current and complete
 - [ ] Works correctly with mainnet timing parameters
 - [ ] Clean install process verified on fresh system
@@ -160,4 +230,5 @@ v1.0 is ready when:
 ---
 
 *Created: January 2026*
+*Updated: 2026-01-20 (added committee selection statistics feature)*
 *Target Release: Before Midnight mainnet launch*
