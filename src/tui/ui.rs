@@ -1325,55 +1325,55 @@ fn render_block_detail_popup(f: &mut Frame, app: &App, block: &crate::db::BlockR
     let content = vec![
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Block Number:     ", Style::default().fg(theme.muted())),
+            Span::styled(" Block Number:     ", Style::default().fg(theme.muted())),
             Span::styled(format!("#{}", block.block_number), Style::default().fg(theme.block_number()).add_modifier(Modifier::BOLD)),
         ]),
         Line::from(vec![
-            Span::styled("  Block Hash:       ", Style::default().fg(theme.muted())),
+            Span::styled(" Block Hash:       ", Style::default().fg(theme.muted())),
             Span::styled(&block.block_hash, Style::default().fg(theme.secondary())),
         ]),
         Line::from(vec![
-            Span::styled("  Parent Hash:      ", Style::default().fg(theme.muted())),
+            Span::styled(" Parent Hash:      ", Style::default().fg(theme.muted())),
             Span::styled(&block.parent_hash, Style::default().fg(theme.text())),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  State Root:       ", Style::default().fg(theme.muted())),
+            Span::styled(" State Root:       ", Style::default().fg(theme.muted())),
             Span::styled(&block.state_root, Style::default().fg(theme.text())),
         ]),
         Line::from(vec![
-            Span::styled("  Extrinsics Root:  ", Style::default().fg(theme.muted())),
+            Span::styled(" Extrinsics Root:  ", Style::default().fg(theme.muted())),
             Span::styled(&block.extrinsics_root, Style::default().fg(theme.text())),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Slot Number:      ", Style::default().fg(theme.muted())),
+            Span::styled(" Slot Number:      ", Style::default().fg(theme.muted())),
             Span::styled(format!("{}", block.slot_number), Style::default().fg(theme.text())),
         ]),
         Line::from(vec![
-            Span::styled("  Sidechain Epoch:  ", Style::default().fg(theme.muted())),
+            Span::styled(" Sidechain Epoch:  ", Style::default().fg(theme.muted())),
             Span::styled(format!("{}", block.sidechain_epoch), Style::default().fg(theme.epoch())),
         ]),
         Line::from(vec![
-            Span::styled("  Mainchain Epoch:  ", Style::default().fg(theme.muted())),
+            Span::styled(" Mainchain Epoch:  ", Style::default().fg(theme.muted())),
             Span::styled(format!("{}", block.epoch), Style::default().fg(theme.epoch())),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Timestamp:        ", Style::default().fg(theme.muted())),
+            Span::styled(" Timestamp:        ", Style::default().fg(theme.muted())),
             Span::styled(format_timestamp(block.timestamp), Style::default().fg(theme.text())),
         ]),
         Line::from(vec![
-            Span::styled("  Author:           ", Style::default().fg(theme.muted())),
+            Span::styled(" Author:           ", Style::default().fg(theme.muted())),
             Span::styled(author_display, Style::default().fg(theme.secondary())),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Extrinsics:       ", Style::default().fg(theme.muted())),
+            Span::styled(" Extrinsics:       ", Style::default().fg(theme.muted())),
             Span::styled(format!("{}", block.extrinsics_count), Style::default().fg(theme.text())),
         ]),
         Line::from(vec![
-            Span::styled("  Finalized:        ", Style::default().fg(theme.muted())),
+            Span::styled(" Finalized:        ", Style::default().fg(theme.muted())),
             Span::styled(
                 if block.is_finalized { "Yes ✓" } else { "No" },
                 Style::default().fg(if block.is_finalized { theme.success() } else { theme.warning() }),
@@ -1381,7 +1381,7 @@ fn render_block_detail_popup(f: &mut Frame, app: &App, block: &crate::db::BlockR
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Press ", Style::default().fg(theme.muted())),
+            Span::styled(" Press ", Style::default().fg(theme.muted())),
             Span::styled("Esc", Style::default().fg(theme.primary())),
             Span::styled(" to close", Style::default().fg(theme.muted())),
         ]),
@@ -1428,26 +1428,26 @@ fn render_peer_detail_popup(f: &mut Frame, app: &App, peer: &crate::tui::app::Pe
     let content = vec![
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Peer ID:          ", Style::default().fg(theme.muted())),
+            Span::styled(" Peer ID:          ", Style::default().fg(theme.muted())),
             Span::styled(&peer.peer_id, Style::default().fg(theme.secondary())),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Remote Address:   ", Style::default().fg(theme.muted())),
+            Span::styled(" Remote Address:   ", Style::default().fg(theme.muted())),
             Span::styled(address_display, Style::default().fg(theme.text())),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Best Block:       ", Style::default().fg(theme.muted())),
+            Span::styled(" Best Block:       ", Style::default().fg(theme.muted())),
             Span::styled(format!("#{}", peer.best_number), Style::default().fg(theme.block_number())),
         ]),
         Line::from(vec![
-            Span::styled("  Best Hash:        ", Style::default().fg(theme.muted())),
+            Span::styled(" Best Hash:        ", Style::default().fg(theme.muted())),
             Span::styled(&peer.best_hash, Style::default().fg(theme.text())),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Connection:       ", Style::default().fg(theme.muted())),
+            Span::styled(" Connection:       ", Style::default().fg(theme.muted())),
             Span::styled(
                 if peer.is_outbound { "Outbound (we dialed)" } else { "Inbound (they dialed)" },
                 Style::default().fg(if peer.is_outbound { theme.muted() } else { theme.success() }),
@@ -1455,7 +1455,7 @@ fn render_peer_detail_popup(f: &mut Frame, app: &App, peer: &crate::tui::app::Pe
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Sync Status:      ", Style::default().fg(theme.muted())),
+            Span::styled(" Sync Status:      ", Style::default().fg(theme.muted())),
             Span::styled(sync_status, Style::default().fg(sync_color)),
             if blocks_behind > 0 {
                 Span::styled(format!(" ({} blocks behind)", blocks_behind), Style::default().fg(theme.muted()))
@@ -1465,7 +1465,7 @@ fn render_peer_detail_popup(f: &mut Frame, app: &App, peer: &crate::tui::app::Pe
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Press ", Style::default().fg(theme.muted())),
+            Span::styled(" Press ", Style::default().fg(theme.muted())),
             Span::styled("Esc", Style::default().fg(theme.primary())),
             Span::styled(" to close", Style::default().fg(theme.muted())),
         ]),
@@ -1530,13 +1530,13 @@ fn render_validator_identity_popup(
     let mut content = vec![
         Line::from(""),
         Line::from(vec![
-            Span::styled(format!("  {}", ours_marker), Style::default().fg(theme.ours())),
+            Span::styled(format!(" {}", ours_marker), Style::default().fg(theme.ours())),
             Span::styled(&validator.sidechain_key, Style::default().fg(theme.secondary()).add_modifier(Modifier::BOLD)),
             Span::styled(&label_display, Style::default().fg(theme.muted())),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Sidechain Key:  ", Style::default().fg(theme.muted())),
+            Span::styled(" Sidechain Key:  ", Style::default().fg(theme.muted())),
             Span::styled(&validator.sidechain_key, Style::default().fg(theme.text())),
         ]),
     ];
@@ -1544,7 +1544,7 @@ fn render_validator_identity_popup(
     // Add AURA key if available
     if let Some(aura) = aura_key {
         content.push(Line::from(vec![
-            Span::styled("  AURA Key:       ", Style::default().fg(theme.muted())),
+            Span::styled(" AURA Key:       ", Style::default().fg(theme.muted())),
             Span::styled(aura, Style::default().fg(theme.text())),
         ]));
     }
@@ -1553,14 +1553,14 @@ fn render_validator_identity_popup(
 
     // Registration section
     content.push(Line::from(vec![
-        Span::styled("  Registration:   ", Style::default().fg(theme.muted())),
+        Span::styled(" Registration:   ", Style::default().fg(theme.muted())),
         Span::styled(reg_status, Style::default().fg(if is_permissioned { theme.warning() } else if is_registered { theme.success() } else { theme.muted() })),
     ]));
 
     // Stake if available
     if let Some(stake) = stake_display {
         content.push(Line::from(vec![
-            Span::styled("  Stake:          ", Style::default().fg(theme.muted())),
+            Span::styled(" Stake:          ", Style::default().fg(theme.muted())),
             Span::styled(stake, Style::default().fg(theme.success())),
         ]));
     }
@@ -1569,7 +1569,7 @@ fn render_validator_identity_popup(
 
     // Current epoch info
     content.push(Line::from(vec![
-        Span::styled("  Seats:          ", Style::default().fg(theme.muted())),
+        Span::styled(" Seats:          ", Style::default().fg(theme.muted())),
         Span::styled(
             format!("{}", current_epoch_seats),
             Style::default().fg(if current_epoch_seats > 0 { theme.success() } else { theme.muted() }),
@@ -1581,7 +1581,7 @@ fn render_validator_identity_popup(
     ]));
 
     content.push(Line::from(vec![
-        Span::styled("  Blocks:         ", Style::default().fg(theme.muted())),
+        Span::styled(" Blocks:         ", Style::default().fg(theme.muted())),
         Span::styled(
             format!("{} produced", blocks_this_epoch),
             Style::default().fg(theme.text()),
@@ -1593,7 +1593,7 @@ fn render_validator_identity_popup(
     ]));
 
     content.push(Line::from(vec![
-        Span::styled("  Total Blocks:   ", Style::default().fg(theme.muted())),
+        Span::styled(" Total Blocks:   ", Style::default().fg(theme.muted())),
         Span::styled(
             format!("{}", validator.total_blocks),
             Style::default().fg(theme.success()),
@@ -1603,7 +1603,7 @@ fn render_validator_identity_popup(
 
     content.push(Line::from(""));
     content.push(Line::from(vec![
-        Span::styled("  Press ", Style::default().fg(theme.muted())),
+        Span::styled(" Press ", Style::default().fg(theme.muted())),
         Span::styled("Esc", Style::default().fg(theme.primary())),
         Span::styled(" to close", Style::default().fg(theme.muted())),
     ]));

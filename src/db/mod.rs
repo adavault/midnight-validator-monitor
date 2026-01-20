@@ -30,8 +30,8 @@ impl Database {
         // Initialize schema
         init_schema(&conn)?;
 
-        // Enable WAL mode for better performance
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")?;
+        // Enable WAL mode for better performance and foreign key enforcement
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;")?;
 
         Ok(Self { conn })
     }

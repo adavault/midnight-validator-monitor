@@ -1077,14 +1077,14 @@ impl App {
 
         // Format stake if available
         let stake_display = epoch_data.and_then(|d| d.stake_lovelace).map(|stake| {
-            // Convert lovelace to tDUST (1 tDUST = 1,000,000 lovelace)
-            let tdust = stake as f64 / 1_000_000.0;
-            if tdust >= 1_000_000.0 {
-                format!("{:.2}M tDUST", tdust / 1_000_000.0)
-            } else if tdust >= 1_000.0 {
-                format!("{:.2}K tDUST", tdust / 1_000.0)
+            // Convert lovelace to ADA (1 ADA = 1,000,000 lovelace)
+            let ada = stake as f64 / 1_000_000.0;
+            if ada >= 1_000_000.0 {
+                format!("{:.2}M tADA", ada / 1_000_000.0)
+            } else if ada >= 1_000.0 {
+                format!("{:.2}K tADA", ada / 1_000.0)
             } else {
-                format!("{:.2} tDUST", tdust)
+                format!("{:.2} tADA", ada)
             }
         });
 
