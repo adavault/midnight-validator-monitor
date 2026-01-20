@@ -206,6 +206,8 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
                 let mut spans = vec![
                     Span::styled("●", Style::default().fg(theme.success())),
                     Span::styled(format!(" {}s ago | ", since_update), Style::default().fg(theme.text())),
+                    Span::styled("[1-5]", Style::default().fg(theme.primary())),
+                    Span::styled(" Views | ", Style::default().fg(theme.muted())),
                 ];
                 if let Some(hint) = enter_hint {
                     spans.push(Span::styled("Enter", Style::default().fg(theme.primary())));
@@ -220,6 +222,8 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
                 let mut spans = vec![
                     Span::styled("●", Style::default().fg(theme.success())),
                     Span::styled(format!(" Connected  |  Updated {}s ago  |  ", since_update), Style::default().fg(theme.text())),
+                    Span::styled("[1-5]", Style::default().fg(theme.primary())),
+                    Span::styled(" Views  ", Style::default().fg(theme.muted())),
                 ];
                 if let Some(hint) = enter_hint {
                     spans.push(Span::styled("[Enter]", Style::default().fg(theme.primary())));
