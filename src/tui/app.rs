@@ -84,6 +84,12 @@ pub struct App {
     pub state: AppState,
     /// Last update timestamp
     pub last_update: Instant,
+    /// Previous sync block for rate calculation
+    prev_sync_block: u64,
+    /// Previous sync check time for rate calculation
+    prev_sync_time: Instant,
+    /// Smoothed sync rate (exponential moving average)
+    smoothed_sync_rate: f64,
     /// Color theme
     pub theme: Theme,
     /// Expected IP for filtering external addresses (from config)
@@ -130,6 +136,10 @@ pub struct SyncProgress {
     pub is_synced: bool,
     /// Blocks remaining to sync
     pub blocks_remaining: u64,
+    /// Sync rate in blocks per second (smoothed)
+    pub sync_rate_bps: f64,
+    /// Estimated time remaining in seconds
+    pub eta_seconds: Option<u64>,
 }
 
 /// Application state data
@@ -311,6 +321,9 @@ impl App {
             drill_down_validator: None,
             state: AppState::default(),
             last_update: Instant::now(),
+            prev_sync_block: 0,
+            prev_sync_time: Instant::now(),
+            smoothed_sync_rate: 0.0,
             theme: Theme::default(),
             expected_ip: None,
             chain_timing: ChainTiming::default(),
@@ -472,6 +485,36 @@ impl App {
             let blocks_remaining = highest_block.saturating_sub(current_block);
             let is_synced = blocks_remaining <= 1; // Allow 1 block tolerance
 
+            // Calculate sync rate and ETA
+            let now = Instant::now();
+            let elapsed_secs = now.duration_since(self.prev_sync_time).as_secs_f64();
+            let (sync_rate_bps, eta_seconds) = if !is_synced && elapsed_secs > 0.5 && self.prev_sync_block > 0 {
+                let blocks_synced = current_block.saturating_sub(self.prev_sync_block);
+                let instant_rate = blocks_synced as f64 / elapsed_secs;
+
+                // Exponential moving average for smoother rate (alpha = 0.3)
+                let alpha = 0.3;
+                let smoothed = if self.smoothed_sync_rate > 0.0 {
+                    alpha * instant_rate + (1.0 - alpha) * self.smoothed_sync_rate
+                } else {
+                    instant_rate
+                };
+                self.smoothed_sync_rate = smoothed;
+
+                let eta = if smoothed > 0.1 {
+                    Some((blocks_remaining as f64 / smoothed) as u64)
+                } else {
+                    None
+                };
+                (smoothed, eta)
+            } else {
+                (self.smoothed_sync_rate, None)
+            };
+
+            // Update tracking for next calculation
+            self.prev_sync_block = current_block;
+            self.prev_sync_time = now;
+
             self.state.sync_progress = SyncProgress {
                 current_block,
                 highest_block,
@@ -479,6 +522,8 @@ impl App {
                 sync_percent: sync_percent.clamp(0.0, 100.0),
                 is_synced,
                 blocks_remaining,
+                sync_rate_bps,
+                eta_seconds,
             };
 
             self.state.sync_state_syncing = !is_synced;

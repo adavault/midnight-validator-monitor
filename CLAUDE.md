@@ -129,6 +129,29 @@ The application uses a modular command-based architecture where each major featu
 - Keyboard navigation (1-5 for views, j/k for scrolling, f for filtering, t for theme, q to quit)
 - Components: `app.rs` (state), `event.rs` (input handling), `ui.rs` (rendering), `layout.rs` (responsive sizing), `theme.rs` (Midnight/Midday themes)
 
+**TUI Color Coding Conventions**
+
+Maintain consistent color coding across all views for visual coherence:
+
+| Element | Color | Theme Method | Usage |
+|---------|-------|--------------|-------|
+| Inbound traffic (↓) | Green | `theme.success()` | Download bandwidth, inbound peers |
+| Outbound traffic (↑) | Gray | `theme.muted()` | Upload bandwidth, outbound peers |
+| Labels | Gray | `theme.muted()` | Row labels like "Bandwidth:", "Peers:" |
+| Normal values | White | `theme.text()` | Standard data values |
+| Warnings/Syncing | Yellow | `theme.warning()` | Sync progress, alerts |
+| Errors | Red | `theme.error()` | Error states, missing keys |
+| Success/Healthy | Green | `theme.success()` | Synced status, valid keys |
+| Block numbers | Cyan | `theme.block_number()` | Block heights |
+| Epoch numbers | Blue | `theme.epoch()` | Epoch identifiers |
+| Secondary info | Purple | `theme.secondary()` | Peer IDs, secondary details |
+| Primary accents | Blue | `theme.primary()` | Titles, progress bars |
+
+**Layout Conventions**
+- Network I/O uses `↓↑` arrows with format: `in / out` (download/upload, inbound/outbound)
+- Dashboard row order: Chain state → Identity → Network activity → System resources
+- Two-column layout: 14-char label + value (padded to ~22 chars) per column
+
 ### Key Data Flow
 
 1. **Status Monitoring**: Polls RPC endpoints → Fetches health, sync state, block info, sidechain status → Verifies keys via `author_hasKey` → Checks registration via `sidechain_getAriadneParameters` → Displays formatted output

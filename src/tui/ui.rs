@@ -310,7 +310,17 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
 fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout) {
     let theme = app.theme;
     let key_mode = layout.key_display_length();
-    let chunks = layout.dashboard_layout(area);
+
+    // Calculate dynamic row count for Network Status panel
+    // Base: 7 rows (Node, Block, Sidechain, Mainchain, Identity, Bandwidth/Peers, Tx Pool)
+    let mut network_rows: u16 = 7;
+    if !app.state.sync_progress.is_synced {
+        network_rows += 1; // Sync detail row
+    }
+    if app.state.system_memory_total_bytes > 0 {
+        network_rows += 1; // System row
+    }
+    let chunks = layout.dashboard_layout(area, network_rows);
 
     // Show loading state if still loading initial data
     if app.state.is_loading {
@@ -414,6 +424,25 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
             Span::styled("Uptime:       ", Style::default().fg(theme.muted())),
             Span::styled(uptime.clone(), Style::default().fg(theme.text())),
         ]));
+        // Row 1b: Sync details with ETA (only when syncing)
+        let eta_str = if let Some(eta_secs) = sync.eta_seconds {
+            format!("ETA {}", format_uptime(eta_secs))
+        } else {
+            "ETA --".to_string()
+        };
+        let rate_str = if sync.sync_rate_bps > 0.1 {
+            format!("{:.0} blk/s", sync.sync_rate_bps)
+        } else {
+            "-- blk/s".to_string()
+        };
+        network_text.push(Line::from(vec![
+            Span::styled("Sync:         ", Style::default().fg(theme.muted())),
+            Span::styled(format!("{} remaining", sync.blocks_remaining), Style::default().fg(theme.warning())),
+            Span::styled("  ", Style::default()),
+            Span::styled(rate_str, Style::default().fg(theme.warning())),
+            Span::styled("  ", Style::default()),
+            Span::styled(eta_str, Style::default().fg(theme.warning())),
+        ]));
     }
 
     // Row 2: Block + Finalized
@@ -440,42 +469,7 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         Span::styled(format!(" {:>5.1}%", epoch_progress.mainchain_progress_percent), Style::default().fg(theme.text())),
     ]));
 
-    // Row 5: Bandwidth + Peers (network I/O grouped)
-    // Use separate spans to avoid Unicode width issues with padding
-    let bw_value = format!("{} / {}", bandwidth_in, bandwidth_out);
-    network_text.push(Line::from(vec![
-        Span::styled("Bandwidth:    ", Style::default().fg(theme.muted())),
-        Span::styled("↓↑ ", Style::default().fg(theme.muted())),
-        Span::styled(format!("{:<19}", bw_value), Style::default().fg(theme.text())),
-        Span::styled("Peers:        ", Style::default().fg(theme.muted())),
-        Span::styled(format!("{} ", app.state.peer_count), Style::default().fg(theme.text())),
-        Span::styled(format!("(out {} in {})", app.state.peers_outbound, app.state.peers_inbound), Style::default().fg(theme.muted())),
-    ]));
-
-    // Row 6: Tx Pool (freed slot available for future use)
-    let txpool_str = format!("{} ready", app.state.txpool_ready);
-    network_text.push(Line::from(vec![
-        Span::styled("Tx Pool:      ", Style::default().fg(theme.muted())),
-        Span::styled(txpool_str, Style::default().fg(theme.text())),
-    ]));
-
-    // Row 7: System resources (from node_exporter if configured)
-    if app.state.system_memory_total_bytes > 0 {
-        let mem_used = format_bytes(app.state.system_memory_used_bytes);
-        let mem_total = format_bytes(app.state.system_memory_total_bytes);
-        let disk_used = format_bytes(app.state.system_disk_used_bytes);
-        let disk_total = format_bytes(app.state.system_disk_total_bytes);
-
-        // Single compact row: Mem used/total | Disk used/total | Load
-        network_text.push(Line::from(vec![
-            Span::styled("System:       ", Style::default().fg(theme.muted())),
-            Span::styled(format!("Mem {}/{}  ", mem_used, mem_total), Style::default().fg(theme.text())),
-            Span::styled(format!("Disk {}/{}  ", disk_used, disk_total), Style::default().fg(theme.text())),
-            Span::styled(format!("Load {:.2}", app.state.system_load1), Style::default().fg(theme.text())),
-        ]));
-    }
-
-    // Row 8: Network identity (external IP + peer ID)
+    // Row 5: Network identity (external IP + peer ID)
     let external_ip = if app.state.external_ips.is_empty() {
         "unknown".to_string()
     } else {
@@ -493,6 +487,48 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         Span::styled(format!("{:<22}", external_ip), Style::default().fg(theme.text())),
         Span::styled(peer_id_display, Style::default().fg(theme.secondary())),
     ]));
+
+    // Row 6: Bandwidth + Peers (network I/O grouped, color-coded like Peers view)
+    // ↓ inbound = green (success), ↑ outbound = muted
+    network_text.push(Line::from(vec![
+        Span::styled("Bandwidth:    ", Style::default().fg(theme.muted())),
+        Span::styled("↓", Style::default().fg(theme.success())),
+        Span::styled("↑ ", Style::default().fg(theme.muted())),
+        Span::styled(format!("{}", bandwidth_in), Style::default().fg(theme.success())),
+        Span::styled(" / ", Style::default().fg(theme.text())),
+        Span::styled(format!("{:<10}", bandwidth_out), Style::default().fg(theme.muted())),
+        Span::styled("Peers:        ", Style::default().fg(theme.muted())),
+        Span::styled("↓", Style::default().fg(theme.success())),
+        Span::styled("↑ ", Style::default().fg(theme.muted())),
+        Span::styled(format!("{}", app.state.peers_inbound), Style::default().fg(theme.success())),
+        Span::styled(" / ", Style::default().fg(theme.text())),
+        Span::styled(format!("{}", app.state.peers_outbound), Style::default().fg(theme.muted())),
+    ]));
+
+    // Row 7: Tx Pool
+    let txpool_str = format!("{} ready", app.state.txpool_ready);
+    network_text.push(Line::from(vec![
+        Span::styled("Tx Pool:      ", Style::default().fg(theme.muted())),
+        Span::styled(txpool_str, Style::default().fg(theme.text())),
+    ]));
+
+    // Row 8: System resources (from node_exporter if configured) - infrastructure last
+    if app.state.system_memory_total_bytes > 0 {
+        let mem_used = format_bytes(app.state.system_memory_used_bytes);
+        let mem_total = format_bytes(app.state.system_memory_total_bytes);
+        let disk_used = format_bytes(app.state.system_disk_used_bytes);
+        let disk_total = format_bytes(app.state.system_disk_total_bytes);
+
+        network_text.push(Line::from(vec![
+            Span::styled("System:       ", Style::default().fg(theme.muted())),
+            Span::styled("Mem ", Style::default().fg(theme.muted())),
+            Span::styled(format!("{}/{}  ", mem_used, mem_total), Style::default().fg(theme.text())),
+            Span::styled("Disk ", Style::default().fg(theme.muted())),
+            Span::styled(format!("{}/{}  ", disk_used, disk_total), Style::default().fg(theme.text())),
+            Span::styled("Load ", Style::default().fg(theme.muted())),
+            Span::styled(format!("{:.2}", app.state.system_load1), Style::default().fg(theme.text())),
+        ]));
+    }
 
     let network_widget = Paragraph::new(network_text)
         .block(Block::default()
