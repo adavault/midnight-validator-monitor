@@ -95,13 +95,30 @@ Implemented based on Discord channel analysis of validator pain points:
 - [ ] **Alert integration with sync**: Wire AlertManager into sync command for real-time alerting
 - [ ] **Add alerts section to config example**: Update `mvm config example` output
 
-## Build Pipeline (In Progress)
+## Build Pipeline
 
-Provisioning 2 VMs at secondary site for build pipeline:
-- [ ] Provision VMs (same spec as vdumdn57/vdumds58)
-- [ ] Install Rust toolchain and build dependencies
-- [ ] Configure SSH access from vdumdn57
-- [ ] Set up CI/CD workflow (GitHub Actions runners or direct SSH builds)
+Build VM provisioned at secondary site (vdumdn90):
+- [x] Provision VM (vdumdn90: 32GB RAM, 4 CPUs, Ubuntu)
+- [x] Install Rust toolchain (1.93.0) and build dependencies
+- [x] Configure SSH access from vdumdn57
+- [x] Create remote build script (`scripts/build-remote.sh`)
+
+**Usage:**
+```bash
+# Build only
+./scripts/build-remote.sh
+
+# Pull latest, build, and deploy
+./scripts/build-remote.sh --pull --deploy
+
+# Clean build
+./scripts/build-remote.sh --clean
+```
+
+### Future Enhancements
+- [ ] Set up GitHub Actions self-hosted runner on vdumdn90
+- [ ] Add cross-compilation for ARM64 (Mac M-series)
+- [ ] Automated release builds with version tagging
 
 ## v0.9 Release Plan
 
