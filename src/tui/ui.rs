@@ -42,15 +42,11 @@ fn sparkline_bars(values: &[u64]) -> String {
 }
 
 /// Create colored sparkline spans - each bar colored based on blocks vs seats
-/// Three-tier coloring:
-/// - Green (success): produced all blocks (blocks >= seats, seats > 0)
-/// - Muted: not selected that epoch (seats == 0)
-/// - Red (error): missed blocks (blocks < seats)
+/// Two-tier coloring: normal (purple) for everything, red only for missed blocks
 fn sparkline_colored_spans<'a>(
     blocks: &[u64],
     seats: &[u64],
-    success_color: Color,
-    muted_color: Color,
+    normal_color: Color,
     error_color: Color,
 ) -> Vec<Span<'a>> {
     const BARS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
@@ -74,13 +70,11 @@ fn sparkline_colored_spans<'a>(
                 BARS[idx.min(7)]
             };
 
-            // Three-tier color coding
-            let color = if seat_count == 0 {
-                muted_color // Not selected - nothing to do
-            } else if block_count >= seat_count {
-                success_color // Produced all expected blocks
+            // Red only for missed blocks, purple for everything else
+            let color = if seat_count > 0 && block_count < seat_count {
+                error_color // Missed blocks - highlight problem
             } else {
-                error_color // Missed blocks
+                normal_color // Normal - not selected or produced all
             };
 
             Span::styled(bar_char.to_string(), Style::default().fg(color))
@@ -684,9 +678,8 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
                 sparkline_spans.extend(sparkline_colored_spans(
                     &app.state.our_blocks_sparkline,
                     &app.state.our_seats_sparkline,
-                    theme.success(),  // Green - produced all blocks
-                    theme.primary(),  // Purple - not selected (matches progress bars)
-                    theme.error(),    // Red - missed blocks
+                    theme.primary(),  // Purple - normal
+                    theme.error(),    // Red - missed blocks only
                 ));
                 sparkline_spans.push(Span::styled(
                     format!("  ({} blocks / {} seats)", sparkline_blocks, sparkline_seats),
