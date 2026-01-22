@@ -430,6 +430,72 @@ pub fn get_block_counts_by_epoch(
     Ok(buckets)
 }
 
+/// Get seat counts per epoch for specified validators (for sparkline)
+/// Returns a vector of seat counts, one per epoch, oldest first
+pub fn get_seats_by_epoch(
+    conn: &Connection,
+    sidechain_keys: &[String],
+    current_epoch: u64,
+    num_epochs: usize,
+) -> Result<Vec<u64>> {
+    if sidechain_keys.is_empty() || num_epochs == 0 {
+        return Ok(vec![0; num_epochs]);
+    }
+
+    // Exclude current epoch (incomplete) - show num_epochs of *completed* epochs
+    let end_epoch = current_epoch.saturating_sub(1);
+    let start_epoch = end_epoch.saturating_sub(num_epochs as u64 - 1);
+
+    // Build IN clause for multiple sidechain keys
+    let placeholders: Vec<String> = (0..sidechain_keys.len())
+        .map(|i| format!("?{}", i + 3))
+        .collect();
+    let in_clause = placeholders.join(", ");
+
+    // Query seats grouped by sidechain_epoch from validator_epochs table
+    let sql = format!(
+        "SELECT sidechain_epoch, COALESCE(SUM(committee_seats), 0) as seats
+         FROM validator_epochs
+         WHERE sidechain_key IN ({})
+           AND sidechain_epoch >= ?1
+           AND sidechain_epoch <= ?2
+         GROUP BY sidechain_epoch
+         ORDER BY sidechain_epoch",
+        in_clause
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+
+    // Build params: start_epoch, end_epoch, then all sidechain keys
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    params.push(Box::new(start_epoch as i64));
+    params.push(Box::new(end_epoch as i64));
+    for key in sidechain_keys {
+        params.push(Box::new(key.clone()));
+    }
+
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+    let rows = stmt.query_map(param_refs.as_slice(), |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+    })?;
+
+    // Initialize all epochs to 0
+    let mut buckets = vec![0u64; num_epochs];
+
+    // Fill in counts from query results
+    for row in rows {
+        let (epoch, seats) = row?;
+        // Map epoch number to bucket index (0 = oldest = start_epoch)
+        let idx = (epoch as u64).saturating_sub(start_epoch) as usize;
+        if idx < num_epochs {
+            buckets[idx] = seats as u64;
+        }
+    }
+
+    Ok(buckets)
+}
+
 /// Store a committee snapshot for an epoch
 ///
 /// This stores the complete committee (all AURA keys in order) for a specific epoch.
@@ -708,7 +774,9 @@ pub fn get_total_seats_for_epochs(
         return Ok(0);
     }
 
-    let start_epoch = current_epoch.saturating_sub(num_epochs as u64 - 1);
+    // Exclude current epoch (incomplete) - show num_epochs of *completed* epochs
+    let end_epoch = current_epoch.saturating_sub(1);
+    let start_epoch = end_epoch.saturating_sub(num_epochs as u64 - 1);
 
     // Build IN clause for multiple sidechain keys
     let placeholders: Vec<String> = (0..sidechain_keys.len())
@@ -725,10 +793,10 @@ pub fn get_total_seats_for_epochs(
 
     let mut stmt = conn.prepare(&query)?;
 
-    // Build params: start_epoch, current_epoch, then all sidechain_keys
+    // Build params: start_epoch, end_epoch, then all sidechain_keys
     let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![
         Box::new(start_epoch as i64),
-        Box::new(current_epoch as i64),
+        Box::new(end_epoch as i64),
     ];
     for key in sidechain_keys {
         params.push(Box::new(key.clone()));

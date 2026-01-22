@@ -200,6 +200,8 @@ pub struct AppState {
     /// Block counts per sidechain epoch for our validators (last 24 epochs = 48h)
     /// Index 0 = oldest, index 23 = most recent (left to right in sparkline)
     pub our_blocks_sparkline: Vec<u64>,
+    /// Seat counts per sidechain epoch for our validators (for per-bar coloring)
+    pub our_seats_sparkline: Vec<u64>,
     /// Total committee seats for our validators over the sparkline period
     pub sparkline_total_seats: u64,
 
@@ -283,6 +285,7 @@ impl Default for AppState {
             validator_epoch_data: HashMap::new(),
             validator_epoch_blocks: HashMap::new(),
             our_blocks_sparkline: Vec::new(),
+            our_seats_sparkline: Vec::new(),
             sparkline_total_seats: 0,
             last_error: None,
             update_duration: Duration::from_secs(0),
@@ -873,6 +876,17 @@ impl App {
                 }
             }
 
+            // Fetch per-epoch seats for sparkline coloring
+            match db.get_seats_by_epoch(&author_keys, self.state.sidechain_epoch, num_epochs) {
+                Ok(seats) => {
+                    self.state.our_seats_sparkline = seats;
+                }
+                Err(e) => {
+                    tracing::debug!("Failed to fetch per-epoch seats: {}", e);
+                    self.state.our_seats_sparkline = vec![0; num_epochs];
+                }
+            }
+
             // Fetch total seats for the same epochs
             match db.get_total_seats_for_epochs(&author_keys, self.state.sidechain_epoch, num_epochs) {
                 Ok(seats) => {
@@ -885,6 +899,7 @@ impl App {
             }
         } else {
             self.state.our_blocks_sparkline = vec![0; num_epochs];
+            self.state.our_seats_sparkline = vec![0; num_epochs];
             self.state.sparkline_total_seats = 0;
         }
 

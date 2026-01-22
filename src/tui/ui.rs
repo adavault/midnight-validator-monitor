@@ -5,7 +5,7 @@ use crate::tui::layout::ResponsiveLayout;
 use crate::tui::{App, ScreenSize, ViewMode};
 use ratatui::{
     layout::{Alignment, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, TableState},
     Frame,
@@ -13,6 +13,7 @@ use ratatui::{
 
 /// Convert a slice of values to Unicode sparkline bars
 /// Uses block characters: ▁▂▃▄▅▆▇█ (8 levels)
+#[allow(dead_code)]
 fn sparkline_bars(values: &[u64]) -> String {
     const BARS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
@@ -36,6 +37,47 @@ fn sparkline_bars(values: &[u64]) -> String {
                 ((v as f64 / max as f64) * 7.0).round() as usize
             };
             BARS[idx.min(7)]
+        })
+        .collect()
+}
+
+/// Create colored sparkline spans - each bar colored based on blocks vs seats
+/// Normal color for blocks >= seats, error color for missed blocks
+fn sparkline_colored_spans<'a>(
+    blocks: &[u64],
+    seats: &[u64],
+    normal_color: Color,
+    error_color: Color,
+) -> Vec<Span<'a>> {
+    const BARS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+
+    if blocks.is_empty() {
+        return vec![];
+    }
+
+    let max = *blocks.iter().max().unwrap_or(&1);
+
+    blocks
+        .iter()
+        .zip(seats.iter().chain(std::iter::repeat(&0u64)))
+        .map(|(&block_count, &seat_count)| {
+            let bar_char = if max == 0 {
+                BARS[0]
+            } else if block_count == 0 {
+                BARS[0]
+            } else {
+                let idx = ((block_count as f64 / max as f64) * 7.0).round() as usize;
+                BARS[idx.min(7)]
+            };
+
+            // Color based on whether we produced all expected blocks
+            let color = if seat_count == 0 || block_count >= seat_count {
+                normal_color // No seats or met/exceeded expectations
+            } else {
+                error_color // Missed blocks
+            };
+
+            Span::styled(bar_char.to_string(), Style::default().fg(color))
         })
         .collect()
 }
@@ -628,14 +670,23 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
                 Span::styled(performance_indicator, Style::default().fg(perf_color)),
             ]),
             // Row 4: Sparkline (24 epoch trend, spans both columns)
-            Line::from(vec![
-                Span::styled("24 Epochs:    ", Style::default().fg(theme.muted())),
-                Span::styled(sparkline_bars(&app.state.our_blocks_sparkline), Style::default().fg(sparkline_color)),
-                Span::styled(
+            // Each bar colored individually: normal for met expectations, red for missed blocks
+            {
+                let mut sparkline_spans = vec![
+                    Span::styled("24 Epochs:    ", Style::default().fg(theme.muted())),
+                ];
+                sparkline_spans.extend(sparkline_colored_spans(
+                    &app.state.our_blocks_sparkline,
+                    &app.state.our_seats_sparkline,
+                    theme.primary(),  // Normal color
+                    theme.error(),    // Missed blocks color
+                ));
+                sparkline_spans.push(Span::styled(
                     format!("  ({} blocks / {} seats)", sparkline_blocks, sparkline_seats),
-                    Style::default().fg(sparkline_color)
-                ),
-            ]),
+                    Style::default().fg(theme.text())
+                ));
+                Line::from(sparkline_spans)
+            },
         ];
 
         // Show validators with all three public keys (14-char labels)
