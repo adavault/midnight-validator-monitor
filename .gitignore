@@ -16,3 +16,6 @@ Cargo.lock
 # OS
 .DS_Store
 Thumbs.db
+
+# Discord exports (may contain private messages)
+discord-context/*.json
