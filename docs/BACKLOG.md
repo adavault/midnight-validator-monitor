@@ -102,8 +102,9 @@ Build VM provisioned at secondary site (vdumdn90):
 - [x] Install Rust toolchain (1.93.0) and build dependencies
 - [x] Configure SSH access from vdumdn57
 - [x] Create remote build script (`scripts/build-remote.sh`)
+- [x] Deploy Midnight sync node for integration testing
 
-**Usage:**
+**Build Script Usage:**
 ```bash
 # Build only
 ./scripts/build-remote.sh
@@ -115,10 +116,18 @@ Build VM provisioned at secondary site (vdumdn90):
 ./scripts/build-remote.sh --clean
 ```
 
+**Test Node (vdumdn90):**
+- Sync-only node (no validator keys)
+- Connects to partnerchains postgres on vdumds58
+- RPC: `http://vdumdn90:9944`
+- Metrics: `http://vdumdn90:9615`
+- Compose file: `~/midnight-node/compose.yml`
+
 ### Future Enhancements
 - [ ] Set up GitHub Actions self-hosted runner on vdumdn90
 - [ ] Add cross-compilation for ARM64 (Mac M-series)
 - [ ] Automated release builds with version tagging
+- [ ] Integration test suite using test node RPC
 
 ## v0.9 Release Plan
 
