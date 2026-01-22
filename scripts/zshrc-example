@@ -1,0 +1,135 @@
+# ~/.zshrc - Ubuntu-style macOS configuration
+
+# ============================================
+# PATH Configuration
+# ============================================
+
+# GNU coreutils (Linux-style commands)
+export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:$PATH"
+export PATH="/opt/homebrew/opt/findutils/libexec/gnubin:$PATH"
+export PATH="/opt/homebrew/opt/gnu-sed/libexec/gnubin:$PATH"
+export PATH="/opt/homebrew/opt/gnu-tar/libexec/gnubin:$PATH"
+export PATH="/opt/homebrew/opt/grep/libexec/gnubin:$PATH"
+export PATH="/opt/homebrew/opt/gawk/libexec/gnubin:$PATH"
+
+# Local binaries
+export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.local/bin/dce:$PATH"
+
+# Homebrew
+export PATH="/opt/homebrew/bin:$PATH"
+
+# ============================================
+# Environment Variables
+# ============================================
+
+# Haskell (ghcup)
+[ -f "$HOME/.ghcup/env" ] && source "$HOME/.ghcup/env"
+
+# Discord export token (keep private!)
+export DISCORD_TOKEN='YOUR_TOKEN_HERE'
+
+# Default editor
+export EDITOR='nano'
+export VISUAL='nano'
+
+# Colored man pages
+export LESS_TERMCAP_mb=$'\e[1;32m'
+export LESS_TERMCAP_md=$'\e[1;32m'
+export LESS_TERMCAP_me=$'\e[0m'
+export LESS_TERMCAP_se=$'\e[0m'
+export LESS_TERMCAP_so=$'\e[01;33m'
+export LESS_TERMCAP_ue=$'\e[0m'
+export LESS_TERMCAP_us=$'\e[1;4;31m'
+
+# ============================================
+# Prompt (Ubuntu-style)
+# ============================================
+
+# green user@host : blue path $
+PROMPT='%F{green}%n@%m%f:%F{blue}%~%f$ '
+
+# ============================================
+# Aliases - File listing
+# ============================================
+
+alias ls='ls --color=auto'
+alias ll='ls -alF --color=auto'
+alias la='ls -A --color=auto'
+alias l='ls -CF --color=auto'
+
+# ============================================
+# Aliases - Grep & Search
+# ============================================
+
+alias grep='grep --color=auto'
+alias fgrep='fgrep --color=auto'
+alias egrep='egrep --color=auto'
+
+# ============================================
+# Aliases - Navigation
+# ============================================
+
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+
+# ============================================
+# Aliases - Safety nets
+# ============================================
+
+alias rm='rm -i'
+alias cp='cp -i'
+alias mv='mv -i'
+
+# ============================================
+# Aliases - Shortcuts
+# ============================================
+
+alias nano='/opt/homebrew/bin/nano'
+alias c='clear'
+alias h='history'
+alias j='jobs -l'
+alias df='df -h'
+alias du='du -h'
+alias free='top -l 1 -s 0 | grep PhysMem'  # macOS doesn't have free
+
+# Git shortcuts
+alias gs='git status'
+alias gp='git pull'
+alias gd='git diff'
+alias gl='git log --oneline -20'
+
+# ============================================
+# Aliases - MVM Development
+# ============================================
+
+alias mvm-server='ssh midnight@vdumdn57'
+alias mvm-logs='ssh midnight@vdumdn57 "journalctl -u mvm-sync -f"'
+
+# ============================================
+# History Configuration
+# ============================================
+
+HISTSIZE=10000
+SAVEHIST=10000
+HISTFILE=~/.zsh_history
+setopt HIST_IGNORE_DUPS
+setopt HIST_IGNORE_SPACE
+setopt SHARE_HISTORY
+
+# ============================================
+# Shell Options
+# ============================================
+
+setopt AUTO_CD              # cd by typing directory name
+setopt CORRECT              # command correction
+setopt NO_BEEP              # no beeping
+
+# ============================================
+# Completion
+# ============================================
+
+autoload -Uz compinit && compinit
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
