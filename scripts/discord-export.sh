@@ -13,25 +13,11 @@ set -e
 OUTPUT_DIR="${DISCORD_EXPORT_DIR:-$HOME/discord-exports/midnight}"
 DATE=$(date +%Y-%m-%d)
 
-# Midnight Discord Channels
-declare -A CHANNELS=(
-    ["block-producers"]="1328720589548032032"
-    ["dev-chat"]="1209887476290682910"
-    ["pool-ids"]="1328721931343499345"
-)
-
 # Check for token
 if [ -z "$DISCORD_TOKEN" ]; then
     echo "Error: DISCORD_TOKEN environment variable not set"
     echo ""
-    echo "To get your token:"
-    echo "1. Open Discord in browser (discord.com/app)"
-    echo "2. Open DevTools (Cmd+Option+I)"
-    echo "3. Go to Network tab"
-    echo "4. Click any channel, find a request"
-    echo "5. Look for 'authorization' header"
-    echo ""
-    echo "Then run: export DISCORD_TOKEN='your_token_here'"
+    echo "Run: export DISCORD_TOKEN='your_token_here'"
     exit 1
 fi
 
@@ -49,29 +35,37 @@ echo "Exporting Midnight Discord channels..."
 echo "Output: $OUTPUT_DIR"
 echo ""
 
-# Export each channel
-for channel_name in "${!CHANNELS[@]}"; do
-    channel_id="${CHANNELS[$channel_name]}"
-    output_file="$OUTPUT_DIR/${channel_name}_${DATE}.json"
+# Export function
+export_channel() {
+    local name=$1
+    local id=$2
+    local output_file="$OUTPUT_DIR/${name}_${DATE}.json"
 
-    echo "Exporting #${channel_name} (${channel_id})..."
+    echo "Exporting #${name} (${id})..."
 
-    DiscordChatExporter.Cli export \
+    if DiscordChatExporter.Cli export \
         -t "$DISCORD_TOKEN" \
-        -c "$channel_id" \
+        -c "$id" \
         -f Json \
         -o "$output_file" \
-        --after "$(date -v-30d +%Y-%m-%d)" \
-        2>/dev/null || echo "  Warning: Failed to export #${channel_name}"
-
-    if [ -f "$output_file" ]; then
-        size=$(du -h "$output_file" | cut -f1)
-        echo "  Saved: $output_file ($size)"
+        --after "$(date -v-30d +%Y-%m-%d 2>/dev/null || date -d '30 days ago' +%Y-%m-%d)" \
+        2>/dev/null; then
+        if [ -f "$output_file" ]; then
+            size=$(du -h "$output_file" | cut -f1)
+            echo "  Saved: $output_file ($size)"
+        fi
+    else
+        echo "  Warning: Failed to export #${name}"
     fi
-done
+}
+
+# Midnight Discord Channels
+export_channel "block-producers" "1328720589548032032"
+export_channel "dev-chat" "1209887476290682910"
+export_channel "pool-ids" "1328721931343499345"
 
 echo ""
 echo "Export complete!"
 echo ""
 echo "To sync to server:"
-echo "  scp -r $OUTPUT_DIR midnight@server:~/midnight-validator-monitor/discord-context/"
+echo "  scp -r $OUTPUT_DIR/* midnight@server:~/midnight-validator-monitor/discord-context/"
