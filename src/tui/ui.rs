@@ -42,11 +42,15 @@ fn sparkline_bars(values: &[u64]) -> String {
 }
 
 /// Create colored sparkline spans - each bar colored based on blocks vs seats
-/// Normal color for blocks >= seats, error color for missed blocks
+/// Three-tier coloring:
+/// - Green (success): produced all blocks (blocks >= seats, seats > 0)
+/// - Muted: not selected that epoch (seats == 0)
+/// - Red (error): missed blocks (blocks < seats)
 fn sparkline_colored_spans<'a>(
     blocks: &[u64],
     seats: &[u64],
-    normal_color: Color,
+    success_color: Color,
+    muted_color: Color,
     error_color: Color,
 ) -> Vec<Span<'a>> {
     const BARS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
@@ -70,9 +74,11 @@ fn sparkline_colored_spans<'a>(
                 BARS[idx.min(7)]
             };
 
-            // Color based on whether we produced all expected blocks
-            let color = if seat_count == 0 || block_count >= seat_count {
-                normal_color // No seats or met/exceeded expectations
+            // Three-tier color coding
+            let color = if seat_count == 0 {
+                muted_color // Not selected - nothing to do
+            } else if block_count >= seat_count {
+                success_color // Produced all expected blocks
             } else {
                 error_color // Missed blocks
             };
@@ -678,8 +684,9 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
                 sparkline_spans.extend(sparkline_colored_spans(
                     &app.state.our_blocks_sparkline,
                     &app.state.our_seats_sparkline,
-                    theme.primary(),  // Normal color
-                    theme.error(),    // Missed blocks color
+                    theme.success(),  // Green - produced all blocks
+                    theme.muted(),    // Dim - not selected
+                    theme.error(),    // Red - missed blocks
                 ));
                 sparkline_spans.push(Span::styled(
                     format!("  ({} blocks / {} seats)", sparkline_blocks, sparkline_seats),
