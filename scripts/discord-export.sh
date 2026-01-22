@@ -48,7 +48,6 @@ export_channel() {
         -c "$id" \
         -f Json \
         -o "$output_file" \
-        --after "$(date -v-30d +%Y-%m-%d 2>/dev/null || date -d '30 days ago' +%Y-%m-%d)" \
         2>/dev/null; then
         if [ -f "$output_file" ]; then
             size=$(du -h "$output_file" | cut -f1)
