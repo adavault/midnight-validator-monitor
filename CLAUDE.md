@@ -47,7 +47,7 @@ We ship products we can stand behind. No cutting corners. Security is a red line
 **Escalate to CxO/CEO:**
 - New features or scope changes
 - Architectural decisions affecting future products (spom-core extraction)
-- Release timing and version bumps
+- **All releases** — CxO reviews commits before tagging
 - Anything touching security model or key handling
 - Public communications (forum posts, release announcements)
 
