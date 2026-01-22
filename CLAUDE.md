@@ -294,3 +294,23 @@ The `config` command provides:
 
 ### Metrics Parsing
 The `metrics.rs` module parses Prometheus-format metrics from the node's `/metrics` endpoint. This is used for additional monitoring data like block production counts.
+
+## Developer Environment
+
+### Primary Development Machine
+- **MacBook Pro M4** (Apple Silicon arm64)
+- macOS with Homebrew at `/opt/homebrew`
+- Rust via rustup/ghcup
+
+### Server Environment
+- **vdumdn57** - Ubuntu Linux x86_64 validator server
+- Midnight node running with `--rpc-methods=unsafe`
+- MVM installed at `/usr/local/bin/mvm`
+
+### Discord Context
+Export scripts in `scripts/discord-export.sh` pull from Midnight Discord channels:
+- `#block-producers` (1328720589548032032)
+- `#dev-chat` (1209887476290682910)
+- `#pool-ids` (1328721931343499345)
+
+Exports stored in `discord-context/` (JSON files gitignored for privacy).
