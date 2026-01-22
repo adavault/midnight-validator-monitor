@@ -808,10 +808,15 @@ fn render_validators(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
             .unwrap_or_else(|| "  -".to_string());
 
         // Standard validator format (same for Medium and Large)
+        let label_suffix = v.label.as_ref()
+            .map(|l| format!(" ({})", l))
+            .unwrap_or_default();
+
         let mut spans = vec![
             Span::styled(ours, Style::default().fg(theme.ours())),
             Span::raw(" "),
             Span::styled(key_display, Style::default().fg(theme.secondary())),
+            Span::styled(label_suffix, Style::default().fg(theme.text())),
             Span::raw("  "),
         ];
 
