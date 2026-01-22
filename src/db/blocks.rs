@@ -376,7 +376,9 @@ pub fn get_block_counts_by_epoch(
         return Ok(vec![0; num_epochs]);
     }
 
-    let start_epoch = current_epoch.saturating_sub(num_epochs as u64 - 1);
+    // Exclude current epoch (incomplete) - show num_epochs of *completed* epochs
+    let end_epoch = current_epoch.saturating_sub(1);
+    let start_epoch = end_epoch.saturating_sub(num_epochs as u64 - 1);
 
     // Build IN clause for multiple author keys
     let placeholders: Vec<String> = (0..author_keys.len())
@@ -398,10 +400,10 @@ pub fn get_block_counts_by_epoch(
 
     let mut stmt = conn.prepare(&sql)?;
 
-    // Build params: start_epoch, current_epoch, then all author keys
+    // Build params: start_epoch, end_epoch, then all author keys
     let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
     params.push(Box::new(start_epoch as i64));
-    params.push(Box::new(current_epoch as i64));
+    params.push(Box::new(end_epoch as i64));
     for key in author_keys {
         params.push(Box::new(key.clone()));
     }
