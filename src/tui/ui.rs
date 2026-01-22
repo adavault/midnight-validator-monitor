@@ -685,7 +685,7 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
                     &app.state.our_blocks_sparkline,
                     &app.state.our_seats_sparkline,
                     theme.success(),  // Green - produced all blocks
-                    theme.muted(),    // Dim - not selected
+                    theme.primary(),  // Purple - not selected (matches progress bars)
                     theme.error(),    // Red - missed blocks
                 ));
                 sparkline_spans.push(Span::styled(
