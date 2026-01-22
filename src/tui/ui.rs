@@ -808,19 +808,20 @@ fn render_validators(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
             .unwrap_or_else(|| "  -".to_string());
 
         // Standard validator format (same for Medium and Large)
-        // Fixed-width label column (12 chars) for alignment
+        // Fixed-width label column (5 chars for pool ticker)
         let label_display = v.label.as_ref()
             .map(|l| {
-                let truncated = if l.len() > 10 { &l[..10] } else { l.as_str() };
-                format!(" ({:<10})", truncated)
+                let truncated = if l.len() > 5 { &l[..5] } else { l.as_str() };
+                format!("{:<5}", truncated)
             })
-            .unwrap_or_else(|| "             ".to_string()); // 13 spaces to match " (label     )"
+            .unwrap_or_else(|| "     ".to_string()); // 5 spaces for unlabeled
 
         let mut spans = vec![
             Span::styled(ours, Style::default().fg(theme.ours())),
             Span::raw(" "),
             Span::styled(key_display, Style::default().fg(theme.secondary())),
-            Span::styled(label_display, Style::default().fg(theme.text())),
+            Span::raw(" "),
+            Span::styled(label_display, Style::default().fg(theme.warning())),
             Span::raw(" "),
         ];
 
