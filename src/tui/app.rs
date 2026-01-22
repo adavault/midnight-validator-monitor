@@ -834,29 +834,28 @@ impl App {
             }
         }
 
-        // Fetch sparkline data for our validators (block production over last 24 sidechain epochs = 48h)
-        let num_buckets = 24; // 24 epochs = 48h on preview, 10 days on mainnet
+        // Fetch sparkline data for our validators (block production over last 24 sidechain epochs)
+        // Using epoch-based counting ensures alignment between blocks and seats
+        let num_epochs = 24;
         if !self.state.our_validators.is_empty() {
             let author_keys: Vec<String> = self.state.our_validators
                 .iter()
                 .map(|v| v.sidechain_key.clone())
                 .collect();
 
-            // Use sidechain epoch duration for buckets (2h for preview, 10h for mainnet)
-            let bucket_secs = (self.chain_timing.sidechain_epoch_ms / 1000) as i64;
-
-            match db.get_block_counts_bucketed(&author_keys, bucket_secs, num_buckets) {
+            // Count blocks by sidechain epoch (aligned with seat counting)
+            match db.get_block_counts_by_epoch(&author_keys, self.state.sidechain_epoch, num_epochs) {
                 Ok(counts) => {
                     self.state.our_blocks_sparkline = counts;
                 }
                 Err(e) => {
                     tracing::debug!("Failed to fetch sparkline data: {}", e);
-                    self.state.our_blocks_sparkline = vec![0; num_buckets];
+                    self.state.our_blocks_sparkline = vec![0; num_epochs];
                 }
             }
 
-            // Fetch total seats for the sparkline period
-            match db.get_total_seats_for_epochs(&author_keys, self.state.sidechain_epoch, num_buckets) {
+            // Fetch total seats for the same epochs
+            match db.get_total_seats_for_epochs(&author_keys, self.state.sidechain_epoch, num_epochs) {
                 Ok(seats) => {
                     self.state.sparkline_total_seats = seats;
                 }
@@ -866,7 +865,7 @@ impl App {
                 }
             }
         } else {
-            self.state.our_blocks_sparkline = vec![0; num_buckets];
+            self.state.our_blocks_sparkline = vec![0; num_epochs];
             self.state.sparkline_total_seats = 0;
         }
 

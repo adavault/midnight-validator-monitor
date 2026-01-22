@@ -354,6 +354,80 @@ pub fn get_block_counts_bucketed(
     Ok(buckets)
 }
 
+/// Get block counts for validators bucketed by sidechain epoch
+///
+/// Returns a vector of block counts, one per epoch, from oldest to newest.
+/// This aligns with how seats are counted (by epoch) for accurate comparison.
+///
+/// # Arguments
+/// * `author_keys` - List of author keys (sidechain keys) to count
+/// * `current_epoch` - Current sidechain epoch
+/// * `num_epochs` - Number of epochs to return (going backwards from current)
+///
+/// # Returns
+/// Vector of counts from oldest epoch to newest (left to right for sparkline)
+pub fn get_block_counts_by_epoch(
+    conn: &Connection,
+    author_keys: &[String],
+    current_epoch: u64,
+    num_epochs: usize,
+) -> Result<Vec<u64>> {
+    if author_keys.is_empty() || num_epochs == 0 {
+        return Ok(vec![0; num_epochs]);
+    }
+
+    let start_epoch = current_epoch.saturating_sub(num_epochs as u64 - 1);
+
+    // Build IN clause for multiple author keys
+    let placeholders: Vec<String> = (0..author_keys.len())
+        .map(|i| format!("?{}", i + 3))
+        .collect();
+    let in_clause = placeholders.join(", ");
+
+    // Query blocks grouped by sidechain_epoch
+    let sql = format!(
+        "SELECT sidechain_epoch, COUNT(*) as count
+         FROM blocks
+         WHERE author_key IN ({})
+           AND sidechain_epoch >= ?1
+           AND sidechain_epoch <= ?2
+         GROUP BY sidechain_epoch
+         ORDER BY sidechain_epoch",
+        in_clause
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+
+    // Build params: start_epoch, current_epoch, then all author keys
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    params.push(Box::new(start_epoch as i64));
+    params.push(Box::new(current_epoch as i64));
+    for key in author_keys {
+        params.push(Box::new(key.clone()));
+    }
+
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+    let rows = stmt.query_map(param_refs.as_slice(), |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+    })?;
+
+    // Initialize all epochs to 0
+    let mut buckets = vec![0u64; num_epochs];
+
+    // Fill in counts from query results
+    for row in rows {
+        let (epoch, count) = row?;
+        // Map epoch number to bucket index (0 = oldest = start_epoch)
+        let idx = (epoch as u64).saturating_sub(start_epoch) as usize;
+        if idx < num_epochs {
+            buckets[idx] = count as u64;
+        }
+    }
+
+    Ok(buckets)
+}
+
 /// Store a committee snapshot for an epoch
 ///
 /// This stores the complete committee (all AURA keys in order) for a specific epoch.

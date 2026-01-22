@@ -627,9 +627,9 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
                 Span::styled(format!("~{:.1} ", expected_blocks), Style::default().fg(theme.text())),
                 Span::styled(performance_indicator, Style::default().fg(perf_color)),
             ]),
-            // Row 4: Sparkline (48h trend, spans both columns)
+            // Row 4: Sparkline (24 epoch trend, spans both columns)
             Line::from(vec![
-                Span::styled("Last 48h:     ", Style::default().fg(theme.muted())),
+                Span::styled("24 Epochs:    ", Style::default().fg(theme.muted())),
                 Span::styled(sparkline_bars(&app.state.our_blocks_sparkline), Style::default().fg(sparkline_color)),
                 Span::styled(
                     format!("  ({} blocks / {} seats)", sparkline_blocks, sparkline_seats),

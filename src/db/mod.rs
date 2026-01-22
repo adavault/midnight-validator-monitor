@@ -177,6 +177,15 @@ impl Database {
         blocks::get_total_seats_for_epochs(&self.conn, sidechain_keys, current_epoch, num_epochs)
     }
 
+    pub fn get_block_counts_by_epoch(
+        &self,
+        author_keys: &[String],
+        current_epoch: u64,
+        num_epochs: usize,
+    ) -> Result<Vec<u64>> {
+        blocks::get_block_counts_by_epoch(&self.conn, author_keys, current_epoch, num_epochs)
+    }
+
     pub fn get_validator_epoch_history(
         &self,
         sidechain_key: &str,
