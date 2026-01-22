@@ -21,7 +21,7 @@ See `docs/EXTERNAL_IP_RESEARCH.md` for detailed research findings.
 
 ## Feature Ideas
 
-- [ ] **Alert thresholds**: Configurable alerts when block production falls below expected rate
+- [x] **Alert thresholds**: Configurable alerts when block production falls below expected rate *(v0.9.3 - AlertManager infrastructure added, config section ready)*
 - [ ] **Historical performance graphs**: Show block production over time
 - [ ] **Multiple node monitoring**: Support monitoring multiple validator nodes from single TUI
 - [ ] **Export functionality**: Export performance data to CSV/JSON
@@ -60,14 +60,48 @@ Benefits over current RPC approach:
 - Performance metrics for network health assessment
 
 ### System Resource Monitoring (Requires node_exporter)
-- [ ] CPU, memory, disk usage display
-- [ ] Integration with Prometheus node_exporter
-- [ ] Alert thresholds for resource usage
+- [x] CPU, memory, disk usage display *(implemented)*
+- [x] Integration with Prometheus node_exporter *(implemented)*
+- [x] Alert thresholds for resource usage *(memory warning at 85%+, trend indicator)*
+- [ ] CPU trend tracking (similar to memory)
 
 ### Other Candidates
 - [ ] Notification system for missed blocks
 - [ ] Web UI alternative to TUI
 - [ ] REST API for external integrations
+
+## v0.9.3 Completed (Discord Analysis Features)
+
+Implemented based on Discord channel analysis of validator pain points:
+
+### Phase 1 - High Impact (DONE)
+- [x] **Registration health check enhancement**: Committee status, seats, selection probability, expected blocks, stake display
+- [x] **Epoch countdown timers**: Shows time until next sidechain/mainchain epoch, highlights at 90%+
+
+### Phase 2 - Block Production (DONE)
+- [x] **Alert system infrastructure**: `AlertManager` with webhook support, `AlertConfig` in config.rs
+- [x] **Committee selection stats**: Already existed, verified working
+
+### Phase 3 - Robustness (DONE)
+- [x] **Memory trend tracking**: Rising/stable/falling indicator with linear regression
+- [x] **Memory warnings**: Warning at 85%+, critical coloring at 90%+
+- [x] **Peer health visualization**: Health status header, diversity warnings, synced peer count
+
+### Phase 4 - Documentation (DONE)
+- [x] **Troubleshooting guide**: `mvm guide` command with topics: not-producing, registration, peers, memory, keys, setup
+- [x] **Status explanation mode**: `mvm status --explain` flag for educational metric explanations
+
+### Pending Integration
+- [ ] **Alert integration with sync**: Wire AlertManager into sync command for real-time alerting
+- [ ] **Add alerts section to config example**: Update `mvm config example` output
+
+## Build Pipeline (In Progress)
+
+Provisioning 2 VMs at secondary site for build pipeline:
+- [ ] Provision VMs (same spec as vdumdn57/vdumds58)
+- [ ] Install Rust toolchain and build dependencies
+- [ ] Configure SSH access from vdumdn57
+- [ ] Set up CI/CD workflow (GitHub Actions runners or direct SSH builds)
 
 ## v0.9 Release Plan
 
