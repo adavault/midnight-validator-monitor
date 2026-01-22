@@ -62,22 +62,27 @@ enum Commands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Initialize logging
-    let log_level = if cli.verbose {
-        Level::DEBUG
-    } else {
-        Level::INFO
-    };
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(log_level)
-        .finish();
-    tracing::subscriber::set_global_default(subscriber)?;
+    // Check if running TUI - skip console logging for TUI mode
+    let is_tui = matches!(cli.command, Some(Commands::View(_)));
 
-    info!(
-        "Starting Midnight Validator Monitor v{} (schema v{})",
-        env!("CARGO_PKG_VERSION"),
-        crate::db::CURRENT_SCHEMA_VERSION
-    );
+    // Initialize logging (skip for TUI which manages its own display)
+    if !is_tui {
+        let log_level = if cli.verbose {
+            Level::DEBUG
+        } else {
+            Level::INFO
+        };
+        let subscriber = FmtSubscriber::builder()
+            .with_max_level(log_level)
+            .finish();
+        tracing::subscriber::set_global_default(subscriber)?;
+
+        info!(
+            "Starting Midnight Validator Monitor v{} (schema v{})",
+            env!("CARGO_PKG_VERSION"),
+            crate::db::CURRENT_SCHEMA_VERSION
+        );
+    }
 
     // Handle commands - default to status if no command given
     match cli.command {
