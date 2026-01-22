@@ -1,0 +1,32 @@
+# Known Validators - Optional labels for validator keys
+#
+# This file allows you to add friendly labels to validators you recognize.
+# Copy this to `known_validators.toml` and add your entries.
+#
+# The actual known_validators.toml is gitignored for privacy - validators
+# may not want their identities publicly associated with their keys.
+#
+# Usage:
+#   cp known_validators.toml.example known_validators.toml
+#   # Edit and add validators you know
+#
+# MVM will automatically load this file from:
+#   1. ./known_validators.toml (current directory)
+#   2. ~/.config/mvm/known_validators.toml
+#   3. /opt/midnight/mvm/config/known_validators.toml
+
+# Format: Add validators with their sidechain public key and a label
+
+[[validators]]
+# Example: Your own validator
+sidechain_key = "0x037764d2d83c269030fef6df5aeb4419c48762ada2cf20b0e4e6ede596809f4700"
+label = "My Validator"
+
+# [[validators]]
+# # Example: A pool you recognize from Discord #pool-ids
+# sidechain_key = "0x03c342001a6a0dd02007659dfea5e5083dec81dcc03f56aa56cdecc63e831507ee"
+# label = "ENVY"
+
+# [[validators]]
+# sidechain_key = "0x03208a0061eeea77720a786c59e387f455395b776c759540aa422b638f28bd7aae"
+# label = "LACE"

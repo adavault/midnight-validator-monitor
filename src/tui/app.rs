@@ -2,7 +2,7 @@
 
 use crate::db::{BlockRecord, Database, ValidatorRecord, ValidatorEpochRecord, ValidatorEpochHistoryRecord, CommitteeSelectionStats};
 use crate::metrics::{MetricsClient, NodeExporterClient};
-use crate::midnight::{ChainTiming, ValidatorSet};
+use crate::midnight::{ChainTiming, KnownValidators, ValidatorSet};
 use crate::rpc::{RpcClient, SidechainStatus};
 use crate::tui::Theme;
 use anyhow::Result;
@@ -96,6 +96,8 @@ pub struct App {
     pub expected_ip: Option<String>,
     /// Chain timing parameters (network-specific)
     pub chain_timing: ChainTiming,
+    /// Known validators registry (optional labels)
+    pub known_validators: KnownValidators,
 }
 
 /// Epoch progress information
@@ -327,6 +329,7 @@ impl App {
             theme: Theme::default(),
             expected_ip: None,
             chain_timing: ChainTiming::default(),
+            known_validators: KnownValidators::load(),
         }
     }
 
@@ -770,6 +773,22 @@ impl App {
         // Get validators
         self.state.validators = db.get_all_validators()?;
         self.state.our_validators = db.get_our_validators()?;
+
+        // Apply known validator labels (if not already set)
+        for v in &mut self.state.validators {
+            if v.label.is_none() {
+                if let Some(label) = self.known_validators.get_label(&v.sidechain_key) {
+                    v.label = Some(label.to_string());
+                }
+            }
+        }
+        for v in &mut self.state.our_validators {
+            if v.label.is_none() {
+                if let Some(label) = self.known_validators.get_label(&v.sidechain_key) {
+                    v.label = Some(label.to_string());
+                }
+            }
+        }
 
         // Get validator epoch data for current sidechain epoch (seats info)
         if self.state.sidechain_epoch > 0 {
