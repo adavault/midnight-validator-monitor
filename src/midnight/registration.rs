@@ -3,7 +3,8 @@ use anyhow::Result;
 use serde::Deserialize;
 use std::collections::HashMap;
 
-use super::keystore::{normalize_hex, KeyStatus, ValidatorKeys};
+use super::keystore::{normalize_hex, CommitteeStatus, KeyStatus, ValidatorKeys};
+use super::ValidatorSet;
 
 /// Registration status for a validator
 #[derive(Debug, Clone, PartialEq)]
@@ -128,5 +129,91 @@ pub async fn get_key_status(
         .await
         .ok();
 
+    // Check committee status
+    status.committee_status = get_committee_status(rpc, keys, current_epoch).await.ok();
+
     status
+}
+
+/// Get committee status for a validator
+async fn get_committee_status(
+    rpc: &RpcClient,
+    keys: &ValidatorKeys,
+    current_epoch: u64,
+) -> Result<CommitteeStatus> {
+    // Fetch the current committee
+    let committee = ValidatorSet::fetch_committee_at_block(rpc, None).await?;
+    let committee_size = committee.len() as u32;
+
+    // Normalize the aura key for comparison
+    let aura_key_normalized = normalize_hex(&keys.aura_pub_key);
+
+    // Count seats in the committee
+    let seat_count = committee.iter()
+        .filter(|k| normalize_hex(k) == aura_key_normalized)
+        .count() as u32;
+
+    let in_committee = seat_count > 0;
+
+    // Calculate selection probability
+    let selection_probability = if committee_size > 0 {
+        seat_count as f64 / committee_size as f64
+    } else {
+        0.0
+    };
+
+    // Fetch stake from AriadneParameters
+    let stake_lovelace = get_validator_stake(rpc, &keys.sidechain_pub_key, current_epoch).await.ok().flatten();
+
+    // Expected blocks per sidechain epoch (typically 1200 blocks on preview)
+    // blocks_per_epoch * (seats / committee_size)
+    let blocks_per_epoch = 1200.0; // preview network
+    let expected_blocks_per_epoch = selection_probability * blocks_per_epoch;
+
+    Ok(CommitteeStatus {
+        in_committee,
+        seat_count,
+        committee_size,
+        stake_lovelace,
+        selection_probability,
+        expected_blocks_per_epoch,
+    })
+}
+
+/// Get validator stake from AriadneParameters
+async fn get_validator_stake(
+    rpc: &RpcClient,
+    sidechain_pubkey: &str,
+    epoch: u64,
+) -> Result<Option<u64>> {
+    #[derive(Debug, Deserialize)]
+    struct AriadneParams {
+        #[serde(rename = "candidateRegistrations")]
+        candidate_registrations: HashMap<String, Vec<CandidateReg>>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct CandidateReg {
+        #[serde(rename = "sidechainPubKey")]
+        sidechain_pub_key: String,
+        #[serde(default)]
+        #[serde(alias = "stake", alias = "stakeAmount", alias = "stakeDelegation")]
+        stake_delegation: Option<u64>,
+    }
+
+    let params: AriadneParams = rpc
+        .call("sidechain_getAriadneParameters", vec![epoch])
+        .await?;
+
+    let normalized_key = normalize_hex(sidechain_pubkey);
+
+    for registrations in params.candidate_registrations.values() {
+        for reg in registrations {
+            if normalize_hex(&reg.sidechain_pub_key) == normalized_key {
+                return Ok(reg.stake_delegation);
+            }
+        }
+    }
+
+    Ok(None)
 }

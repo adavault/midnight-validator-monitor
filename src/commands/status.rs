@@ -36,6 +36,10 @@ pub struct StatusArgs {
     /// Run once and exit (don't loop)
     #[arg(long)]
     pub once: bool,
+
+    /// Show explanations for each metric (educational mode)
+    #[arg(short = 'E', long)]
+    pub explain: bool,
 }
 
 /// Combined validator status for display
@@ -75,14 +79,16 @@ pub struct StatusMonitor {
     rpc: RpcClient,
     metrics: MetricsClient,
     keys: Option<ValidatorKeys>,
+    explain: bool,
 }
 
 impl StatusMonitor {
-    pub fn new(rpc_url: &str, metrics_url: &str, keys: Option<ValidatorKeys>, timeout_ms: u64) -> Self {
+    pub fn new(rpc_url: &str, metrics_url: &str, keys: Option<ValidatorKeys>, timeout_ms: u64, explain: bool) -> Self {
         Self {
             rpc: RpcClient::with_timeout(rpc_url, timeout_ms),
             metrics: MetricsClient::new(metrics_url),
             keys,
+            explain,
         }
     }
 
@@ -170,19 +176,40 @@ impl StatusMonitor {
             "Health: {} | Syncing: {} | Peers: {}",
             health_icon, sync_icon, status.peer_count
         );
+        if self.explain {
+            info!("  → Health: Combined indicator - node is connected and not syncing");
+            info!("  → Syncing: ✓ means synced to chain tip, ⟳ means still catching up");
+            info!("  → Peers: Number of connected nodes. Want 10+, minimum 3-5 to function");
+        }
+
         info!(
             "Block: {} | Finalized: {} | Sync: {:.2}%",
             status.current_block,
             status.finalized_block,
             status.sync_percentage()
         );
+        if self.explain {
+            info!("  → Block: Current best block (may not be finalized yet)");
+            info!("  → Finalized: Highest block confirmed by GRANDPA consensus");
+            info!("  → Sync: Percentage of known chain downloaded (100% = fully synced)");
+        }
+
         info!("Blocks produced: {}", status.blocks_produced);
+        if self.explain {
+            info!("  → Blocks produced: Total blocks authored by your node since startup");
+            info!("    This resets when node restarts. For historical data, use 'mvm view'");
+        }
 
         if let Some(ref sc) = status.sidechain_status {
             info!(
                 "Sidechain: epoch {} slot {} | Mainchain: epoch {} slot {}",
                 sc.sidechain.epoch, sc.sidechain.slot, sc.mainchain.epoch, sc.mainchain.slot
             );
+            if self.explain {
+                info!("  → Sidechain epoch: 2-hour cycle (preview) that determines committee");
+                info!("  → Mainchain epoch: 24-hour cycle (preview) used for registration");
+                info!("  → Slot: 6-second block production window within each epoch");
+            }
         }
 
         if let Some(ref ks) = status.key_status {
@@ -192,15 +219,25 @@ impl StatusMonitor {
         // Warnings
         if status.health.is_syncing {
             warn!("Node is still syncing");
+            if self.explain {
+                info!("  → Your node must finish syncing before it can produce blocks");
+            }
         }
         if status.peer_count == 0 {
             error!("No peers connected!");
+            if self.explain {
+                info!("  → Check internet connectivity and firewall (port 30333)");
+            }
         }
         if status.current_block.saturating_sub(status.finalized_block) > 100 {
             warn!(
                 "Large finality gap: {} blocks behind",
                 status.current_block - status.finalized_block
             );
+            if self.explain {
+                info!("  → Normally finality is within 10-20 blocks. Large gap may indicate");
+                info!("    network issues or your node is on a minority fork");
+            }
         }
     }
 
@@ -213,6 +250,12 @@ impl StatusMonitor {
             "Keys: sidechain {} | aura {} | grandpa {}",
             sc_icon, aura_icon, gran_icon
         );
+        if self.explain {
+            info!("  → Sidechain (crch): Your validator's identity key");
+            info!("  → Aura: Block production authorization key");
+            info!("  → Grandpa: Finality voting key");
+            info!("  → ✓ = loaded in node keystore, ✗ = missing, ? = unable to verify");
+        }
 
         // Show note if keys can't be verified
         if ks.sidechain_loaded.is_none() && ks.aura_loaded.is_none() && ks.grandpa_loaded.is_none() {
@@ -222,29 +265,103 @@ impl StatusMonitor {
         match &ks.registration {
             Some(RegistrationStatus::Permissioned) => {
                 info!("Registration: ✓ Permissioned candidate");
+                if self.explain {
+                    info!("  → Permissioned = IOG/Midnight team validator, no stake required");
+                }
             }
             Some(RegistrationStatus::RegisteredValid) => {
                 info!("Registration: ✓ Registered (valid)");
+                if self.explain {
+                    info!("  → Your registration is active and eligible for committee selection");
+                }
             }
             Some(RegistrationStatus::RegisteredInvalid(reason)) => {
                 warn!("Registration: ⚠ Registered but INVALID: {}", reason);
+                if self.explain {
+                    info!("  → Registration exists but not valid. May be pending or have issues.");
+                    info!("  → Common causes: insufficient stake, keys mismatch, processing delay");
+                }
             }
             Some(RegistrationStatus::NotRegistered) => {
                 error!("Registration: ✗ Not registered");
+                if self.explain {
+                    info!("  → No registration found. Submit registration transaction to participate.");
+                }
             }
             None => {
                 info!("Registration: ? Unable to check");
             }
         }
 
+        // Display committee status
+        if let Some(ref committee) = ks.committee_status {
+            if committee.in_committee {
+                info!(
+                    "Committee: ✓ Elected ({} seats / {} total = {:.2}% selection)",
+                    committee.seat_count,
+                    committee.committee_size,
+                    committee.selection_probability * 100.0
+                );
+                if self.explain {
+                    info!("  → You ARE in this epoch's committee and CAN produce blocks");
+                    info!("  → Seats = how many times you appear in the rotation schedule");
+                    info!("  → More seats = more block production opportunities");
+                }
+                info!(
+                    "Expected blocks: ~{:.1} per sidechain epoch",
+                    committee.expected_blocks_per_epoch
+                );
+                if self.explain {
+                    info!("  → Based on your seat count and epoch duration (1200 blocks on preview)");
+                }
+            } else {
+                warn!(
+                    "Committee: ✗ NOT elected (committee size: {})",
+                    committee.committee_size
+                );
+                warn!("Your validator is registered but was not selected for this epoch's committee.");
+                warn!("Committee selection is stake-weighted random. Keep your node running and staked.");
+                if self.explain {
+                    info!("  → Being registered does NOT guarantee committee selection");
+                    info!("  → Selection is stake-weighted random each sidechain epoch (2h preview)");
+                    info!("  → Higher stake = higher probability, but not guaranteed");
+                    info!("  → This is NORMAL - wait for next epoch or increase stake");
+                }
+            }
+
+            // Display stake if available
+            if let Some(stake) = committee.stake_lovelace {
+                let ada = stake as f64 / 1_000_000.0;
+                if ada >= 1_000_000.0 {
+                    info!("Stake: {:.2}M tADA", ada / 1_000_000.0);
+                } else if ada >= 1_000.0 {
+                    info!("Stake: {:.2}K tADA", ada / 1_000.0);
+                } else {
+                    info!("Stake: {:.2} tADA", ada);
+                }
+                if self.explain {
+                    info!("  → Your delegated stake affects committee selection probability");
+                }
+            }
+        }
+
         if ks.sidechain_loaded == Some(false) {
             error!("Sidechain key not loaded in keystore!");
+            if self.explain {
+                info!("  → Copy your sidechain key file to the node's keystore directory");
+            }
         }
         if ks.aura_loaded == Some(false) {
             error!("Aura key not loaded in keystore!");
+            if self.explain {
+                info!("  → Without AURA key, your node cannot produce blocks");
+            }
         }
         if ks.grandpa_loaded == Some(false) {
             error!("Grandpa key not loaded in keystore!");
+            if self.explain {
+                info!("  → Without GRANDPA key, your node cannot vote on finality");
+            }
         }
     }
 }
@@ -310,7 +427,7 @@ pub async fn run(args: StatusArgs) -> Result<()> {
         }
     };
 
-    let monitor = StatusMonitor::new(&rpc_url, &metrics_url, keys, config.rpc.timeout_ms);
+    let monitor = StatusMonitor::new(&rpc_url, &metrics_url, keys, config.rpc.timeout_ms, args.explain);
 
     // Try to get version on startup
     match monitor.get_version().await {

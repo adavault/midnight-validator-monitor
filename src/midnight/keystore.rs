@@ -101,6 +101,25 @@ pub struct KeyStatus {
     pub grandpa_loaded: Option<bool>,
     /// Validator registration status
     pub registration: Option<super::RegistrationStatus>,
+    /// Committee status for this validator
+    pub committee_status: Option<CommitteeStatus>,
+}
+
+/// Committee status for a validator
+#[derive(Debug, Clone)]
+pub struct CommitteeStatus {
+    /// Whether the validator is in the current committee
+    pub in_committee: bool,
+    /// Number of seats in the committee (if in committee)
+    pub seat_count: u32,
+    /// Total committee size
+    pub committee_size: u32,
+    /// Stake amount in lovelace (if available, dynamic registrations only)
+    pub stake_lovelace: Option<u64>,
+    /// Selection probability (seats / committee_size)
+    pub selection_probability: f64,
+    /// Expected blocks per sidechain epoch based on seats
+    pub expected_blocks_per_epoch: f64,
 }
 
 impl KeyStatus {

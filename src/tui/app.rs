@@ -120,6 +120,10 @@ pub struct EpochProgress {
     pub committee_size: u64,
     /// Number of seats our validators have in the committee
     pub our_committee_seats: u64,
+    /// Time remaining until next sidechain epoch (in seconds)
+    pub sidechain_time_remaining_secs: u64,
+    /// Time remaining until next mainchain epoch (in seconds)
+    pub mainchain_time_remaining_secs: u64,
 }
 
 /// Node sync progress information
@@ -235,6 +239,19 @@ pub struct AppState {
     pub system_memory_total_bytes: u64,
     pub system_disk_used_bytes: u64,
     pub system_disk_total_bytes: u64,
+    /// Memory usage history for trend analysis (last 10 samples)
+    pub memory_history: Vec<u64>,
+    /// Memory trend: positive = rising, negative = falling, zero = stable
+    pub memory_trend: MemoryTrend,
+}
+
+/// Memory usage trend
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MemoryTrend {
+    #[default]
+    Stable,
+    Rising,
+    Falling,
 }
 
 /// Information about a connected peer
@@ -307,6 +324,8 @@ impl Default for AppState {
             system_memory_total_bytes: 0,
             system_disk_used_bytes: 0,
             system_disk_total_bytes: 0,
+            memory_history: Vec::new(),
+            memory_trend: MemoryTrend::default(),
         }
     }
 }
@@ -452,6 +471,8 @@ impl App {
                 self.state.epoch_progress.epoch_length_slots = sidechain_epoch_ms / 1000;
                 self.state.epoch_progress.current_slot_in_epoch = time_elapsed_ms / 1000;
                 self.state.epoch_progress.progress_percent = progress.clamp(0.0, 100.0);
+                // Store countdown time for display
+                self.state.epoch_progress.sidechain_time_remaining_secs = time_remaining_ms / 1000;
             }
 
             // Calculate MAINCHAIN epoch progress using nextEpochTimestamp
@@ -464,6 +485,8 @@ impl App {
                 let progress = (time_elapsed_ms as f64 / mainchain_epoch_ms as f64) * 100.0;
 
                 self.state.epoch_progress.mainchain_progress_percent = progress.clamp(0.0, 100.0);
+                // Store countdown time for display
+                self.state.epoch_progress.mainchain_time_remaining_secs = time_remaining_ms / 1000;
             }
         }
 
@@ -938,8 +961,17 @@ impl App {
             // Calculate memory used = total - available
             if m.memory_total_bytes > 0 {
                 self.state.system_memory_total_bytes = m.memory_total_bytes;
-                self.state.system_memory_used_bytes = m.memory_total_bytes
-                    .saturating_sub(m.memory_available_bytes);
+                let memory_used = m.memory_total_bytes.saturating_sub(m.memory_available_bytes);
+                self.state.system_memory_used_bytes = memory_used;
+
+                // Track memory history for trend analysis (keep last 10 samples)
+                self.state.memory_history.push(memory_used);
+                if self.state.memory_history.len() > 10 {
+                    self.state.memory_history.remove(0);
+                }
+
+                // Calculate trend (need at least 3 samples)
+                self.state.memory_trend = calculate_memory_trend(&self.state.memory_history);
             }
 
             // Calculate disk used = total - available
@@ -950,7 +982,36 @@ impl App {
             }
         }
     }
+}
 
+/// Calculate memory trend from history using linear regression
+fn calculate_memory_trend(history: &[u64]) -> MemoryTrend {
+    if history.len() < 3 {
+        return MemoryTrend::Stable;
+    }
+
+    // Simple linear regression slope calculation
+    let n = history.len() as f64;
+    let sum_x: f64 = (0..history.len()).map(|i| i as f64).sum();
+    let sum_y: f64 = history.iter().map(|&v| v as f64).sum();
+    let sum_xy: f64 = history.iter().enumerate().map(|(i, &v)| i as f64 * v as f64).sum();
+    let sum_xx: f64 = (0..history.len()).map(|i| (i as f64) * (i as f64)).sum();
+
+    let slope = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x);
+
+    // Consider slope significant if it's more than 1% of the last value per sample
+    let threshold = history.last().unwrap_or(&0).saturating_div(100) as f64;
+
+    if slope > threshold {
+        MemoryTrend::Rising
+    } else if slope < -threshold {
+        MemoryTrend::Falling
+    } else {
+        MemoryTrend::Stable
+    }
+}
+
+impl App {
     /// Switch to next view (skips drill-down views)
     pub fn next_view(&mut self) {
         // Close popup if open

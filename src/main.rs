@@ -1,3 +1,4 @@
+mod alerts;
 mod commands;
 mod config;
 mod daemon;
@@ -49,6 +50,9 @@ enum Commands {
 
     /// Install MVM as a system service
     Install(commands::InstallArgs),
+
+    /// Troubleshooting guides and documentation
+    Guide(commands::GuideArgs),
 
     /// Generate shell completions
     Completions {
@@ -107,6 +111,9 @@ async fn main() -> Result<()> {
         Some(Commands::Install(args)) => {
             commands::install::run(args).await?;
         }
+        Some(Commands::Guide(args)) => {
+            commands::guide::run(args).await?;
+        }
         Some(Commands::Completions { shell }) => {
             let mut cmd = Cli::command();
             generate(shell, &mut cmd, "mvm", &mut std::io::stdout());
@@ -122,6 +129,7 @@ async fn main() -> Result<()> {
                 keystore: None,
                 interval: None,
                 once: false,
+                explain: false,
             };
             commands::status::run(args).await?;
         }

@@ -30,6 +30,9 @@ pub struct Config {
 
     #[serde(default)]
     pub chain: ChainConfig,
+
+    #[serde(default)]
+    pub alerts: AlertConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -132,6 +135,55 @@ pub struct ChainConfig {
     /// If not set, uses the network preset default (when available)
     #[serde(default)]
     pub genesis_timestamp_ms: Option<u64>,
+}
+
+/// Alert configuration for block production monitoring
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AlertConfig {
+    /// Enable block production alerts
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Alert threshold: percentage of expected blocks below which to alert (0-100)
+    /// Default: 80 (alert if producing less than 80% of expected blocks)
+    #[serde(default = "default_alert_threshold")]
+    pub threshold_percent: u8,
+
+    /// Minimum blocks expected before alerting (to avoid false positives early in epoch)
+    #[serde(default = "default_min_expected_blocks")]
+    pub min_expected_blocks: u32,
+
+    /// Optional webhook URL for sending alerts
+    #[serde(default)]
+    pub webhook_url: Option<String>,
+
+    /// Cooldown between alerts in seconds (to avoid spam)
+    #[serde(default = "default_alert_cooldown")]
+    pub cooldown_secs: u64,
+}
+
+fn default_alert_threshold() -> u8 {
+    80
+}
+
+fn default_min_expected_blocks() -> u32 {
+    5
+}
+
+fn default_alert_cooldown() -> u64 {
+    300 // 5 minutes
+}
+
+impl Default for AlertConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            threshold_percent: default_alert_threshold(),
+            min_expected_blocks: default_min_expected_blocks(),
+            webhook_url: None,
+            cooldown_secs: default_alert_cooldown(),
+        }
+    }
 }
 
 impl Default for ChainConfig {

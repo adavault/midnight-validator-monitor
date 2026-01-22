@@ -361,6 +361,11 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
     }
     if app.state.system_memory_total_bytes > 0 {
         network_rows += 1; // System row
+        // Check if memory warning will be shown
+        let mem_percent = (app.state.system_memory_used_bytes as f64 / app.state.system_memory_total_bytes as f64) * 100.0;
+        if mem_percent > 85.0 {
+            network_rows += 1; // Memory warning row
+        }
     }
     let chunks = layout.dashboard_layout(area, network_rows);
 
@@ -495,20 +500,37 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         Span::styled(finalized_str, Style::default().fg(theme.text())),
     ]));
 
-    // Row 3: Sidechain epoch (full width with longer bar)
+    // Row 3: Sidechain epoch (full width with longer bar + countdown)
+    // Highlight countdown in warning color only when >90% through epoch (last 10%)
+    let sidechain_countdown = format_countdown(epoch_progress.sidechain_time_remaining_secs);
+    let sidechain_countdown_color = if epoch_progress.progress_percent > 90.0 {
+        theme.warning()
+    } else {
+        theme.muted()
+    };
     network_text.push(Line::from(vec![
         Span::styled("Sidechain:    ", Style::default().fg(theme.muted())),
         Span::styled(format!("epoch {:<6}", app.state.sidechain_epoch), Style::default().fg(theme.epoch())),
         Span::styled(sidechain_bar, Style::default().fg(theme.primary())),
         Span::styled(format!(" {:>5.1}%", epoch_progress.progress_percent), Style::default().fg(theme.text())),
+        Span::styled("  next ", Style::default().fg(theme.muted())),
+        Span::styled(sidechain_countdown, Style::default().fg(sidechain_countdown_color)),
     ]));
 
-    // Row 4: Mainchain epoch (full width with longer bar)
+    // Row 4: Mainchain epoch (full width with longer bar + countdown)
+    let mainchain_countdown = format_countdown(epoch_progress.mainchain_time_remaining_secs);
+    let mainchain_countdown_color = if epoch_progress.mainchain_progress_percent > 90.0 {
+        theme.warning()
+    } else {
+        theme.muted()
+    };
     network_text.push(Line::from(vec![
         Span::styled("Mainchain:    ", Style::default().fg(theme.muted())),
         Span::styled(format!("epoch {:<6}", app.state.mainchain_epoch), Style::default().fg(theme.epoch())),
         Span::styled(mainchain_bar, Style::default().fg(theme.primary())),
         Span::styled(format!(" {:>5.1}%", epoch_progress.mainchain_progress_percent), Style::default().fg(theme.text())),
+        Span::styled("  next ", Style::default().fg(theme.muted())),
+        Span::styled(mainchain_countdown, Style::default().fg(mainchain_countdown_color)),
     ]));
 
     // Row 5: Network identity (external IP + peer ID)
@@ -561,15 +583,47 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         let disk_used = format_bytes(app.state.system_disk_used_bytes);
         let disk_total = format_bytes(app.state.system_disk_total_bytes);
 
+        // Calculate memory percentage and determine color/warning
+        let mem_percent = (app.state.system_memory_used_bytes as f64 / app.state.system_memory_total_bytes as f64) * 100.0;
+        let mem_color = if mem_percent > 90.0 {
+            theme.error() // Critical
+        } else if mem_percent > 80.0 {
+            theme.warning() // Warning
+        } else {
+            theme.text() // Normal
+        };
+
+        // Memory trend indicator
+        use crate::tui::app::MemoryTrend;
+        let trend_indicator = match app.state.memory_trend {
+            MemoryTrend::Rising => ("↑", theme.warning()),
+            MemoryTrend::Falling => ("↓", theme.success()),
+            MemoryTrend::Stable => ("─", theme.muted()),
+        };
+
         network_text.push(Line::from(vec![
             Span::styled("System:       ", Style::default().fg(theme.muted())),
             Span::styled("Mem ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{}/{}  ", mem_used, mem_total), Style::default().fg(theme.text())),
+            Span::styled(format!("{}/{}", mem_used, mem_total), Style::default().fg(mem_color)),
+            Span::styled(trend_indicator.0, Style::default().fg(trend_indicator.1)),
+            Span::styled("  ", Style::default()),
             Span::styled("Disk ", Style::default().fg(theme.muted())),
             Span::styled(format!("{}/{}  ", disk_used, disk_total), Style::default().fg(theme.text())),
             Span::styled("Load ", Style::default().fg(theme.muted())),
             Span::styled(format!("{:.2}", app.state.system_load1), Style::default().fg(theme.text())),
         ]));
+
+        // Add memory warning if high usage
+        if mem_percent > 85.0 {
+            network_text.push(Line::from(vec![
+                Span::styled("              ", Style::default()),
+                Span::styled("⚠ ", Style::default().fg(theme.warning())),
+                Span::styled(
+                    format!("Memory usage high ({:.0}%) - Node may crash if this continues", mem_percent),
+                    Style::default().fg(theme.warning())
+                ),
+            ]));
+        }
     }
 
     let network_widget = Paragraph::new(network_text)
@@ -980,11 +1034,90 @@ fn render_performance(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveL
 
 fn render_peers(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout) {
     use crate::tui::app::PeerInfo;
+    use ratatui::layout::{Constraint, Direction, Layout};
 
     let theme = app.theme;
     let key_mode = layout.key_display_length();
 
-    // Header with peer summary
+    // Peer health analysis
+    let peer_count = app.state.connected_peers.len();
+    let (health_status, health_color) = if peer_count == 0 {
+        ("CRITICAL: No peers connected!", theme.error())
+    } else if peer_count < 3 {
+        ("WARNING: Very few peers - network isolation risk", theme.error())
+    } else if peer_count < 8 {
+        ("CAUTION: Low peer count", theme.warning())
+    } else {
+        ("Healthy", theme.success())
+    };
+
+    // Check peer diversity (inbound vs outbound balance)
+    let diversity_warning = if app.state.peers_inbound == 0 && peer_count > 0 {
+        Some("No inbound peers - check firewall/port forwarding")
+    } else if app.state.peers_outbound == 0 && peer_count > 0 {
+        Some("No outbound peers - check internet connectivity")
+    } else {
+        None
+    };
+
+    // Calculate synced vs unsynced peers
+    let synced_peers = app.state.connected_peers.iter()
+        .filter(|p| app.state.chain_tip.saturating_sub(p.best_number) < 10)
+        .count();
+
+    // Split area: header info + peer list
+    let has_warnings = peer_count < 8 || diversity_warning.is_some();
+    let header_height = if has_warnings { 4 } else { 2 };
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(header_height),
+            Constraint::Min(1),
+        ])
+        .split(area);
+
+    // Render header with health info
+    let mut header_lines = vec![
+        Line::from(vec![
+            Span::styled("Status: ", Style::default().fg(theme.muted())),
+            Span::styled(health_status, Style::default().fg(health_color)),
+            Span::styled("    ", Style::default()),
+            Span::styled("Synced: ", Style::default().fg(theme.muted())),
+            Span::styled(format!("{}/{}", synced_peers, peer_count), Style::default().fg(
+                if synced_peers == peer_count { theme.success() } else { theme.warning() }
+            )),
+            Span::styled("    ", Style::default()),
+            Span::styled("Balance: ", Style::default().fg(theme.muted())),
+            Span::styled("↓", Style::default().fg(theme.success())),
+            Span::styled(format!("{}", app.state.peers_inbound), Style::default().fg(theme.success())),
+            Span::styled(" / ", Style::default().fg(theme.text())),
+            Span::styled("↑", Style::default().fg(theme.muted())),
+            Span::styled(format!("{}", app.state.peers_outbound), Style::default().fg(theme.muted())),
+        ]),
+    ];
+
+    if let Some(warning) = diversity_warning {
+        header_lines.push(Line::from(vec![
+            Span::styled("⚠ ", Style::default().fg(theme.warning())),
+            Span::styled(warning, Style::default().fg(theme.warning())),
+        ]));
+    } else if peer_count < 8 {
+        header_lines.push(Line::from(vec![
+            Span::styled("⚠ ", Style::default().fg(theme.warning())),
+            Span::styled("Consider opening port 30333 for better network connectivity", Style::default().fg(theme.warning())),
+        ]));
+    }
+
+    let header_block = Block::default()
+        .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
+        .border_style(Style::default().fg(theme.border()))
+        .title(Span::styled("Peer Network Health", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)));
+
+    let header = Paragraph::new(header_lines).block(header_block);
+    f.render_widget(header, chunks[0]);
+
+    // Peer list
     let peer_items: Vec<ListItem> = app.state.connected_peers.iter().map(|peer: &PeerInfo| {
         let peer_id_display = key_mode.format(&peer.peer_id);
 
@@ -1019,36 +1152,19 @@ fn render_peers(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout)
         ListItem::new(line)
     }).collect();
 
-    // Build enhanced title with Prometheus-based metrics
-    let mut title_parts = vec![format!(
-        "Peers: {} (↑{} ↓{})",
-        app.state.connected_peers.len(),
-        app.state.peers_outbound,
-        app.state.peers_inbound
-    )];
-
-    // Add discovered peers if available
-    if app.state.peers_discovered > 0 {
-        title_parts.push(format!("Discovered: {}", app.state.peers_discovered));
-    }
-
-    // Add pending connections if any
-    if app.state.pending_connections > 0 {
-        title_parts.push(format!("Pending: {}", app.state.pending_connections));
-    }
-
-    let title = format!("{} - j/k or ↑/↓ scroll", title_parts.join(" | "));
+    // Build title with count
+    let title = format!("{} connected peers - j/k or ↑/↓ scroll, Enter for details", peer_count);
 
     let peers_list = List::new(peer_items)
         .block(Block::default()
-            .borders(Borders::ALL)
+            .borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT)
             .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled(title, Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))))
+            .title(Span::styled(title, Style::default().fg(theme.muted()))))
         .highlight_style(Style::default().bg(theme.highlight()).add_modifier(Modifier::BOLD).fg(theme.text()));
 
     let mut list_state = ListState::default();
     list_state.select(Some(app.selected_index()));
-    f.render_stateful_widget(peers_list, area, &mut list_state);
+    f.render_stateful_widget(peers_list, chunks[1], &mut list_state);
 }
 
 fn render_help(f: &mut Frame, app: &App, area: Rect) {
@@ -1333,6 +1449,15 @@ fn format_uptime(secs: u64) -> String {
     } else {
         format!("{}s", secs)
     }
+}
+
+/// Format countdown seconds into HH:MM:SS format (always includes hours for alignment)
+fn format_countdown(secs: u64) -> String {
+    let hours = secs / 3600;
+    let mins = (secs % 3600) / 60;
+    let s = secs % 60;
+
+    format!("{:02}:{:02}:{:02}", hours, mins, s)
 }
 
 /// Format timestamp as human-readable date/time
