@@ -9,50 +9,100 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-release:
-    name: Build Release Binary
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: mvm
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: mvm
+            cross: true
+
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Install cross-compilation tools
+        if: matrix.cross
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
 
       - name: Build release binary
-        run: cargo build --release
+        if: ${{ !matrix.cross }}
+        run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Prepare release artifacts
+      - name: Build release binary (cross)
+        if: matrix.cross
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package binary
         run: |
-          cp target/release/mvm mvm-linux-x86_64
-          sha256sum mvm-linux-x86_64 > mvm-linux-x86_64.sha256
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact }} dist/
+          cd dist
+          tar czf mvm-${{ matrix.target }}.tar.gz ${{ matrix.artifact }}
+          sha256sum mvm-${{ matrix.target }}.tar.gz > mvm-${{ matrix.target }}.tar.gz.sha256
 
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-binaries
-          path: |
-            mvm-linux-x86_64
-            mvm-linux-x86_64.sha256
+          name: mvm-${{ matrix.target }}
+          path: dist/mvm-${{ matrix.target }}.tar.gz*
 
-  create-release:
-    name: Create GitHub Release
-    needs: build-release
+  release:
+    name: Create Release
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: release-binaries
+          path: artifacts
 
-      - name: Create release
-        uses: softprops/action-gh-release@v2
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          find artifacts -name '*.tar.gz*' -exec mv {} release/ \;
+          ls -la release/
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Check for release notes
+        id: notes
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          NOTES_FILE="docs/RELEASE_NOTES_${VERSION}.md"
+          if [ -f "$NOTES_FILE" ]; then
+            echo "file=$NOTES_FILE" >> $GITHUB_OUTPUT
+            echo "found=true" >> $GITHUB_OUTPUT
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
         with:
-          files: |
-            mvm-linux-x86_64
-            mvm-linux-x86_64.sha256
-          generate_release_notes: true
+          files: release/*
+          body_path: ${{ steps.notes.outputs.found == 'true' && steps.notes.outputs.file || '' }}
+          generate_release_notes: ${{ steps.notes.outputs.found != 'true' }}
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}

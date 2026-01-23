@@ -156,6 +156,76 @@ MVM aims to be the essential toolkit for the Midnight ecosystem - starting with 
 
 ---
 
+## CI/CD Maturity
+
+**Decision Date:** 2026-01-23
+**Status:** In Progress
+
+### Current State (v1.0)
+
+| Job | Purpose | Status |
+|-----|---------|--------|
+| Build | Compile release binary | Active |
+| Test | Run cargo test suite | Active |
+| Format | Enforce cargo fmt | Active |
+| Clippy | Lint with warnings as errors | Active |
+| Security Audit | rustsec dependency scan | Active |
+| PII Check | Detect leaked IPs in config files | Active |
+| Release | Tag-triggered binary releases | Active |
+
+### Release Automation
+
+Triggered on `v*` tags, the release workflow:
+1. Builds binaries for linux/amd64 and linux/arm64
+2. Creates tarball with SHA256 checksums
+3. Publishes GitHub Release with assets
+4. Uses `docs/RELEASE_NOTES_vX.Y.Z.md` if present, otherwise auto-generates notes
+5. Marks alpha/beta/rc tags as pre-release
+
+**Release process:**
+```bash
+# 1. Update version in Cargo.toml
+# 2. Create release notes: docs/RELEASE_NOTES_v1.0.0.md
+# 3. Commit and tag
+git tag v1.0.0
+git push origin v1.0.0
+# 4. CI builds and publishes release automatically
+```
+
+### v2.0 Planned: Integration Testing
+
+**Goal:** Catch RPC compatibility regressions before release
+
+**Approach:**
+- Nightly scheduled workflow (not on every PR - too slow/expensive)
+- Connect to Midnight preview testnet endpoint
+- Run smoke tests:
+  - `system_health` - node reachable
+  - `system_version` - parse version response
+  - `chain_getHeader` - fetch and decode block header
+  - `sidechain_getStatus` - Midnight-specific RPC works
+- Store test results for trend analysis
+- Alert on failure (GitHub issue or notification)
+
+**Infrastructure options:**
+1. **Public testnet endpoint** - simplest, depends on Midnight providing stable endpoint
+2. **Self-hosted testnet node** - more control, higher maintenance
+3. **Mock RPC server** - fastest, but doesn't catch real compatibility issues
+
+**Decision:** Start with public endpoint if available, fall back to mock for CI reliability.
+
+### Future Considerations
+
+| Enhancement | Priority | Target |
+|-------------|----------|--------|
+| MSRV check | Medium | v1.1 |
+| Binary size tracking | Low | v2.0 |
+| Changelog enforcement | Low | v2.0 |
+| Signed releases (sigstore) | Medium | v2.0+ (post-mainnet) |
+| Auto-deploy to staging | Low | If manual becomes friction |
+
+---
+
 ## Validator Registry Strategy
 
 **Decision Date:** 2026-01-23
@@ -213,9 +283,9 @@ Throughout all versions, MVM adheres to these principles:
 
 ## Current Status
 
-**Latest Release:** v0.9.3
+**Latest Release:** v1.0.0
 
-**Next Up:** v1.0 (First production release - stability verification)
+**Next Up:** v1.1 (Shell completion auto-install, documentation improvements)
 
 See [BACKLOG.md](BACKLOG.md) for detailed feature planning.
 
