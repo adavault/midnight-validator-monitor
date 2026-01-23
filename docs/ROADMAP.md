@@ -113,6 +113,93 @@ MVM aims to be the essential toolkit for the Midnight ecosystem - starting with 
 
 ---
 
+## Infrastructure & Deployment Strategy
+
+**Decision Date:** 2026-01-23
+**Status:** Approved
+
+### v1.x: Manual Deployment
+
+- Binary releases via GitHub Releases (CI already in place)
+- Manual deployment to test/production nodes
+- No containers - single static binary is sufficient
+- Test environment: mdn90 (vdumdn90) with manual deploys
+
+**Rationale:** MVM is a ~5MB static binary with no runtime dependencies. Containers add overhead without benefit at this stage.
+
+### v2.x: Container-First with Sidecar Support
+
+- Multi-arch container builds (linux/amd64, linux/arm64)
+- Published to container registry (Docker Hub - decision pending on costs/uptake)
+- Sidecar deployment model alongside midnight-node:
+
+```
+┌─────────────────────────────────────┐
+│  Pod / Compose Stack                │
+│  ┌─────────────┐  ┌──────────────┐  │
+│  │ midnight-   │  │     mvm      │  │
+│  │   node      │◄─│   (sidecar)  │  │
+│  │  :9944      │  │              │  │
+│  └─────────────┘  └──────────────┘  │
+└─────────────────────────────────────┘
+```
+
+- Helm chart and/or docker-compose examples
+- Kubernetes-native: health probes, resource limits, service discovery
+
+**Rationale:** Operators running Midnight nodes in production expect containerized tooling. Sidecar model simplifies deployment and networking.
+
+### Future Considerations
+
+- **Container Registry:** Start with GHCR (free, tied to repo), evaluate Docker Hub based on adoption
+- **CD Pipeline:** May add auto-deploy to staging (mdn90) in v1.x if manual deployment becomes friction
+
+---
+
+## Validator Registry Strategy
+
+**Decision Date:** 2026-01-23
+**Status:** Approved
+
+MVM includes a public validator registry (`known_validators.toml`) that maps sidechain keys to Cardano stake pool tickers. This enables human-readable validator identification in the TUI.
+
+### Goals
+
+1. **Community engagement** - SPOs submit PRs to be listed, increasing repo visibility
+2. **Competition** - Validators want to be recognized, driving adoption
+3. **No PII concerns** - Pool tickers are intentionally public identifiers
+
+### Verification Strategy
+
+**Preview Testnet (v1.x):**
+- Trust-based PR workflow
+- Validator submits PR with sidechain key + ticker
+- We verify key exists on-chain, then merge
+- Low friction to bootstrap community
+
+**PreProd / Mainnet (v2.x+):**
+- Calidus signature verification required
+- Validator signs with pool cold key using CIP-88v2
+- Proves ownership of Cardano stake pool
+- Ticker auto-collected from pool.json metadata
+
+**Tools:** [cardano-signer](https://github.com/gitmachtl/cardano-signer) by Martin (gitmachtl)
+
+### Rationale
+
+Calidus verification for production networks:
+- Prevents ticker squatting
+- Cryptographically proves pool ownership
+- Aligns with Cardano ecosystem standards
+- Builds relationship with tooling maintainers (Martin)
+
+Trust-based for preview:
+- Lower friction for testnet experimentation
+- Faster community onboarding
+- Acceptable risk (testnet only)
+
+---
+
 ## Design Principles
 
 Throughout all versions, MVM adheres to these principles:
@@ -126,9 +213,9 @@ Throughout all versions, MVM adheres to these principles:
 
 ## Current Status
 
-**Latest Release:** v0.7.0
+**Latest Release:** v0.9.3
 
-**Next Up:** v0.8 (Help glossary, Prometheus peer metrics)
+**Next Up:** v1.0 (First production release - stability verification)
 
 See [BACKLOG.md](BACKLOG.md) for detailed feature planning.
 

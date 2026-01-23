@@ -1,7 +1,7 @@
 # Rust build artifacts
 /target/
 **/*.rs.bk
-Cargo.lock
+# Note: Cargo.lock IS committed (required for binary crates + security audits)
 
 # IDE
 .idea/
@@ -19,9 +19,6 @@ Thumbs.db
 
 # Discord exports (may contain private messages)
 discord-context/*.json
-
-# Known validators (private - may contain identity info)
-known_validators.toml
 
 # Local database files
 *.db

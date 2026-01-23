@@ -445,6 +445,18 @@ impl Config {
         toml::to_string_pretty(&Config::default())
             .unwrap_or_else(|_| "# Error generating example".to_string())
     }
+
+    /// Generate helpful message when no configuration file is found
+    pub fn config_not_found_help() -> String {
+        let paths = Self::config_file_paths();
+        let mut help = String::from("No configuration file found.\n\nSearched locations:\n");
+        for path in &paths {
+            help.push_str(&format!("  - {}\n", path.display()));
+        }
+        help.push_str("\nTo see search paths: mvm config paths");
+        help.push_str("\nTo create config:    mvm config example > ./mvm.toml");
+        help
+    }
 }
 
 #[cfg(test)]
