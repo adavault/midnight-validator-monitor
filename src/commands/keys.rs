@@ -5,7 +5,7 @@ use crate::midnight::{get_key_status, ValidatorKeys};
 use crate::rpc::RpcClient;
 use anyhow::Result;
 use clap::{Args, Subcommand};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, warn};
 
 /// Keys command arguments
@@ -44,7 +44,10 @@ pub async fn run(args: KeysArgs) -> Result<()> {
     info!("Config database.path = {}", config.database.path);
 
     // Get keystore path from args or config
-    let keystore_path = match args.keystore.or_else(|| config.validator.keystore_path.map(PathBuf::from)) {
+    let keystore_path = match args
+        .keystore
+        .or_else(|| config.validator.keystore_path.map(PathBuf::from))
+    {
         Some(path) => path,
         None => {
             error!("No keystore path provided");
@@ -55,7 +58,9 @@ pub async fn run(args: KeysArgs) -> Result<()> {
 
     // Get RPC URL and database path from args or config
     let rpc_url = args.rpc_url.unwrap_or(config.rpc.url);
-    let db_path = args.db_path.unwrap_or_else(|| std::path::PathBuf::from(&config.database.path));
+    let db_path = args
+        .db_path
+        .unwrap_or_else(|| std::path::PathBuf::from(&config.database.path));
 
     info!("db_path resolved to: {}", db_path.display());
 
@@ -93,7 +98,12 @@ fn run_show(keys: &ValidatorKeys) -> Result<()> {
     Ok(())
 }
 
-async fn run_verify(keys: &ValidatorKeys, rpc_url: &str, db_path: &PathBuf, timeout_ms: u64) -> Result<()> {
+async fn run_verify(
+    keys: &ValidatorKeys,
+    rpc_url: &str,
+    db_path: &Path,
+    timeout_ms: u64,
+) -> Result<()> {
     info!("Verifying validator keys...");
     info!("RPC endpoint: {}", rpc_url);
     info!("─────────────────────────────────────────────────────────────────────────────");
@@ -142,13 +152,11 @@ async fn run_verify(keys: &ValidatorKeys, rpc_url: &str, db_path: &PathBuf, time
         Some(false) => ("✗", "NOT LOADED"),
         None => ("?", "Could not verify"),
     };
+    info!("  Sidechain: {} {}", sc_status.0, sc_status.1);
     info!(
-        "  Sidechain: {} {}",
-        sc_status.0, sc_status.1
-    );
-    info!("    Key: {}...{}",
+        "    Key: {}...{}",
         &keys.sidechain_pub_key[..10],
-        &keys.sidechain_pub_key[keys.sidechain_pub_key.len()-8..]
+        &keys.sidechain_pub_key[keys.sidechain_pub_key.len() - 8..]
     );
 
     // Aura key
@@ -157,13 +165,11 @@ async fn run_verify(keys: &ValidatorKeys, rpc_url: &str, db_path: &PathBuf, time
         Some(false) => ("✗", "NOT LOADED"),
         None => ("?", "Could not verify"),
     };
+    info!("  Aura:      {} {}", aura_status.0, aura_status.1);
     info!(
-        "  Aura:      {} {}",
-        aura_status.0, aura_status.1
-    );
-    info!("    Key: {}...{}",
+        "    Key: {}...{}",
         &keys.aura_pub_key[..10],
-        &keys.aura_pub_key[keys.aura_pub_key.len()-8..]
+        &keys.aura_pub_key[keys.aura_pub_key.len() - 8..]
     );
 
     // Grandpa key
@@ -172,19 +178,18 @@ async fn run_verify(keys: &ValidatorKeys, rpc_url: &str, db_path: &PathBuf, time
         Some(false) => ("✗", "NOT LOADED"),
         None => ("?", "Could not verify"),
     };
+    info!("  Grandpa:   {} {}", gran_status.0, gran_status.1);
     info!(
-        "  Grandpa:   {} {}",
-        gran_status.0, gran_status.1
-    );
-    info!("    Key: {}...{}",
+        "    Key: {}...{}",
         &keys.grandpa_pub_key[..10],
-        &keys.grandpa_pub_key[keys.grandpa_pub_key.len()-8..]
+        &keys.grandpa_pub_key[keys.grandpa_pub_key.len() - 8..]
     );
 
     // Show note if keys can't be verified
     if key_status.sidechain_loaded.is_none()
         && key_status.aura_loaded.is_none()
-        && key_status.grandpa_loaded.is_none() {
+        && key_status.grandpa_loaded.is_none()
+    {
         info!("");
         warn!("  Note: Key verification requires node started with --rpc-methods=unsafe");
         warn!("        Keys shown above are from your keystore file only");
@@ -269,12 +274,17 @@ async fn run_verify(keys: &ValidatorKeys, rpc_url: &str, db_path: &PathBuf, time
                 // Get all validators to show rank
                 let all_validators = db.get_all_validators()?;
                 if !all_validators.is_empty() {
-                    let rank = all_validators.iter()
+                    let rank = all_validators
+                        .iter()
                         .position(|v| v.sidechain_key == keys.sidechain_pub_key)
                         .map(|i| i + 1)
                         .unwrap_or(0);
                     if rank > 0 {
-                        info!("  Performance rank:       #{} of {} validators", rank, all_validators.len());
+                        info!(
+                            "  Performance rank:       #{} of {} validators",
+                            rank,
+                            all_validators.len()
+                        );
                     }
                 }
 
@@ -288,7 +298,8 @@ async fn run_verify(keys: &ValidatorKeys, rpc_url: &str, db_path: &PathBuf, time
                         let recent_blocks: Vec<_> = blocks
                             .iter()
                             .filter(|b| {
-                                b.author_key.as_ref()
+                                b.author_key
+                                    .as_ref()
                                     .map(|k| k == &keys.sidechain_pub_key)
                                     .unwrap_or(false)
                             })

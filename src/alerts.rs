@@ -2,6 +2,11 @@
 //!
 //! Tracks block production performance and generates alerts when
 //! validators are underperforming their expected block production.
+//!
+//! Note: This module is kept for future integration with the sync command.
+//! See BACKLOG.md "Pending Integration" section.
+
+#![allow(dead_code)]
 
 use crate::config::AlertConfig;
 use anyhow::Result;
@@ -66,7 +71,8 @@ impl AlertManager {
         expected_blocks: f64,
         committee_seats: u32,
     ) {
-        let state = self.validator_states
+        let state = self
+            .validator_states
             .entry(sidechain_key.to_string())
             .or_insert_with(|| ValidatorAlertState {
                 sidechain_key: sidechain_key.to_string(),
@@ -109,7 +115,8 @@ impl AlertManager {
             // Check if below threshold
             if ratio < threshold {
                 // Check cooldown
-                let should_alert = state.last_alert
+                let should_alert = state
+                    .last_alert
                     .map(|t| t.elapsed() >= cooldown)
                     .unwrap_or(true);
 
@@ -190,11 +197,7 @@ async fn send_webhook_alert(url: &str, alert: &BlockProductionAlert) -> Result<(
         )
     });
 
-    let response = client
-        .post(url)
-        .json(&payload)
-        .send()
-        .await?;
+    let response = client.post(url).json(&payload).send().await?;
 
     if !response.status().is_success() {
         anyhow::bail!("Webhook returned status: {}", response.status());
@@ -207,7 +210,7 @@ async fn send_webhook_alert(url: &str, alert: &BlockProductionAlert) -> Result<(
 /// Truncate a key for display
 fn truncate_key(key: &str) -> String {
     if key.len() > 16 {
-        format!("{}...{}", &key[..8], &key[key.len()-4..])
+        format!("{}...{}", &key[..8], &key[key.len() - 4..])
     } else {
         key.to_string()
     }

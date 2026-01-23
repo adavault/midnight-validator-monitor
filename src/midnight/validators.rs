@@ -234,12 +234,7 @@ impl ValidatorSet {
                 ],
             )
             .await
-            .with_context(|| {
-                format!(
-                    "Failed to call AuraApi_authorities at block {}",
-                    hash
-                )
-            })?
+            .with_context(|| format!("Failed to call AuraApi_authorities at block {}", hash))?
         } else {
             // Query current state
             rpc.call(
@@ -254,8 +249,7 @@ impl ValidatorSet {
         };
 
         // Decode SCALE-encoded response
-        decode_aura_authorities(&result)
-            .context("Failed to decode AURA authorities response")
+        decode_aura_authorities(&result).context("Failed to decode AURA authorities response")
     }
 
     /// Legacy fetch method (DEPRECATED - uses incorrect candidate list for block attribution)
@@ -339,9 +333,7 @@ impl ValidatorSet {
     /// Find validator by aura key
     pub fn find_by_aura_key(&self, key: &str) -> Option<&Validator> {
         let normalized = normalize_hex(key);
-        self.candidates
-            .iter()
-            .find(|v| v.aura_key == normalized)
+        self.candidates.iter().find(|v| v.aura_key == normalized)
     }
 
     /// Check if an AURA key is in the committee
@@ -373,18 +365,9 @@ mod tests {
 
     #[test]
     fn test_normalize_hex() {
-        assert_eq!(
-            normalize_hex("0xABCD1234"),
-            "0xabcd1234"
-        );
-        assert_eq!(
-            normalize_hex("ABCD1234"),
-            "0xabcd1234"
-        );
-        assert_eq!(
-            normalize_hex("  0xABCD1234  "),
-            "0xabcd1234"
-        );
+        assert_eq!(normalize_hex("0xABCD1234"), "0xabcd1234");
+        assert_eq!(normalize_hex("ABCD1234"), "0xabcd1234");
+        assert_eq!(normalize_hex("  0xABCD1234  "), "0xabcd1234");
     }
 
     #[test]

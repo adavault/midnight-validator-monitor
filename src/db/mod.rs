@@ -2,7 +2,10 @@ mod blocks;
 mod schema;
 mod validators;
 
-pub use blocks::{BlockRecord, SyncStatusRecord, ValidatorEpochRecord, ValidatorEpochHistoryRecord, CommitteeSelectionStats};
+pub use blocks::{
+    BlockRecord, CommitteeSelectionStats, SyncStatusRecord, ValidatorEpochHistoryRecord,
+    ValidatorEpochRecord,
+};
 pub use schema::{init_schema, CURRENT_SCHEMA_VERSION};
 pub use validators::*;
 
@@ -34,7 +37,9 @@ impl Database {
         schema::run_migrations(&conn)?;
 
         // Enable WAL mode for better performance and foreign key enforcement
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;")?;
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;",
+        )?;
 
         Ok(Self { conn })
     }
@@ -109,17 +114,27 @@ impl Database {
         blocks::count_blocks_by_author_in_epoch(&self.conn, author_key, epoch)
     }
 
-    pub fn count_blocks_by_author_since(&self, author_key: &str, since_timestamp: i64) -> Result<u64> {
+    pub fn count_blocks_by_author_since(
+        &self,
+        author_key: &str,
+        since_timestamp: i64,
+    ) -> Result<u64> {
         blocks::count_blocks_by_author_since(&self.conn, author_key, since_timestamp)
     }
 
+    #[allow(dead_code)]
     pub fn get_block_counts_bucketed(
         &self,
         author_keys: &[String],
         bucket_duration_secs: i64,
         num_buckets: usize,
     ) -> Result<Vec<u64>> {
-        blocks::get_block_counts_bucketed(&self.conn, author_keys, bucket_duration_secs, num_buckets)
+        blocks::get_block_counts_bucketed(
+            &self.conn,
+            author_keys,
+            bucket_duration_secs,
+            num_buckets,
+        )
     }
 
     // Committee snapshot operations
@@ -156,10 +171,14 @@ impl Database {
         blocks::get_validator_epoch(&self.conn, sidechain_epoch, sidechain_key)
     }
 
-    pub fn get_validators_for_epoch(&self, sidechain_epoch: u64) -> Result<Vec<ValidatorEpochRecord>> {
+    pub fn get_validators_for_epoch(
+        &self,
+        sidechain_epoch: u64,
+    ) -> Result<Vec<ValidatorEpochRecord>> {
         blocks::get_validators_for_epoch(&self.conn, sidechain_epoch)
     }
 
+    #[allow(dead_code)]
     pub fn get_latest_validator_epochs(&self) -> Result<Vec<ValidatorEpochRecord>> {
         blocks::get_latest_validator_epochs(&self.conn)
     }

@@ -39,28 +39,36 @@ pub async fn run(args: ViewArgs) -> Result<()> {
 
     // Use args or fall back to config
     let rpc_url = args.rpc_url.unwrap_or(config.rpc.url);
-    let db_path = args.db_path.unwrap_or_else(|| std::path::PathBuf::from(&config.database.path));
-    let refresh_interval = args.refresh_interval.unwrap_or(config.view.refresh_interval_ms);
+    let db_path = args
+        .db_path
+        .unwrap_or_else(|| std::path::PathBuf::from(&config.database.path));
+    let refresh_interval = args
+        .refresh_interval
+        .unwrap_or(config.view.refresh_interval_ms);
 
     // Connect to RPC, metrics, and database BEFORE initializing terminal
     let rpc = RpcClient::with_timeout(&rpc_url, config.rpc.timeout_ms);
     let metrics = MetricsClient::new(&config.rpc.metrics_url);
-    let node_exporter = config.rpc.node_exporter_url.as_ref()
+    let node_exporter = config
+        .rpc
+        .node_exporter_url
+        .as_ref()
         .map(|url| NodeExporterClient::new(url));
-    let db = Database::open(&db_path)
-        .context(format!("Failed to open database at {}.
+    let db = Database::open(&db_path).context(format!(
+        "Failed to open database at {}.
 
 Tip: If you installed MVM, the database should be at /opt/midnight/mvm/data/mvm.db
      Try: mvm view --db-path /opt/midnight/mvm/data/mvm.db
      Or set MVM_DB_PATH=/opt/midnight/mvm/data/mvm.db in your environment
 
-     If running locally without install, use: mvm view --db-path ./mvm.db", db_path.display()))?;
+     If running locally without install, use: mvm view --db-path ./mvm.db",
+        db_path.display()
+    ))?;
 
     // Initialize terminal
     enable_raw_mode().context("Failed to enable raw mode")?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)
-        .context("Failed to enter alternate screen")?;
+    execute!(stdout, EnterAlternateScreen).context("Failed to enter alternate screen")?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend).context("Failed to create terminal")?;
 
@@ -78,7 +86,10 @@ Tip: If you installed MVM, the database should be at /opt/midnight/mvm/data/mvm.
     }
 
     // Do initial update
-    if let Err(e) = app.update(&rpc, &metrics, node_exporter.as_ref(), &db).await {
+    if let Err(e) = app
+        .update(&rpc, &metrics, node_exporter.as_ref(), &db)
+        .await
+    {
         error!("Initial update failed: {}", e);
     }
 
@@ -86,14 +97,21 @@ Tip: If you installed MVM, the database should be at /opt/midnight/mvm/data/mvm.
     let event_handler = EventHandler::new(Duration::from_millis(1000));
 
     // Run the TUI loop (data refresh at configured interval)
-    let res = run_tui(&mut terminal, &mut app, &rpc, &metrics, node_exporter.as_ref(), &db, &event_handler, refresh_interval).await;
+    let res = run_tui(
+        &mut terminal,
+        &mut app,
+        &rpc,
+        &metrics,
+        node_exporter.as_ref(),
+        &db,
+        &event_handler,
+        refresh_interval,
+    )
+    .await;
 
     // Restore terminal (always, even on error)
     let _ = disable_raw_mode();
-    let _ = execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen
-    );
+    let _ = execute!(terminal.backend_mut(), LeaveAlternateScreen);
     let _ = terminal.show_cursor();
 
     // Check for errors
@@ -105,6 +123,7 @@ Tip: If you installed MVM, the database should be at /opt/midnight/mvm/data/mvm.
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_tui(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,

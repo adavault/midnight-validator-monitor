@@ -102,8 +102,7 @@ async fn run_uninstall(remove_data: bool) -> Result<()> {
     if remove_data {
         println!("==> Removing data directory");
         if Path::new(INSTALL_BASE).exists() {
-            fs::remove_dir_all(INSTALL_BASE)
-                .context("Failed to remove data directory")?;
+            fs::remove_dir_all(INSTALL_BASE).context("Failed to remove data directory")?;
             println!("    Removed {}", INSTALL_BASE);
         }
     } else {
@@ -173,8 +172,7 @@ fn create_directories(user: &str) -> Result<()> {
     println!("==> Creating directories");
 
     for dir in &[BIN_DIR, DATA_DIR, CONFIG_DIR] {
-        fs::create_dir_all(dir)
-            .with_context(|| format!("Failed to create directory: {}", dir))?;
+        fs::create_dir_all(dir).with_context(|| format!("Failed to create directory: {}", dir))?;
     }
 
     // Set ownership
@@ -188,8 +186,7 @@ fn install_binary(user: &str) -> Result<()> {
     println!("==> Installing binary");
 
     // Get the path to the current executable
-    let current_exe = std::env::current_exe()
-        .context("Failed to get current executable path")?;
+    let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
 
     let dest_path = format!("{}/mvm", BIN_DIR);
 
@@ -210,8 +207,7 @@ fn install_binary(user: &str) -> Result<()> {
     if symlink.exists() || symlink.is_symlink() {
         fs::remove_file(symlink).ok();
     }
-    std::os::unix::fs::symlink(&dest_path, symlink)
-        .context("Failed to create symlink")?;
+    std::os::unix::fs::symlink(&dest_path, symlink).context("Failed to create symlink")?;
 
     println!("    Binary installed to {}", dest_path);
     println!("    Symlink created at {}", SYMLINK_PATH);
@@ -252,8 +248,7 @@ pid_file = "{}/mvm-sync.pid"
         DATA_DIR, DATA_DIR
     );
 
-    fs::write(&config_path, config_content)
-        .context("Failed to write config file")?;
+    fs::write(&config_path, config_content).context("Failed to write config file")?;
 
     set_ownership(&config_path, user)?;
 

@@ -2,7 +2,6 @@
 ///
 /// This module provides minimal SCALE (Simple Concatenated Aggregate Little-Endian)
 /// codec support for decoding AURA authorities responses from the runtime.
-
 use anyhow::{Context, Result};
 
 /// Decode a SCALE-encoded array of 32-byte AURA public keys
@@ -23,8 +22,7 @@ pub fn decode_aura_authorities(hex_response: &str) -> Result<Vec<String>> {
     let hex = hex_response.trim_start_matches("0x");
 
     // Decode hex to bytes
-    let bytes = hex::decode(hex)
-        .context("Failed to decode hex string")?;
+    let bytes = hex::decode(hex).context("Failed to decode hex string")?;
 
     if bytes.is_empty() {
         return Ok(Vec::new());

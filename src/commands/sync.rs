@@ -1,8 +1,8 @@
 //! Sync command - synchronize blocks to local database
 
-use crate::db::{BlockRecord, Database, ValidatorRecord, ValidatorEpochRecord};
+use crate::db::{BlockRecord, Database, ValidatorEpochRecord, ValidatorRecord};
 use crate::midnight::{extract_slot_from_digest, ChainTiming, ValidatorSet};
-use crate::rpc::{RpcClient, SignedBlock, SidechainStatus};
+use crate::rpc::{RpcClient, SidechainStatus, SignedBlock};
 use anyhow::{Context, Result};
 use clap::Args;
 use signal_hook::consts::signal::*;
@@ -10,8 +10,8 @@ use signal_hook_tokio::Signals;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Duration;
-use tokio::time;
 use tokio::select;
+use tokio::time;
 use tokio_stream::StreamExt;
 use tracing::{debug, info, warn};
 
@@ -58,7 +58,9 @@ pub async fn run(args: SyncArgs) -> Result<()> {
 
     // Use args or fall back to config
     let rpc_url = args.rpc_url.unwrap_or_else(|| config.rpc.url.clone());
-    let db_path = args.db_path.unwrap_or_else(|| std::path::PathBuf::from(&config.database.path));
+    let db_path = args
+        .db_path
+        .unwrap_or_else(|| std::path::PathBuf::from(&config.database.path));
     let batch_size = args.batch_size.unwrap_or(config.sync.batch_size);
     let poll_interval = args.poll_interval.unwrap_or(config.sync.poll_interval_secs);
     let finalized_only = args.finalized_only.unwrap_or(config.sync.finalized_only);
@@ -76,8 +78,8 @@ pub async fn run(args: SyncArgs) -> Result<()> {
     };
 
     // Set up signal handling for graceful shutdown
-    let signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])
-        .context("Failed to register signal handlers")?;
+    let signals =
+        Signals::new([SIGTERM, SIGINT, SIGQUIT]).context("Failed to register signal handlers")?;
     let mut signals = signals.fuse();
 
     if args.daemon {
@@ -92,12 +94,14 @@ pub async fn run(args: SyncArgs) -> Result<()> {
     let rpc = RpcClient::with_config(&rpc_url, config.rpc.timeout_ms, config.rpc.retry_config());
 
     // Get current chain state
-    let chain_tip = get_chain_tip(&rpc).await
-        .context(format!("Failed to connect to node at {}.
+    let chain_tip = get_chain_tip(&rpc).await.context(format!(
+        "Failed to connect to node at {}.
 
 Tip: Make sure your Midnight node is running and RPC is enabled.
      Check the RPC URL is correct: {}
-     Default port is 9944 for HTTP RPC.", rpc_url, rpc_url))?;
+     Default port is 9944 for HTTP RPC.",
+        rpc_url, rpc_url
+    ))?;
     let finalized = get_finalized_block(&rpc).await?;
     let sidechain_status = get_sidechain_status(&rpc).await.ok();
     let mainchain_epoch = sidechain_status
@@ -122,7 +126,8 @@ Tip: Make sure your Midnight node is running and RPC is enabled.
                 .unwrap_or(0);
 
             // genesis_time = now - (current_slot * slot_duration)
-            let calculated_genesis = now_ms.saturating_sub(current_slot * chain_timing.slot_duration_ms);
+            let calculated_genesis =
+                now_ms.saturating_sub(current_slot * chain_timing.slot_duration_ms);
             chain_timing.genesis_timestamp_ms = Some(calculated_genesis);
 
             debug!(
@@ -133,7 +138,10 @@ Tip: Make sure your Midnight node is running and RPC is enabled.
     }
 
     info!("Chain tip: {}, finalized: {}", chain_tip, finalized);
-    info!("Mainchain epoch: {}, Sidechain epoch: {}", mainchain_epoch, sidechain_epoch);
+    info!(
+        "Mainchain epoch: {}, Sidechain epoch: {}",
+        mainchain_epoch, sidechain_epoch
+    );
 
     // Determine start block
     let sync_status = db.get_sync_status()?;
@@ -147,9 +155,14 @@ Tip: Make sure your Midnight node is running and RPC is enabled.
     };
 
     info!("Starting sync from block {}", start_from);
-    info!("Target block: {} ({})",
+    info!(
+        "Target block: {} ({})",
         if finalized_only { finalized } else { chain_tip },
-        if finalized_only { "finalized" } else { "chain tip" }
+        if finalized_only {
+            "finalized"
+        } else {
+            "chain tip"
+        }
     );
 
     // Detect if historical state is available for author attribution
@@ -157,7 +170,11 @@ Tip: Make sure your Midnight node is running and RPC is enabled.
         if start_from < safe_start {
             warn!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             warn!("Historical state is pruned before block {}", safe_start);
-            warn!("Blocks {} to {} will be synced WITHOUT author attribution", start_from, safe_start - 1);
+            warn!(
+                "Blocks {} to {} will be synced WITHOUT author attribution",
+                start_from,
+                safe_start - 1
+            );
             warn!("Block data will be complete, but author_key will be NULL for these blocks.");
             warn!("For full attribution history, use an archive node (--state-pruning archive)");
             warn!("See docs/BLOCK_ATTRIBUTION.md for details");
@@ -169,11 +186,7 @@ Tip: Make sure your Midnight node is running and RPC is enabled.
 
     // Initial sync: catch up to chain tip
     let mut current_block = start_from;
-    let target = if finalized_only {
-        finalized
-    } else {
-        chain_tip
-    };
+    let target = if finalized_only { finalized } else { chain_tip };
 
     let total_blocks_to_sync = if target >= start_from {
         target - start_from + 1
@@ -196,8 +209,12 @@ Tip: Make sure your Midnight node is running and RPC is enabled.
 
             info!(
                 "Synced blocks {}-{} ({} blocks) - Progress: {:.1}% ({}/{})",
-                current_block, batch_end, synced,
-                progress_pct, blocks_synced_so_far, total_blocks_to_sync
+                current_block,
+                batch_end,
+                synced,
+                progress_pct,
+                blocks_synced_so_far,
+                total_blocks_to_sync
             );
 
             // Update sync status
@@ -335,7 +352,9 @@ Tip: Make sure your Midnight node is running and RPC is enabled.
 }
 
 async fn get_chain_tip(rpc: &RpcClient) -> Result<u64> {
-    let header: crate::rpc::BlockHeader = rpc.call_with_retry("chain_getHeader", Vec::<()>::new()).await?;
+    let header: crate::rpc::BlockHeader = rpc
+        .call_with_retry("chain_getHeader", Vec::<()>::new())
+        .await?;
     Ok(header.block_number())
 }
 
@@ -343,22 +362,29 @@ async fn get_finalized_block(rpc: &RpcClient) -> Result<u64> {
     let hash: String = rpc
         .call_with_retry("chain_getFinalizedHead", Vec::<()>::new())
         .await?;
-    let header: crate::rpc::BlockHeader = rpc.call_with_retry("chain_getHeader", vec![&hash]).await?;
+    let header: crate::rpc::BlockHeader =
+        rpc.call_with_retry("chain_getHeader", vec![&hash]).await?;
     Ok(header.block_number())
 }
 
 async fn get_sidechain_status(rpc: &RpcClient) -> Result<SidechainStatus> {
-    rpc.call_with_retry("sidechain_getStatus", Vec::<()>::new()).await
+    rpc.call_with_retry("sidechain_getStatus", Vec::<()>::new())
+        .await
 }
 
-async fn get_sidechain_status_at_block(rpc: &RpcClient, block_hash: &str) -> Result<SidechainStatus> {
+async fn get_sidechain_status_at_block(
+    rpc: &RpcClient,
+    block_hash: &str,
+) -> Result<SidechainStatus> {
     // Query sidechain status at a specific block hash
     // Substrate RPC methods typically accept an optional block hash as the last parameter
-    rpc.call_with_retry("sidechain_getStatus", vec![block_hash]).await
+    rpc.call_with_retry("sidechain_getStatus", vec![block_hash])
+        .await
 }
 
 async fn get_block_hash(rpc: &RpcClient, block_number: u64) -> Result<String> {
-    rpc.call_with_retry("chain_getBlockHash", vec![block_number]).await
+    rpc.call_with_retry("chain_getBlockHash", vec![block_number])
+        .await
 }
 
 async fn get_block(rpc: &RpcClient, hash: &str) -> Result<SignedBlock> {
@@ -392,14 +418,20 @@ async fn detect_safe_start_block(rpc: &RpcClient, chain_tip: u64) -> Option<u64>
     match ValidatorSet::fetch_committee_at_block(rpc, Some(&hash)).await {
         Ok(_) => {
             // State is available for old blocks - likely an archive node
-            debug!("Historical state available at block {} - archive node detected", test_old_block);
+            debug!(
+                "Historical state available at block {} - archive node detected",
+                test_old_block
+            );
             None
         }
         Err(e) => {
             let err_str = format!("{:?}", e);
             if err_str.contains("State already discarded") || err_str.contains("UnknownBlock") {
                 // State is pruned - do binary search to find the boundary
-                debug!("State pruned at block {}, searching for safe start...", test_old_block);
+                debug!(
+                    "State pruned at block {}, searching for safe start...",
+                    test_old_block
+                );
 
                 // Binary search between test_old_block and chain_tip
                 let mut low = test_old_block;
@@ -515,7 +547,16 @@ async fn sync_block_range(
     let mut captured_sidechain_epochs: HashSet<u64> = HashSet::new();
 
     for block_num in from..=to {
-        match sync_single_block(rpc, db, block_num, &mut committee_cache, &mut captured_sidechain_epochs, chain_timing).await {
+        match sync_single_block(
+            rpc,
+            db,
+            block_num,
+            &mut committee_cache,
+            &mut captured_sidechain_epochs,
+            chain_timing,
+        )
+        .await
+        {
             Ok(true) => synced += 1,
             Ok(false) => {
                 debug!("Block {} already exists, skipping", block_num);
@@ -619,7 +660,10 @@ async fn sync_single_block(
                             sidechain_epoch, e
                         );
                     } else {
-                        debug!("Stored committee snapshot for sidechain epoch {}", sidechain_epoch);
+                        debug!(
+                            "Stored committee snapshot for sidechain epoch {}",
+                            sidechain_epoch
+                        );
                     }
                 }
 
@@ -636,7 +680,9 @@ async fn sync_single_block(
                 if used_fallback {
                     None
                 } else {
-                    committee_cache.get(&sidechain_epoch).map(|c| &c.validator_set)
+                    committee_cache
+                        .get(&sidechain_epoch)
+                        .map(|c| &c.validator_set)
                 }
             }
             Err(e) => {
@@ -658,7 +704,8 @@ async fn sync_single_block(
     if let Some(vset) = &validator_set {
         if sidechain_epoch > 0 && !captured_sidechain_epochs.contains(&sidechain_epoch) {
             // Check if already in database
-            let already_captured = db.has_validator_epoch_snapshot(sidechain_epoch)
+            let already_captured = db
+                .has_validator_epoch_snapshot(sidechain_epoch)
                 .unwrap_or(false);
 
             if !already_captured {
@@ -736,7 +783,10 @@ async fn sync_single_block(
                 None
             }
         } else {
-            debug!("Block {} has no slot number, cannot determine author", block_number);
+            debug!(
+                "Block {} has no slot number, cannot determine author",
+                block_number
+            );
             None
         }
     } else {

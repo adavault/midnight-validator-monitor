@@ -150,11 +150,7 @@ impl RpcClient {
                     attempts += 1;
                     warn!(
                         "RPC call '{}' failed (attempt {}/{}), retrying in {}ms: {}",
-                        method,
-                        attempts,
-                        self.retry_config.max_retries,
-                        delay,
-                        e
+                        method, attempts, self.retry_config.max_retries, delay, e
                     );
                     tokio::time::sleep(Duration::from_millis(delay)).await;
                     delay = ((delay as f64) * self.retry_config.backoff_multiplier) as u64;

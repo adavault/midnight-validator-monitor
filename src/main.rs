@@ -76,9 +76,7 @@ async fn main() -> Result<()> {
         } else {
             Level::INFO
         };
-        let subscriber = FmtSubscriber::builder()
-            .with_max_level(log_level)
-            .finish();
+        let subscriber = FmtSubscriber::builder().with_max_level(log_level).finish();
         tracing::subscriber::set_global_default(subscriber)?;
 
         info!(

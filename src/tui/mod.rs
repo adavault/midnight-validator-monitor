@@ -6,7 +6,7 @@ mod layout;
 mod theme;
 mod ui;
 
-pub use app::{App, ViewMode, PopupContent};
+pub use app::{App, PopupContent, ViewMode};
 pub use event::{Event, EventHandler};
 pub use layout::ScreenSize;
 pub use theme::Theme;

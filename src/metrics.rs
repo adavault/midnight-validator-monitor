@@ -2,6 +2,9 @@ use anyhow::{Context, Result};
 use reqwest::Client;
 use std::collections::HashMap;
 
+/// Type alias for parsed Prometheus metrics: metric_name -> Vec<(labels, value)>
+type ParsedMetrics = HashMap<String, Vec<(HashMap<String, String>, f64)>>;
+
 /// Client for fetching Prometheus metrics from Substrate node
 pub struct MetricsClient {
     client: Client,
@@ -270,8 +273,8 @@ fn parse_metrics(body: &str) -> BlockProductionMetrics {
 
 /// Simple Prometheus text format parser
 /// Returns a map of metric_name -> Vec<(labels, value)>
-fn parse_prometheus_text(body: &str) -> HashMap<String, Vec<(HashMap<String, String>, f64)>> {
-    let mut result: HashMap<String, Vec<(HashMap<String, String>, f64)>> = HashMap::new();
+fn parse_prometheus_text(body: &str) -> ParsedMetrics {
+    let mut result: ParsedMetrics = HashMap::new();
 
     for line in body.lines() {
         let line = line.trim();
@@ -298,10 +301,7 @@ fn parse_prometheus_text(body: &str) -> HashMap<String, Vec<(HashMap<String, Str
                 (name_labels.to_string(), HashMap::new())
             };
 
-            result
-                .entry(name)
-                .or_default()
-                .push((labels, value));
+            result.entry(name).or_default().push((labels, value));
         }
     }
 
@@ -346,7 +346,7 @@ fn parse_labels(labels_str: &str) -> HashMap<String, String> {
 
 /// Find a metric value by name and optional label filters
 fn find_metric(
-    parsed: &HashMap<String, Vec<(HashMap<String, String>, f64)>>,
+    parsed: &ParsedMetrics,
     name: &str,
     label_filters: Option<&[(&str, &str)]>,
 ) -> Option<f64> {
@@ -354,9 +354,9 @@ fn find_metric(
 
     for (labels, value) in entries {
         let matches = match label_filters {
-            Some(filters) => filters.iter().all(|(k, v)| {
-                labels.get(*k).map(|lv| lv == *v).unwrap_or(false)
-            }),
+            Some(filters) => filters
+                .iter()
+                .all(|(k, v)| labels.get(*k).map(|lv| lv == *v).unwrap_or(false)),
             None => true,
         };
 
@@ -370,24 +370,19 @@ fn find_metric(
 
 /// Sum all metric values matching the label filters
 /// Used for metrics with multiple label dimensions (e.g., connections_closed has both direction and reason)
-fn sum_metric(
-    parsed: &HashMap<String, Vec<(HashMap<String, String>, f64)>>,
-    name: &str,
-    label_filters: Option<&[(&str, &str)]>,
-) -> f64 {
+fn sum_metric(parsed: &ParsedMetrics, name: &str, label_filters: Option<&[(&str, &str)]>) -> f64 {
     let entries = match parsed.get(name) {
         Some(e) => e,
         None => return 0.0,
     };
 
-    entries.iter()
-        .filter(|(labels, _)| {
-            match label_filters {
-                Some(filters) => filters.iter().all(|(k, v)| {
-                    labels.get(*k).map(|lv| lv == *v).unwrap_or(false)
-                }),
-                None => true,
-            }
+    entries
+        .iter()
+        .filter(|(labels, _)| match label_filters {
+            Some(filters) => filters
+                .iter()
+                .all(|(k, v)| labels.get(*k).map(|lv| lv == *v).unwrap_or(false)),
+            None => true,
         })
         .map(|(_, value)| *value)
         .sum()

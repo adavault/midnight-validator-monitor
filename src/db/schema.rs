@@ -1,5 +1,5 @@
+use anyhow::{bail, Result};
 use rusqlite::Connection;
-use anyhow::{Result, bail};
 use tracing::info;
 
 /// Current schema version - increment when making schema changes
@@ -212,7 +212,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if db_version == 0 {
         // New database - initialize metadata
         init_schema_meta(conn, CURRENT_SCHEMA_VERSION, app_version)?;
-        info!("Initialized new database with schema version {}", CURRENT_SCHEMA_VERSION);
+        info!(
+            "Initialized new database with schema version {}",
+            CURRENT_SCHEMA_VERSION
+        );
         return Ok(());
     }
 
@@ -248,7 +251,6 @@ fn run_migration(_conn: &Connection, to_version: u32) -> Result<()> {
         //     _conn.execute("ALTER TABLE blocks ADD COLUMN new_field TEXT", [])?;
         //     Ok(())
         // }
-
         _ => bail!("Unknown migration version: {}", to_version),
     }
 }
@@ -300,11 +302,14 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
 
         // Simulate a pre-v1.0 database by creating tables without schema_meta
-        conn.execute_batch(r#"
+        conn.execute_batch(
+            r#"
             CREATE TABLE blocks (block_number INTEGER PRIMARY KEY);
             CREATE TABLE validators (id INTEGER PRIMARY KEY);
             CREATE TABLE sync_status (id INTEGER PRIMARY KEY);
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         // Run migrations - should detect missing schema_meta and initialize it
         run_migrations(&conn).unwrap();

@@ -88,7 +88,9 @@ impl KnownValidators {
         }
 
         // 3. Install location
-        paths.push(PathBuf::from("/opt/midnight/mvm/config/known_validators.toml"));
+        paths.push(PathBuf::from(
+            "/opt/midnight/mvm/config/known_validators.toml",
+        ));
 
         paths
     }
@@ -100,11 +102,13 @@ impl KnownValidators {
     }
 
     /// Check if we have any known validators loaded
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.labels.is_empty()
     }
 
     /// Get count of known validators
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.labels.len()
     }

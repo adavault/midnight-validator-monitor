@@ -22,3 +22,15 @@ discord-context/*.json
 
 # Known validators (private - may contain identity info)
 known_validators.toml
+
+# Local database files
+*.db
+*.db-shm
+*.db-wal
+*.db.backup_*
+
+# Local config overrides
+config_updated.toml
+
+# Test scripts (local dev only)
+test_*.sh

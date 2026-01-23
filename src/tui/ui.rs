@@ -7,7 +7,10 @@ use ratatui::{
     layout::{Alignment, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, TableState},
+    widgets::{
+        Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Scrollbar,
+        ScrollbarOrientation, ScrollbarState, Table, TableState,
+    },
     Frame,
 };
 
@@ -61,9 +64,7 @@ fn sparkline_colored_spans<'a>(
         .iter()
         .zip(seats.iter().chain(std::iter::repeat(&0u64)))
         .map(|(&block_count, &seat_count)| {
-            let bar_char = if max == 0 {
-                BARS[0]
-            } else if block_count == 0 {
+            let bar_char = if max == 0 || block_count == 0 {
                 BARS[0]
             } else {
                 let idx = ((block_count as f64 / max as f64) * 7.0).round() as usize;
@@ -145,31 +146,49 @@ fn render_title_bar(f: &mut Frame, app: &App, area: Rect, _layout: &ResponsiveLa
     };
 
     let left_text = vec![
-        Span::styled("Midnight Validator Monitor", Style::default().fg(theme.title()).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Midnight Validator Monitor",
+            Style::default()
+                .fg(theme.title())
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw("  |  "),
-        Span::styled(view_label, Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            view_label,
+            Style::default()
+                .fg(theme.primary())
+                .add_modifier(Modifier::BOLD),
+        ),
     ];
 
-    let left_paragraph = Paragraph::new(Line::from(left_text))
-        .alignment(Alignment::Left);
+    let left_paragraph = Paragraph::new(Line::from(left_text)).alignment(Alignment::Left);
     f.render_widget(left_paragraph, chunks[0]);
 
     // Right side: chain name and hostname (bold)
     let right_text = if app.state.chain_name.is_empty() {
         Line::from(vec![
-            Span::styled(&app.state.node_name, Style::default().fg(theme.secondary()).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                &app.state.node_name,
+                Style::default()
+                    .fg(theme.secondary())
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" "),
         ])
     } else {
         Line::from(vec![
             Span::styled(&app.state.chain_name, Style::default().fg(theme.epoch())),
             Span::styled(" @ ", Style::default().fg(theme.muted())),
-            Span::styled(&app.state.node_name, Style::default().fg(theme.secondary()).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                &app.state.node_name,
+                Style::default()
+                    .fg(theme.secondary())
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" "),
         ])
     };
-    let right_paragraph = Paragraph::new(right_text)
-        .alignment(Alignment::Right);
+    let right_paragraph = Paragraph::new(right_text).alignment(Alignment::Right);
     f.render_widget(right_paragraph, chunks[1]);
 }
 
@@ -193,8 +212,8 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
 
     // Split inner area: left for status, right for MVM/version/theme
     let right_width = match layout.size {
-        ScreenSize::Medium => 24,  // MVM: 12345 ☽ Night
-        ScreenSize::Large => 45,   // MVM: 12345  Node: v0.5.6  ☽ Midnight
+        ScreenSize::Medium => 24, // MVM: 12345 ☽ Night
+        ScreenSize::Large => 45,  // MVM: 12345  Node: v0.5.6  ☽ Midnight
     };
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -207,7 +226,10 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
         // Popup is open - show dismiss hint
         vec![
             Span::styled("●", Style::default().fg(theme.success())),
-            Span::styled(format!(" {}s ago  |  ", since_update), Style::default().fg(theme.text())),
+            Span::styled(
+                format!(" {}s ago  |  ", since_update),
+                Style::default().fg(theme.text()),
+            ),
             Span::styled("[Esc]", Style::default().fg(theme.primary())),
             Span::styled(" Close popup  ", Style::default().fg(theme.muted())),
             // Show scroll hint for validator detail popup
@@ -229,7 +251,12 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
         ]
     } else if let Some(ref err) = app.state.last_error {
         vec![
-            Span::styled("ERR: ", Style::default().fg(theme.error()).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "ERR: ",
+                Style::default()
+                    .fg(theme.error())
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(err.clone(), Style::default().fg(theme.error())),
         ]
     } else {
@@ -247,13 +274,19 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
                 // Compact status for narrow screens
                 let mut spans = vec![
                     Span::styled("●", Style::default().fg(theme.success())),
-                    Span::styled(format!(" {}s ago | ", since_update), Style::default().fg(theme.text())),
+                    Span::styled(
+                        format!(" {}s ago | ", since_update),
+                        Style::default().fg(theme.text()),
+                    ),
                     Span::styled("[1-5]", Style::default().fg(theme.primary())),
                     Span::styled(" Views | ", Style::default().fg(theme.muted())),
                 ];
                 if let Some(hint) = enter_hint {
                     spans.push(Span::styled("Enter", Style::default().fg(theme.primary())));
-                    spans.push(Span::styled(format!(" {} | ", hint), Style::default().fg(theme.muted())));
+                    spans.push(Span::styled(
+                        format!(" {} | ", hint),
+                        Style::default().fg(theme.muted()),
+                    ));
                 }
                 spans.push(Span::styled("?", Style::default().fg(theme.primary())));
                 spans.push(Span::styled(" Help", Style::default().fg(theme.muted())));
@@ -263,13 +296,22 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
                 // Full status for wide screens
                 let mut spans = vec![
                     Span::styled("●", Style::default().fg(theme.success())),
-                    Span::styled(format!(" Connected  |  Updated {}s ago  |  ", since_update), Style::default().fg(theme.text())),
+                    Span::styled(
+                        format!(" Connected  |  Updated {}s ago  |  ", since_update),
+                        Style::default().fg(theme.text()),
+                    ),
                     Span::styled("[1-5]", Style::default().fg(theme.primary())),
                     Span::styled(" Views  ", Style::default().fg(theme.muted())),
                 ];
                 if let Some(hint) = enter_hint {
-                    spans.push(Span::styled("[Enter]", Style::default().fg(theme.primary())));
-                    spans.push(Span::styled(format!(" {}  ", hint), Style::default().fg(theme.muted())));
+                    spans.push(Span::styled(
+                        "[Enter]",
+                        Style::default().fg(theme.primary()),
+                    ));
+                    spans.push(Span::styled(
+                        format!(" {}  ", hint),
+                        Style::default().fg(theme.muted()),
+                    ));
                 }
                 spans.push(Span::styled("[Q]", Style::default().fg(theme.primary())));
                 spans.push(Span::styled(" Quit  ", Style::default().fg(theme.muted())));
@@ -280,13 +322,15 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
         }
     };
 
-    let left_paragraph = Paragraph::new(Line::from(left_text))
-        .alignment(Alignment::Left);
+    let left_paragraph = Paragraph::new(Line::from(left_text)).alignment(Alignment::Left);
     f.render_widget(left_paragraph, chunks[0]);
 
     // Right side: MVM status, node version, theme name
     // Calculate MVM sync status
-    let mvm_last_block = app.state.recent_blocks.first()
+    let mvm_last_block = app
+        .state
+        .recent_blocks
+        .first()
         .map(|b| b.block_number)
         .unwrap_or(0);
     let mvm_sync_pct = if app.state.chain_tip > 0 && mvm_last_block > 0 {
@@ -300,7 +344,11 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
 
     // Format node version (trim git hash)
     let version_display = if app.state.node_version.contains('-') {
-        app.state.node_version.split('-').next().unwrap_or(&app.state.node_version)
+        app.state
+            .node_version
+            .split('-')
+            .next()
+            .unwrap_or(&app.state.node_version)
     } else if app.state.node_version.is_empty() {
         "?"
     } else {
@@ -308,18 +356,28 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
     };
 
     let (theme_icon, theme_display) = if theme.name().contains("Midnight") {
-        ("☽ ", match layout.size {
-            ScreenSize::Medium => "Night",
-            ScreenSize::Large => "Midnight",
-        })
+        (
+            "☽ ",
+            match layout.size {
+                ScreenSize::Medium => "Night",
+                ScreenSize::Large => "Midnight",
+            },
+        )
     } else {
-        ("☀ ", match layout.size {
-            ScreenSize::Medium => "Day",
-            ScreenSize::Large => "Midday",
-        })
+        (
+            "☀ ",
+            match layout.size {
+                ScreenSize::Medium => "Day",
+                ScreenSize::Large => "Midday",
+            },
+        )
     };
 
-    let mvm_color = if mvm_synced { theme.text() } else { theme.warning() };
+    let mvm_color = if mvm_synced {
+        theme.text()
+    } else {
+        theme.warning()
+    };
     let mvm_display = if mvm_synced {
         format!("{}", app.state.total_blocks)
     } else {
@@ -338,14 +396,16 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
             Span::styled("MVM: ", Style::default().fg(theme.muted())),
             Span::styled(format!("{}  ", mvm_display), Style::default().fg(mvm_color)),
             Span::styled("Node: ", Style::default().fg(theme.muted())),
-            Span::styled(format!("v{}  ", version_display), Style::default().fg(theme.text())),
+            Span::styled(
+                format!("v{}  ", version_display),
+                Style::default().fg(theme.text()),
+            ),
             Span::styled(theme_icon, Style::default().fg(theme.primary())),
             Span::styled(theme_display, Style::default().fg(theme.secondary())),
             Span::raw(" "),
         ]),
     };
-    let right_paragraph = Paragraph::new(right_text)
-        .alignment(Alignment::Right);
+    let right_paragraph = Paragraph::new(right_text).alignment(Alignment::Right);
     f.render_widget(right_paragraph, chunks[1]);
 }
 
@@ -361,8 +421,10 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
     }
     if app.state.system_memory_total_bytes > 0 {
         network_rows += 1; // System row
-        // Check if memory warning will be shown
-        let mem_percent = (app.state.system_memory_used_bytes as f64 / app.state.system_memory_total_bytes as f64) * 100.0;
+                           // Check if memory warning will be shown
+        let mem_percent = (app.state.system_memory_used_bytes as f64
+            / app.state.system_memory_total_bytes as f64)
+            * 100.0;
         if mem_percent > 85.0 {
             network_rows += 1; // Memory warning row
         }
@@ -374,56 +436,80 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         let loading_text = vec![
             Line::from(vec![
                 Span::styled("◌ ", Style::default().fg(theme.warning())),
-                Span::styled("Connecting to node and loading data...", Style::default().fg(theme.text())),
+                Span::styled(
+                    "Connecting to node and loading data...",
+                    Style::default().fg(theme.text()),
+                ),
             ]),
             Line::from(""),
-            Line::from(vec![
-                Span::styled("  This may take a few seconds on first startup.", Style::default().fg(theme.muted())),
-            ]),
+            Line::from(vec![Span::styled(
+                "  This may take a few seconds on first startup.",
+                Style::default().fg(theme.muted()),
+            )]),
         ];
-        let loading_widget = Paragraph::new(loading_text)
-            .block(Block::default()
+        let loading_widget = Paragraph::new(loading_text).block(
+            Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(theme.border()))
-                .title(Span::styled("Network Status", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))));
+                .title(Span::styled(
+                    "Network Status",
+                    Style::default()
+                        .fg(theme.primary())
+                        .add_modifier(Modifier::BOLD),
+                )),
+        );
         f.render_widget(loading_widget, chunks[0]);
 
         // Empty placeholders for other panels
-        let placeholder = Paragraph::new("")
-            .block(Block::default()
+        let placeholder = Paragraph::new("").block(
+            Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(theme.border()))
-                .title(Span::styled("Our Validator", Style::default().fg(theme.ours()).add_modifier(Modifier::BOLD))));
+                .title(Span::styled(
+                    "Our Validator",
+                    Style::default()
+                        .fg(theme.ours())
+                        .add_modifier(Modifier::BOLD),
+                )),
+        );
         f.render_widget(placeholder, chunks[1]);
 
-        let placeholder2 = Paragraph::new("")
-            .block(Block::default()
+        let placeholder2 = Paragraph::new("").block(
+            Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(theme.border()))
-                .title(Span::styled("Recent Blocks", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))));
+                .title(Span::styled(
+                    "Recent Blocks",
+                    Style::default()
+                        .fg(theme.primary())
+                        .add_modifier(Modifier::BOLD),
+                )),
+        );
         f.render_widget(placeholder2, chunks[2]);
         return;
     }
 
     // Create epoch progress bars (full width for epochs)
     let epoch_progress = &app.state.epoch_progress;
-    let epoch_bar_width = 30;  // Wider bars for full-width epoch rows
-    let sidechain_filled = ((epoch_progress.progress_percent / 100.0) * epoch_bar_width as f64) as usize;
+    let epoch_bar_width = 30; // Wider bars for full-width epoch rows
+    let sidechain_filled =
+        ((epoch_progress.progress_percent / 100.0) * epoch_bar_width as f64) as usize;
     let sidechain_bar: String = format!(
         "{}{}",
         "━".repeat(sidechain_filled.min(epoch_bar_width)),
         "░".repeat(epoch_bar_width.saturating_sub(sidechain_filled))
     );
-    let mainchain_filled = ((epoch_progress.mainchain_progress_percent / 100.0) * epoch_bar_width as f64) as usize;
+    let mainchain_filled =
+        ((epoch_progress.mainchain_progress_percent / 100.0) * epoch_bar_width as f64) as usize;
     let mainchain_bar: String = format!(
         "{}{}",
         "━".repeat(mainchain_filled.min(epoch_bar_width)),
         "░".repeat(epoch_bar_width.saturating_sub(mainchain_filled))
     );
 
-    // Build sync progress bar
+    // Build sync progress bar (12 chars + space + percentage fits in 22 char column)
     let sync = &app.state.sync_progress;
-    let sync_bar_width = 20;
+    let sync_bar_width = 12;
     let sync_filled = ((sync.sync_percent / 100.0) * sync_bar_width as f64) as usize;
     let sync_bar: String = format!(
         "{}{}",
@@ -447,7 +533,10 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
 
     // Format block and finalized display
     let block_str = format!("#{}", app.state.chain_tip);
-    let finalized_lag = app.state.chain_tip.saturating_sub(app.state.finalized_block);
+    let finalized_lag = app
+        .state
+        .chain_tip
+        .saturating_sub(app.state.finalized_block);
     let finalized_str = if finalized_lag == 0 {
         format!("#{} (tip)", app.state.finalized_block)
     } else {
@@ -459,7 +548,10 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
     if sync.is_synced {
         network_text.push(Line::from(vec![
             Span::styled("Node:         ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{:<22}", format!("{} Synced", sync_icon)), Style::default().fg(sync_color)),
+            Span::styled(
+                format!("{:<22}", format!("{} Synced", sync_icon)),
+                Style::default().fg(sync_color),
+            ),
             Span::styled("Uptime:       ", Style::default().fg(theme.muted())),
             Span::styled(uptime.clone(), Style::default().fg(theme.text())),
         ]));
@@ -467,7 +559,10 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         let sync_display = format!("{} {:.1}%", sync_bar, sync.sync_percent);
         network_text.push(Line::from(vec![
             Span::styled("Node:         ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{:<22}", sync_display), Style::default().fg(theme.warning())),
+            Span::styled(
+                format!("{:<22}", sync_display),
+                Style::default().fg(theme.warning()),
+            ),
             Span::styled("Uptime:       ", Style::default().fg(theme.muted())),
             Span::styled(uptime.clone(), Style::default().fg(theme.text())),
         ]));
@@ -484,7 +579,10 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         };
         network_text.push(Line::from(vec![
             Span::styled("Sync:         ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{} remaining", sync.blocks_remaining), Style::default().fg(theme.warning())),
+            Span::styled(
+                format!("{} remaining", sync.blocks_remaining),
+                Style::default().fg(theme.warning()),
+            ),
             Span::styled("  ", Style::default()),
             Span::styled(rate_str, Style::default().fg(theme.warning())),
             Span::styled("  ", Style::default()),
@@ -495,7 +593,10 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
     // Row 2: Block + Finalized
     network_text.push(Line::from(vec![
         Span::styled("Block:        ", Style::default().fg(theme.muted())),
-        Span::styled(format!("{:<22}", block_str), Style::default().fg(theme.block_number())),
+        Span::styled(
+            format!("{:<22}", block_str),
+            Style::default().fg(theme.block_number()),
+        ),
         Span::styled("Finalized:    ", Style::default().fg(theme.muted())),
         Span::styled(finalized_str, Style::default().fg(theme.text())),
     ]));
@@ -510,11 +611,20 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
     };
     network_text.push(Line::from(vec![
         Span::styled("Sidechain:    ", Style::default().fg(theme.muted())),
-        Span::styled(format!("epoch {:<6}", app.state.sidechain_epoch), Style::default().fg(theme.epoch())),
+        Span::styled(
+            format!("epoch {:<6}", app.state.sidechain_epoch),
+            Style::default().fg(theme.epoch()),
+        ),
         Span::styled(sidechain_bar, Style::default().fg(theme.primary())),
-        Span::styled(format!(" {:>5.1}%", epoch_progress.progress_percent), Style::default().fg(theme.text())),
+        Span::styled(
+            format!(" {:>5.1}%", epoch_progress.progress_percent),
+            Style::default().fg(theme.text()),
+        ),
         Span::styled("  next ", Style::default().fg(theme.muted())),
-        Span::styled(sidechain_countdown, Style::default().fg(sidechain_countdown_color)),
+        Span::styled(
+            sidechain_countdown,
+            Style::default().fg(sidechain_countdown_color),
+        ),
     ]));
 
     // Row 4: Mainchain epoch (full width with longer bar + countdown)
@@ -526,11 +636,20 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
     };
     network_text.push(Line::from(vec![
         Span::styled("Mainchain:    ", Style::default().fg(theme.muted())),
-        Span::styled(format!("epoch {:<6}", app.state.mainchain_epoch), Style::default().fg(theme.epoch())),
+        Span::styled(
+            format!("epoch {:<6}", app.state.mainchain_epoch),
+            Style::default().fg(theme.epoch()),
+        ),
         Span::styled(mainchain_bar, Style::default().fg(theme.primary())),
-        Span::styled(format!(" {:>5.1}%", epoch_progress.mainchain_progress_percent), Style::default().fg(theme.text())),
+        Span::styled(
+            format!(" {:>5.1}%", epoch_progress.mainchain_progress_percent),
+            Style::default().fg(theme.text()),
+        ),
         Span::styled("  next ", Style::default().fg(theme.muted())),
-        Span::styled(mainchain_countdown, Style::default().fg(mainchain_countdown_color)),
+        Span::styled(
+            mainchain_countdown,
+            Style::default().fg(mainchain_countdown_color),
+        ),
     ]));
 
     // Row 5: Network identity (external IP + peer ID)
@@ -540,7 +659,11 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         app.state.external_ips.join(", ")
     };
     let peer_id_display = if app.state.local_peer_id.len() > 16 {
-        format!("{}...{}", &app.state.local_peer_id[..8], &app.state.local_peer_id[app.state.local_peer_id.len()-4..])
+        format!(
+            "{}...{}",
+            &app.state.local_peer_id[..8],
+            &app.state.local_peer_id[app.state.local_peer_id.len() - 4..]
+        )
     } else if app.state.local_peer_id.is_empty() {
         "unknown".to_string()
     } else {
@@ -548,7 +671,10 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
     };
     network_text.push(Line::from(vec![
         Span::styled("Identity:     ", Style::default().fg(theme.muted())),
-        Span::styled(format!("{:<22}", external_ip), Style::default().fg(theme.text())),
+        Span::styled(
+            format!("{:<22}", external_ip),
+            Style::default().fg(theme.text()),
+        ),
         Span::styled(peer_id_display, Style::default().fg(theme.secondary())),
     ]));
 
@@ -558,15 +684,27 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         Span::styled("Bandwidth:    ", Style::default().fg(theme.muted())),
         Span::styled("↓", Style::default().fg(theme.success())),
         Span::styled("↑ ", Style::default().fg(theme.muted())),
-        Span::styled(format!("{}", bandwidth_in), Style::default().fg(theme.success())),
+        Span::styled(
+            bandwidth_in.to_string(),
+            Style::default().fg(theme.success()),
+        ),
         Span::styled(" / ", Style::default().fg(theme.text())),
-        Span::styled(format!("{:<10}", bandwidth_out), Style::default().fg(theme.muted())),
+        Span::styled(
+            format!("{:<10}", bandwidth_out),
+            Style::default().fg(theme.muted()),
+        ),
         Span::styled("Peers:        ", Style::default().fg(theme.muted())),
         Span::styled("↓", Style::default().fg(theme.success())),
         Span::styled("↑ ", Style::default().fg(theme.muted())),
-        Span::styled(format!("{}", app.state.peers_inbound), Style::default().fg(theme.success())),
+        Span::styled(
+            format!("{}", app.state.peers_inbound),
+            Style::default().fg(theme.success()),
+        ),
         Span::styled(" / ", Style::default().fg(theme.text())),
-        Span::styled(format!("{}", app.state.peers_outbound), Style::default().fg(theme.muted())),
+        Span::styled(
+            format!("{}", app.state.peers_outbound),
+            Style::default().fg(theme.muted()),
+        ),
     ]));
 
     // Row 7: Tx Pool
@@ -584,7 +722,9 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         let disk_total = format_bytes(app.state.system_disk_total_bytes);
 
         // Calculate memory percentage and determine color/warning
-        let mem_percent = (app.state.system_memory_used_bytes as f64 / app.state.system_memory_total_bytes as f64) * 100.0;
+        let mem_percent = (app.state.system_memory_used_bytes as f64
+            / app.state.system_memory_total_bytes as f64)
+            * 100.0;
         let mem_color = if mem_percent > 90.0 {
             theme.error() // Critical
         } else if mem_percent > 80.0 {
@@ -604,13 +744,22 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         network_text.push(Line::from(vec![
             Span::styled("System:       ", Style::default().fg(theme.muted())),
             Span::styled("Mem ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{}/{}", mem_used, mem_total), Style::default().fg(mem_color)),
+            Span::styled(
+                format!("{}/{}", mem_used, mem_total),
+                Style::default().fg(mem_color),
+            ),
             Span::styled(trend_indicator.0, Style::default().fg(trend_indicator.1)),
             Span::styled("  ", Style::default()),
             Span::styled("Disk ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{}/{}  ", disk_used, disk_total), Style::default().fg(theme.text())),
+            Span::styled(
+                format!("{}/{}  ", disk_used, disk_total),
+                Style::default().fg(theme.text()),
+            ),
             Span::styled("Load ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{:.2}", app.state.system_load1), Style::default().fg(theme.text())),
+            Span::styled(
+                format!("{:.2}", app.state.system_load1),
+                Style::default().fg(theme.text()),
+            ),
         ]));
 
         // Add memory warning if high usage
@@ -619,23 +768,37 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
                 Span::styled("              ", Style::default()),
                 Span::styled("⚠ ", Style::default().fg(theme.warning())),
                 Span::styled(
-                    format!("Memory usage high ({:.0}%) - Node may crash if this continues", mem_percent),
-                    Style::default().fg(theme.warning())
+                    format!(
+                        "Memory usage high ({:.0}%) - Node may crash if this continues",
+                        mem_percent
+                    ),
+                    Style::default().fg(theme.warning()),
                 ),
             ]));
         }
     }
 
-    let network_widget = Paragraph::new(network_text)
-        .block(Block::default()
+    let network_widget = Paragraph::new(network_text).block(
+        Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled("Network Status", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))));
+            .title(Span::styled(
+                "Network Status",
+                Style::default()
+                    .fg(theme.primary())
+                    .add_modifier(Modifier::BOLD),
+            )),
+    );
     f.render_widget(network_widget, chunks[0]);
 
     // Our validators - responsive with epoch block predictions
     let our_validators_text = if app.state.our_validators_count > 0 {
-        let total_our_blocks: u64 = app.state.our_validators.iter().map(|v| v.total_blocks).sum();
+        let total_our_blocks: u64 = app
+            .state
+            .our_validators
+            .iter()
+            .map(|v| v.total_blocks)
+            .sum();
         let share = if app.state.total_blocks > 0 {
             (total_our_blocks as f64 / app.state.total_blocks as f64) * 100.0
         } else {
@@ -647,13 +810,23 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         let expected_blocks = epoch_progress.expected_blocks;
         let performance_indicator = if expected_blocks > 0.0 {
             let ratio = epoch_blocks as f64 / expected_blocks;
-            if ratio >= 0.9 { "✓" } else if ratio >= 0.5 { "○" } else { "!" }
+            if ratio >= 0.9 {
+                "✓"
+            } else if ratio >= 0.5 {
+                "○"
+            } else {
+                "!"
+            }
         } else {
             "?"
         };
-        let perf_color = if performance_indicator == "✓" { theme.success() }
-            else if performance_indicator == "!" { theme.warning() }
-            else { theme.muted() };
+        let perf_color = if performance_indicator == "✓" {
+            theme.success()
+        } else if performance_indicator == "!" {
+            theme.warning()
+        } else {
+            theme.muted()
+        };
 
         // Panel height (9) fits 1 validator with all 3 keys (4 header + 3 key lines + 2 border)
         let max_validators = 1;
@@ -667,7 +840,10 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
 
         // Committee status - compact format
         let committee_status = if app.state.committee_elected {
-            format!("{} Elected ({} / {})", committee_icon, app.state.committee_seats, app.state.committee_size)
+            format!(
+                "{} Elected ({} / {})",
+                committee_icon, app.state.committee_seats, app.state.committee_size
+            )
         } else if app.state.committee_size > 0 {
             format!("{} Not elected", committee_icon)
         } else {
@@ -685,12 +861,12 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         } else {
             1.0 // No seats = no missed blocks
         };
-        let sparkline_color = if sparkline_ratio >= 0.9 {
-            theme.primary()  // Good performance (>= 90%)
+        let _sparkline_color = if sparkline_ratio >= 0.9 {
+            theme.primary() // Good performance (>= 90%)
         } else if sparkline_ratio >= 0.7 {
-            theme.warning()  // Moderate issues (70-90%)
+            theme.warning() // Moderate issues (70-90%)
         } else {
-            theme.error()    // Significant issues (< 70%)
+            theme.error() // Significant issues (< 70%)
         };
 
         // GRANDPA voter status
@@ -704,40 +880,59 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
             // Row 1: Committee + GRANDPA (validator participation statuses)
             Line::from(vec![
                 Span::styled("Committee:    ", Style::default().fg(theme.muted())),
-                Span::styled(format!("{:<22}", committee_status), Style::default().fg(committee_color)),
+                Span::styled(
+                    format!("{:<22}", committee_status),
+                    Style::default().fg(committee_color),
+                ),
                 Span::styled("GRANDPA:      ", Style::default().fg(theme.muted())),
                 Span::styled(grandpa_icon, Style::default().fg(grandpa_color)),
             ]),
             // Row 2: All-time blocks + Share
             Line::from(vec![
                 Span::styled("All-Time:     ", Style::default().fg(theme.muted())),
-                Span::styled(format!("{:<22}", blocks_str), Style::default().fg(theme.success())),
+                Span::styled(
+                    format!("{:<22}", blocks_str),
+                    Style::default().fg(theme.success()),
+                ),
                 Span::styled("Share:        ", Style::default().fg(theme.muted())),
-                Span::styled(format!("{:.3}%", share), Style::default().fg(theme.success())),
+                Span::styled(
+                    format!("{:.3}%", share),
+                    Style::default().fg(theme.success()),
+                ),
             ]),
             // Row 3: This epoch + Expected
             Line::from(vec![
                 Span::styled("This Epoch:   ", Style::default().fg(theme.muted())),
-                Span::styled(format!("{:<22}", epoch_str), Style::default().fg(theme.primary())),
+                Span::styled(
+                    format!("{:<22}", epoch_str),
+                    Style::default().fg(theme.primary()),
+                ),
                 Span::styled("Expected:     ", Style::default().fg(theme.muted())),
-                Span::styled(format!("~{:.1} ", expected_blocks), Style::default().fg(theme.text())),
+                Span::styled(
+                    format!("~{:.1} ", expected_blocks),
+                    Style::default().fg(theme.text()),
+                ),
                 Span::styled(performance_indicator, Style::default().fg(perf_color)),
             ]),
             // Row 4: Sparkline (24 epoch trend, spans both columns)
             // Each bar colored individually: normal for met expectations, red for missed blocks
             {
-                let mut sparkline_spans = vec![
-                    Span::styled("24 Epochs:    ", Style::default().fg(theme.muted())),
-                ];
+                let mut sparkline_spans = vec![Span::styled(
+                    "24 Epochs:    ",
+                    Style::default().fg(theme.muted()),
+                )];
                 sparkline_spans.extend(sparkline_colored_spans(
                     &app.state.our_blocks_sparkline,
                     &app.state.our_seats_sparkline,
-                    theme.primary(),  // Purple - normal
-                    theme.error(),    // Red - missed blocks only
+                    theme.primary(), // Purple - normal
+                    theme.error(),   // Red - missed blocks only
                 ));
                 sparkline_spans.push(Span::styled(
-                    format!("  ({} blocks / {} seats)", sparkline_blocks, sparkline_seats),
-                    Style::default().fg(theme.text())
+                    format!(
+                        "  ({} blocks / {} seats)",
+                        sparkline_blocks, sparkline_seats
+                    ),
+                    Style::default().fg(theme.text()),
                 ));
                 Line::from(sparkline_spans)
             },
@@ -746,12 +941,19 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         // Show validators with all three public keys (14-char labels)
         for v in app.state.our_validators.iter().take(max_validators) {
             let sidechain_display = key_mode.format(&v.sidechain_key);
-            let label = v.label.as_ref().map(|l| format!(" ({})", l)).unwrap_or_default();
+            let label = v
+                .label
+                .as_ref()
+                .map(|l| format!(" ({})", l))
+                .unwrap_or_default();
 
             // Row 5: Sidechain key
             lines.push(Line::from(vec![
                 Span::styled("* Sidechain:  ", Style::default().fg(theme.ours())),
-                Span::styled(sidechain_display.clone(), Style::default().fg(theme.secondary())),
+                Span::styled(
+                    sidechain_display.clone(),
+                    Style::default().fg(theme.secondary()),
+                ),
                 Span::styled(label.clone(), Style::default().fg(theme.muted())),
             ]));
 
@@ -775,66 +977,104 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLay
         }
 
         if app.state.our_validators_count > max_validators as u64 {
-            lines.push(Line::from(vec![
-                Span::styled(format!("  +{} more validators", app.state.our_validators_count - max_validators as u64), Style::default().fg(theme.muted())),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                format!(
+                    "  +{} more validators",
+                    app.state.our_validators_count - max_validators as u64
+                ),
+                Style::default().fg(theme.muted()),
+            )]));
         }
 
         lines
     } else {
         // No validators message (same for Medium and Large)
         vec![
-            Line::from(vec![
-                Span::styled("No validators marked as 'ours'", Style::default().fg(theme.warning())),
-            ]),
+            Line::from(vec![Span::styled(
+                "No validators marked as 'ours'",
+                Style::default().fg(theme.warning()),
+            )]),
             Line::from(""),
             Line::from(vec![
                 Span::styled("  Run: ", Style::default().fg(theme.muted())),
-                Span::styled("mvm keys --keystore <path> verify", Style::default().fg(theme.secondary())),
+                Span::styled(
+                    "mvm keys --keystore <path> verify",
+                    Style::default().fg(theme.secondary()),
+                ),
             ]),
         ]
     };
 
-    let our_validators_widget = Paragraph::new(our_validators_text)
-        .block(Block::default()
+    let our_validators_widget = Paragraph::new(our_validators_text).block(
+        Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled("Our Validator", Style::default().fg(theme.ours()).add_modifier(Modifier::BOLD))));
+            .title(Span::styled(
+                "Our Validator",
+                Style::default()
+                    .fg(theme.ours())
+                    .add_modifier(Modifier::BOLD),
+            )),
+    );
     f.render_widget(our_validators_widget, chunks[1]);
 
     // Recent blocks - fill available space (panel height minus 2 for borders)
     let blocks_to_show = chunks[2].height.saturating_sub(2) as usize;
 
-    let blocks_items: Vec<ListItem> = app.state.recent_blocks.iter().take(blocks_to_show).map(|block| {
-        let author_display = if let Some(ref author) = block.author_key {
-            key_mode.format(author)
-        } else {
-            "unknown".to_string()
-        };
+    let blocks_items: Vec<ListItem> = app
+        .state
+        .recent_blocks
+        .iter()
+        .take(blocks_to_show)
+        .map(|block| {
+            let author_display = if let Some(ref author) = block.author_key {
+                key_mode.format(author)
+            } else {
+                "unknown".to_string()
+            };
 
-        let finalized = if block.is_finalized { "✓" } else { " " };
+            let finalized = if block.is_finalized { "✓" } else { " " };
 
-        // Standard block format (same for Medium and Large)
-        let line = Line::from(vec![
-            Span::styled(format!("#{:<8}", block.block_number), Style::default().fg(theme.block_number())),
-            Span::raw("  "),
-            Span::styled(format!("slot {:>12}", block.slot_number), Style::default().fg(theme.muted())),
-            Span::raw("  "),
-            Span::styled(format!("epoch {:>6}", block.sidechain_epoch), Style::default().fg(theme.epoch())),
-            Span::raw("  "),
-            Span::styled(format!("{} ", finalized), Style::default().fg(theme.success())),
-            Span::styled("author: ", Style::default().fg(theme.muted())),
-            Span::styled(author_display, Style::default().fg(theme.text())),
-        ]);
+            // Standard block format (same for Medium and Large)
+            let line = Line::from(vec![
+                Span::styled(
+                    format!("#{:<8}", block.block_number),
+                    Style::default().fg(theme.block_number()),
+                ),
+                Span::raw("  "),
+                Span::styled(
+                    format!("slot {:>12}", block.slot_number),
+                    Style::default().fg(theme.muted()),
+                ),
+                Span::raw("  "),
+                Span::styled(
+                    format!("epoch {:>6}", block.sidechain_epoch),
+                    Style::default().fg(theme.epoch()),
+                ),
+                Span::raw("  "),
+                Span::styled(
+                    format!("{} ", finalized),
+                    Style::default().fg(theme.success()),
+                ),
+                Span::styled("author: ", Style::default().fg(theme.muted())),
+                Span::styled(author_display, Style::default().fg(theme.text())),
+            ]);
 
-        ListItem::new(line)
-    }).collect();
+            ListItem::new(line)
+        })
+        .collect();
 
-    let blocks_list = List::new(blocks_items)
-        .block(Block::default()
+    let blocks_list = List::new(blocks_items).block(
+        Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled("Recent Blocks", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))));
+            .title(Span::styled(
+                "Recent Blocks",
+                Style::default()
+                    .fg(theme.primary())
+                    .add_modifier(Modifier::BOLD),
+            )),
+    );
     f.render_widget(blocks_list, chunks[2]);
 }
 
@@ -843,50 +1083,89 @@ fn render_blocks(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout
     let key_mode = layout.key_display_length();
     let block_cols = layout.block_list_columns();
 
-    let blocks_items: Vec<ListItem> = app.state.recent_blocks.iter().map(|block| {
-        let author_display = if let Some(ref author) = block.author_key {
-            key_mode.format(author)
-        } else {
-            "unknown".to_string()
-        };
+    let blocks_items: Vec<ListItem> = app
+        .state
+        .recent_blocks
+        .iter()
+        .map(|block| {
+            let author_display = if let Some(ref author) = block.author_key {
+                key_mode.format(author)
+            } else {
+                "unknown".to_string()
+            };
 
-        let finalized = if block.is_finalized { "✓" } else { " " };
+            let finalized = if block.is_finalized { "✓" } else { " " };
 
-        // Standard block format (same for Medium and Large)
-        let mut spans = vec![
-            Span::styled(format!("#{:<8}", block.block_number), Style::default().fg(theme.block_number())),
-            Span::raw("  "),
-        ];
+            // Standard block format (same for Medium and Large)
+            let mut spans = vec![
+                Span::styled(
+                    format!("#{:<8}", block.block_number),
+                    Style::default().fg(theme.block_number()),
+                ),
+                Span::raw("  "),
+            ];
 
-        if block_cols.show_slot {
-            spans.push(Span::styled(format!("slot {:>12}", block.slot_number), Style::default().fg(theme.muted())));
-            spans.push(Span::raw("  "));
-        }
+            if block_cols.show_slot {
+                spans.push(Span::styled(
+                    format!("slot {:>12}", block.slot_number),
+                    Style::default().fg(theme.muted()),
+                ));
+                spans.push(Span::raw("  "));
+            }
 
-        if block_cols.show_epoch {
-            spans.push(Span::styled(format!("epoch {:>6}", block.sidechain_epoch), Style::default().fg(theme.epoch())));
-            spans.push(Span::raw("  "));
-        }
+            if block_cols.show_epoch {
+                spans.push(Span::styled(
+                    format!("epoch {:>6}", block.sidechain_epoch),
+                    Style::default().fg(theme.epoch()),
+                ));
+                spans.push(Span::raw("  "));
+            }
 
-        if block_cols.show_extrinsics {
-            spans.push(Span::styled(format!("extr:{:<3}", block.extrinsics_count), Style::default().fg(theme.text())));
-            spans.push(Span::raw("  "));
-        }
+            if block_cols.show_extrinsics {
+                spans.push(Span::styled(
+                    format!("extr:{:<3}", block.extrinsics_count),
+                    Style::default().fg(theme.text()),
+                ));
+                spans.push(Span::raw("  "));
+            }
 
-        spans.push(Span::styled(format!("{} ", finalized), Style::default().fg(theme.success())));
-        spans.push(Span::styled(author_display, Style::default().fg(theme.text())));
+            spans.push(Span::styled(
+                format!("{} ", finalized),
+                Style::default().fg(theme.success()),
+            ));
+            spans.push(Span::styled(
+                author_display,
+                Style::default().fg(theme.text()),
+            ));
 
-        ListItem::new(Line::from(spans))
-    }).collect();
+            ListItem::new(Line::from(spans))
+        })
+        .collect();
 
-    let title = format!("Blocks ({} total, showing last {}) - Use j/k or ↑/↓ to scroll", app.state.total_blocks, app.state.recent_blocks.len());
+    let title = format!(
+        "Blocks ({} total, showing last {}) - Use j/k or ↑/↓ to scroll",
+        app.state.total_blocks,
+        app.state.recent_blocks.len()
+    );
 
     let blocks_list = List::new(blocks_items)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled(title, Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))))
-        .highlight_style(Style::default().bg(theme.highlight()).add_modifier(Modifier::BOLD).fg(theme.text()));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.border()))
+                .title(Span::styled(
+                    title,
+                    Style::default()
+                        .fg(theme.primary())
+                        .add_modifier(Modifier::BOLD),
+                )),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(theme.highlight())
+                .add_modifier(Modifier::BOLD)
+                .fg(theme.text()),
+        );
 
     let mut list_state = ListState::default();
     list_state.select(Some(app.selected_index()));
@@ -901,59 +1180,84 @@ fn render_validators(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
     // Use the shared sorted validator list
     let validators = app.get_sorted_validators();
 
-    let validator_items: Vec<ListItem> = validators.iter().map(|v| {
-        let status = v.registration_status.as_deref().unwrap_or("unknown");
-        let ours = if v.is_ours { "★" } else { " " };
-        let key_display = key_mode.format(&v.sidechain_key);
+    let validator_items: Vec<ListItem> = validators
+        .iter()
+        .map(|v| {
+            let status = v.registration_status.as_deref().unwrap_or("unknown");
+            let ours = if v.is_ours { "★" } else { " " };
+            let key_display = key_mode.format(&v.sidechain_key);
 
-        // Get seats from epoch data if available
-        let seats_display = app.state.validator_epoch_data
-            .get(&v.sidechain_key)
-            .map(|epoch| format!("{:>3}", epoch.committee_seats))
-            .unwrap_or_else(|| "  -".to_string());
+            // Get seats from epoch data if available
+            let seats_display = app
+                .state
+                .validator_epoch_data
+                .get(&v.sidechain_key)
+                .map(|epoch| format!("{:>3}", epoch.committee_seats))
+                .unwrap_or_else(|| "  -".to_string());
 
-        // Standard validator format (same for Medium and Large)
-        // Fixed-width label column (5 chars for pool ticker)
-        let label_display = v.label.as_ref()
-            .map(|l| {
-                let truncated = if l.len() > 5 { &l[..5] } else { l.as_str() };
-                format!("{:<5}", truncated)
-            })
-            .unwrap_or_else(|| "     ".to_string()); // 5 spaces for unlabeled
+            // Standard validator format (same for Medium and Large)
+            // Fixed-width label column (5 chars for pool ticker)
+            let label_display = v
+                .label
+                .as_ref()
+                .map(|l| {
+                    let truncated = if l.len() > 5 { &l[..5] } else { l.as_str() };
+                    format!("{:<5}", truncated)
+                })
+                .unwrap_or_else(|| "     ".to_string()); // 5 spaces for unlabeled
 
-        let mut spans = vec![
-            Span::styled(ours, Style::default().fg(theme.ours())),
-            Span::raw(" "),
-            Span::styled(key_display, Style::default().fg(theme.secondary())),
-            Span::raw(" "),
-            Span::styled(label_display, Style::default().fg(theme.warning())),
-            Span::raw(" "),
-        ];
+            let mut spans = vec![
+                Span::styled(ours, Style::default().fg(theme.ours())),
+                Span::raw(" "),
+                Span::styled(key_display, Style::default().fg(theme.secondary())),
+                Span::raw(" "),
+                Span::styled(label_display, Style::default().fg(theme.warning())),
+                Span::raw(" "),
+            ];
 
-        if val_cols.show_status {
-            spans.push(Span::styled(format!("{:<12}", status), Style::default().fg(if v.is_ours { theme.success() } else { theme.muted() })));
+            if val_cols.show_status {
+                spans.push(Span::styled(
+                    format!("{:<12}", status),
+                    Style::default().fg(if v.is_ours {
+                        theme.success()
+                    } else {
+                        theme.muted()
+                    }),
+                ));
+                spans.push(Span::raw("  "));
+            }
+
+            // Add seats column
+            let seats_style = if app
+                .state
+                .validator_epoch_data
+                .get(&v.sidechain_key)
+                .map(|e| e.committee_seats > 0)
+                .unwrap_or(false)
+            {
+                Style::default().fg(theme.success())
+            } else {
+                Style::default().fg(theme.muted())
+            };
+            spans.push(Span::styled(seats_display, seats_style));
+            spans.push(Span::styled(" seats", Style::default().fg(theme.muted())));
             spans.push(Span::raw("  "));
-        }
 
-        // Add seats column
-        let seats_style = if app.state.validator_epoch_data.get(&v.sidechain_key).map(|e| e.committee_seats > 0).unwrap_or(false) {
-            Style::default().fg(theme.success())
-        } else {
-            Style::default().fg(theme.muted())
-        };
-        spans.push(Span::styled(seats_display, seats_style));
-        spans.push(Span::styled(" seats", Style::default().fg(theme.muted())));
-        spans.push(Span::raw("  "));
+            // Show epoch blocks (not total) - consistent with seats being per-epoch
+            let epoch_blocks = app
+                .state
+                .validator_epoch_blocks
+                .get(&v.sidechain_key)
+                .copied()
+                .unwrap_or(0);
+            spans.push(Span::styled(
+                format!("{:>4} blocks", epoch_blocks),
+                Style::default().fg(theme.text()),
+            ));
 
-        // Show epoch blocks (not total) - consistent with seats being per-epoch
-        let epoch_blocks = app.state.validator_epoch_blocks
-            .get(&v.sidechain_key)
-            .copied()
-            .unwrap_or(0);
-        spans.push(Span::styled(format!("{:>4} blocks", epoch_blocks), Style::default().fg(theme.text())));
-
-        ListItem::new(Line::from(spans))
-    }).collect();
+            ListItem::new(Line::from(spans))
+        })
+        .collect();
 
     let filter_text = if app.show_ours_only { " (ours)" } else { "" };
     let epoch_label = if app.state.sidechain_epoch > 0 {
@@ -961,14 +1265,31 @@ fn render_validators(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
     } else {
         String::new()
     };
-    let title = format!("Validators ({} total{}{}) - [F] filter, j/k or ↑/↓ scroll", validators.len(), filter_text, epoch_label);
+    let title = format!(
+        "Validators ({} total{}{}) - [F] filter, j/k or ↑/↓ scroll",
+        validators.len(),
+        filter_text,
+        epoch_label
+    );
 
     let validators_list = List::new(validator_items)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled(title, Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))))
-        .highlight_style(Style::default().bg(theme.highlight()).add_modifier(Modifier::BOLD).fg(theme.text()));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.border()))
+                .title(Span::styled(
+                    title,
+                    Style::default()
+                        .fg(theme.primary())
+                        .add_modifier(Modifier::BOLD),
+                )),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(theme.highlight())
+                .add_modifier(Modifier::BOLD)
+                .fg(theme.text()),
+        );
 
     let mut list_state = ListState::default();
     list_state.select(Some(app.selected_index()));
@@ -991,41 +1312,73 @@ fn render_performance(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveL
     // Always use total blocks from all validators for percentage (not filtered total)
     let total_blocks = app.state.total_blocks;
 
-    let validator_items: Vec<ListItem> = validators.iter().enumerate().map(|(i, v)| {
-        let share = if total_blocks > 0 {
-            (v.total_blocks as f64 / total_blocks as f64) * 100.0
-        } else {
-            0.0
-        };
+    let validator_items: Vec<ListItem> = validators
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let share = if total_blocks > 0 {
+                (v.total_blocks as f64 / total_blocks as f64) * 100.0
+            } else {
+                0.0
+            };
 
-        let ours = if v.is_ours { "★" } else { " " };
-        let key_display = key_mode.format(&v.sidechain_key);
+            let ours = if v.is_ours { "★" } else { " " };
+            let key_display = key_mode.format(&v.sidechain_key);
 
-        // Standard performance format (same for Medium and Large)
-        let line = Line::from(vec![
-            Span::styled(format!("{:>3}.", i + 1), Style::default().fg(theme.warning())),
-            Span::raw(" "),
-            Span::styled(ours, Style::default().fg(theme.ours())),
-            Span::raw(" "),
-            Span::styled(key_display, Style::default().fg(theme.secondary())),
-            Span::raw("  "),
-            Span::styled(format!("{:>6} blocks", v.total_blocks), Style::default().fg(theme.text())),
-            Span::raw("  "),
-            Span::styled(format!("{:>6.3}%", share), Style::default().fg(if v.is_ours { theme.success() } else { theme.muted() })),
-        ]);
+            // Standard performance format (same for Medium and Large)
+            let line = Line::from(vec![
+                Span::styled(
+                    format!("{:>3}.", i + 1),
+                    Style::default().fg(theme.warning()),
+                ),
+                Span::raw(" "),
+                Span::styled(ours, Style::default().fg(theme.ours())),
+                Span::raw(" "),
+                Span::styled(key_display, Style::default().fg(theme.secondary())),
+                Span::raw("  "),
+                Span::styled(
+                    format!("{:>6} blocks", v.total_blocks),
+                    Style::default().fg(theme.text()),
+                ),
+                Span::raw("  "),
+                Span::styled(
+                    format!("{:>6.3}%", share),
+                    Style::default().fg(if v.is_ours {
+                        theme.success()
+                    } else {
+                        theme.muted()
+                    }),
+                ),
+            ]);
 
-        ListItem::new(line)
-    }).collect();
+            ListItem::new(line)
+        })
+        .collect();
 
     let filter_text = if app.show_ours_only { " (ours)" } else { "" };
-    let title = format!("Performance Rankings{} - [F] filter, j/k or ↑/↓ scroll", filter_text);
+    let title = format!(
+        "Performance Rankings{} - [F] filter, j/k or ↑/↓ scroll",
+        filter_text
+    );
 
     let performance_list = List::new(validator_items)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled(title, Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))))
-        .highlight_style(Style::default().bg(theme.highlight()).add_modifier(Modifier::BOLD).fg(theme.text()));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.border()))
+                .title(Span::styled(
+                    title,
+                    Style::default()
+                        .fg(theme.primary())
+                        .add_modifier(Modifier::BOLD),
+                )),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(theme.highlight())
+                .add_modifier(Modifier::BOLD)
+                .fg(theme.text()),
+        );
 
     let mut list_state = ListState::default();
     list_state.select(Some(app.selected_index()));
@@ -1044,7 +1397,10 @@ fn render_peers(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout)
     let (health_status, health_color) = if peer_count == 0 {
         ("CRITICAL: No peers connected!", theme.error())
     } else if peer_count < 3 {
-        ("WARNING: Very few peers - network isolation risk", theme.error())
+        (
+            "WARNING: Very few peers - network isolation risk",
+            theme.error(),
+        )
     } else if peer_count < 8 {
         ("CAUTION: Low peer count", theme.warning())
     } else {
@@ -1061,7 +1417,10 @@ fn render_peers(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout)
     };
 
     // Calculate synced vs unsynced peers
-    let synced_peers = app.state.connected_peers.iter()
+    let synced_peers = app
+        .state
+        .connected_peers
+        .iter()
         .filter(|p| app.state.chain_tip.saturating_sub(p.best_number) < 10)
         .count();
 
@@ -1071,31 +1430,37 @@ fn render_peers(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout)
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(header_height),
-            Constraint::Min(1),
-        ])
+        .constraints([Constraint::Length(header_height), Constraint::Min(1)])
         .split(area);
 
     // Render header with health info
-    let mut header_lines = vec![
-        Line::from(vec![
-            Span::styled("Status: ", Style::default().fg(theme.muted())),
-            Span::styled(health_status, Style::default().fg(health_color)),
-            Span::styled("    ", Style::default()),
-            Span::styled("Synced: ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{}/{}", synced_peers, peer_count), Style::default().fg(
-                if synced_peers == peer_count { theme.success() } else { theme.warning() }
-            )),
-            Span::styled("    ", Style::default()),
-            Span::styled("Balance: ", Style::default().fg(theme.muted())),
-            Span::styled("↓", Style::default().fg(theme.success())),
-            Span::styled(format!("{}", app.state.peers_inbound), Style::default().fg(theme.success())),
-            Span::styled(" / ", Style::default().fg(theme.text())),
-            Span::styled("↑", Style::default().fg(theme.muted())),
-            Span::styled(format!("{}", app.state.peers_outbound), Style::default().fg(theme.muted())),
-        ]),
-    ];
+    let mut header_lines = vec![Line::from(vec![
+        Span::styled("Status: ", Style::default().fg(theme.muted())),
+        Span::styled(health_status, Style::default().fg(health_color)),
+        Span::styled("    ", Style::default()),
+        Span::styled("Synced: ", Style::default().fg(theme.muted())),
+        Span::styled(
+            format!("{}/{}", synced_peers, peer_count),
+            Style::default().fg(if synced_peers == peer_count {
+                theme.success()
+            } else {
+                theme.warning()
+            }),
+        ),
+        Span::styled("    ", Style::default()),
+        Span::styled("Balance: ", Style::default().fg(theme.muted())),
+        Span::styled("↓", Style::default().fg(theme.success())),
+        Span::styled(
+            format!("{}", app.state.peers_inbound),
+            Style::default().fg(theme.success()),
+        ),
+        Span::styled(" / ", Style::default().fg(theme.text())),
+        Span::styled("↑", Style::default().fg(theme.muted())),
+        Span::styled(
+            format!("{}", app.state.peers_outbound),
+            Style::default().fg(theme.muted()),
+        ),
+    ])];
 
     if let Some(warning) = diversity_warning {
         header_lines.push(Line::from(vec![
@@ -1105,62 +1470,94 @@ fn render_peers(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLayout)
     } else if peer_count < 8 {
         header_lines.push(Line::from(vec![
             Span::styled("⚠ ", Style::default().fg(theme.warning())),
-            Span::styled("Consider opening port 30333 for better network connectivity", Style::default().fg(theme.warning())),
+            Span::styled(
+                "Consider opening port 30333 for better network connectivity",
+                Style::default().fg(theme.warning()),
+            ),
         ]));
     }
 
     let header_block = Block::default()
         .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
         .border_style(Style::default().fg(theme.border()))
-        .title(Span::styled("Peer Network Health", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)));
+        .title(Span::styled(
+            "Peer Network Health",
+            Style::default()
+                .fg(theme.primary())
+                .add_modifier(Modifier::BOLD),
+        ));
 
     let header = Paragraph::new(header_lines).block(header_block);
     f.render_widget(header, chunks[0]);
 
     // Peer list
-    let peer_items: Vec<ListItem> = app.state.connected_peers.iter().map(|peer: &PeerInfo| {
-        let peer_id_display = key_mode.format(&peer.peer_id);
+    let peer_items: Vec<ListItem> = app
+        .state
+        .connected_peers
+        .iter()
+        .map(|peer: &PeerInfo| {
+            let peer_id_display = key_mode.format(&peer.peer_id);
 
-        // Show sync status compared to our best block
-        let sync_status = if peer.best_number >= app.state.chain_tip {
-            ("✓", theme.success())  // Ahead or at our tip
-        } else if app.state.chain_tip.saturating_sub(peer.best_number) < 10 {
-            ("~", theme.warning())  // Within 10 blocks
-        } else {
-            ("○", theme.muted())    // Behind
-        };
+            // Show sync status compared to our best block
+            let sync_status = if peer.best_number >= app.state.chain_tip {
+                ("✓", theme.success()) // Ahead or at our tip
+            } else if app.state.chain_tip.saturating_sub(peer.best_number) < 10 {
+                ("~", theme.warning()) // Within 10 blocks
+            } else {
+                ("○", theme.muted()) // Behind
+            };
 
-        // Connection direction: ↑ = outbound (we dialed), ↓ = inbound (they dialed)
-        let direction = if peer.is_outbound { "↑" } else { "↓" };
-        let direction_color = if peer.is_outbound { theme.muted() } else { theme.success() };
+            // Connection direction: ↑ = outbound (we dialed), ↓ = inbound (they dialed)
+            let direction = if peer.is_outbound { "↑" } else { "↓" };
+            let direction_color = if peer.is_outbound {
+                theme.muted()
+            } else {
+                theme.success()
+            };
 
-        // Format address if available
-        let addr_display = peer.address.as_ref()
-            .map(|a| format!("  {}", a))
-            .unwrap_or_default();
+            // Format address if available
+            let addr_display = peer
+                .address
+                .as_ref()
+                .map(|a| format!("  {}", a))
+                .unwrap_or_default();
 
-        let line = Line::from(vec![
-            Span::styled(sync_status.0, Style::default().fg(sync_status.1)),
-            Span::styled(direction, Style::default().fg(direction_color)),
-            Span::raw(" "),
-            Span::styled(peer_id_display, Style::default().fg(theme.secondary())),
-            Span::raw("  "),
-            Span::styled(format!("#{}", peer.best_number), Style::default().fg(theme.block_number())),
-            Span::styled(addr_display, Style::default().fg(theme.muted())),
-        ]);
+            let line = Line::from(vec![
+                Span::styled(sync_status.0, Style::default().fg(sync_status.1)),
+                Span::styled(direction, Style::default().fg(direction_color)),
+                Span::raw(" "),
+                Span::styled(peer_id_display, Style::default().fg(theme.secondary())),
+                Span::raw("  "),
+                Span::styled(
+                    format!("#{}", peer.best_number),
+                    Style::default().fg(theme.block_number()),
+                ),
+                Span::styled(addr_display, Style::default().fg(theme.muted())),
+            ]);
 
-        ListItem::new(line)
-    }).collect();
+            ListItem::new(line)
+        })
+        .collect();
 
     // Build title with count
-    let title = format!("{} connected peers - j/k or ↑/↓ scroll, Enter for details", peer_count);
+    let title = format!(
+        "{} connected peers - j/k or ↑/↓ scroll, Enter for details",
+        peer_count
+    );
 
     let peers_list = List::new(peer_items)
-        .block(Block::default()
-            .borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT)
-            .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled(title, Style::default().fg(theme.muted()))))
-        .highlight_style(Style::default().bg(theme.highlight()).add_modifier(Modifier::BOLD).fg(theme.text()));
+        .block(
+            Block::default()
+                .borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT)
+                .border_style(Style::default().fg(theme.border()))
+                .title(Span::styled(title, Style::default().fg(theme.muted()))),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(theme.highlight())
+                .add_modifier(Modifier::BOLD)
+                .fg(theme.text()),
+        );
 
     let mut list_state = ListState::default();
     list_state.select(Some(app.selected_index()));
@@ -1172,20 +1569,30 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
 
     // Build help items as ListItems for scrolling support
     let help_items: Vec<ListItem> = vec![
-        ListItem::new(Line::from(vec![
-            Span::styled("About", Style::default().fg(theme.title()).add_modifier(Modifier::BOLD)),
-        ])),
+        ListItem::new(Line::from(vec![Span::styled(
+            "About",
+            Style::default()
+                .fg(theme.title())
+                .add_modifier(Modifier::BOLD),
+        )])),
         ListItem::new(Line::from("")),
-        ListItem::new(Line::from(vec![
-            Span::styled("  Version:", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
-        ])),
-        ListItem::new(Line::from(vec![
-            Span::styled(format!("    MVM v{}", env!("CARGO_PKG_VERSION")), Style::default().fg(theme.text())),
-        ])),
+        ListItem::new(Line::from(vec![Span::styled(
+            "  Version:",
+            Style::default()
+                .fg(theme.primary())
+                .add_modifier(Modifier::BOLD),
+        )])),
+        ListItem::new(Line::from(vec![Span::styled(
+            format!("    MVM v{}", env!("CARGO_PKG_VERSION")),
+            Style::default().fg(theme.text()),
+        )])),
         ListItem::new(Line::from("")),
-        ListItem::new(Line::from(vec![
-            Span::styled("  Credits:", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
-        ])),
+        ListItem::new(Line::from(vec![Span::styled(
+            "  Credits:",
+            Style::default()
+                .fg(theme.primary())
+                .add_modifier(Modifier::BOLD),
+        )])),
         ListItem::new(Line::from(vec![
             Span::styled("    Source           ", Style::default().fg(theme.text())),
             Span::raw("https://github.com/adavault/midnight-validator-monitor"),
@@ -1195,16 +1602,24 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
             Span::raw("MIT"),
         ])),
         ListItem::new(Line::from("")),
-        ListItem::new(Line::from(vec![
-            Span::styled("Keyboard Shortcuts", Style::default().fg(theme.title()).add_modifier(Modifier::BOLD)),
-        ])),
+        ListItem::new(Line::from(vec![Span::styled(
+            "Keyboard Shortcuts",
+            Style::default()
+                .fg(theme.title())
+                .add_modifier(Modifier::BOLD),
+        )])),
         ListItem::new(Line::from("")),
-        ListItem::new(Line::from(vec![
-            Span::styled("  Navigation:", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
-        ])),
+        ListItem::new(Line::from(vec![Span::styled(
+            "  Navigation:",
+            Style::default()
+                .fg(theme.primary())
+                .add_modifier(Modifier::BOLD),
+        )])),
         ListItem::new(Line::from(vec![
             Span::styled("    1-5       ", Style::default().fg(theme.text())),
-            Span::raw("Switch to view (1=Dashboard, 2=Blocks, 3=Validators, 4=Performance, 5=Peers)"),
+            Span::raw(
+                "Switch to view (1=Dashboard, 2=Blocks, 3=Validators, 4=Performance, 5=Peers)",
+            ),
         ])),
         ListItem::new(Line::from(vec![
             Span::styled("    Tab       ", Style::default().fg(theme.text())),
@@ -1219,9 +1634,12 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
             Span::raw("  Show this help"),
         ])),
         ListItem::new(Line::from("")),
-        ListItem::new(Line::from(vec![
-            Span::styled("  Scrolling:", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
-        ])),
+        ListItem::new(Line::from(vec![Span::styled(
+            "  Scrolling:",
+            Style::default()
+                .fg(theme.primary())
+                .add_modifier(Modifier::BOLD),
+        )])),
         ListItem::new(Line::from(vec![
             Span::styled("    ↑ / k     ", Style::default().fg(theme.text())),
             Span::raw("Scroll up"),
@@ -1239,9 +1657,12 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
             Span::raw("Page down (10 items)"),
         ])),
         ListItem::new(Line::from("")),
-        ListItem::new(Line::from(vec![
-            Span::styled("  Drill-Down / Details:", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
-        ])),
+        ListItem::new(Line::from(vec![Span::styled(
+            "  Drill-Down / Details:",
+            Style::default()
+                .fg(theme.primary())
+                .add_modifier(Modifier::BOLD),
+        )])),
         ListItem::new(Line::from(vec![
             Span::styled("    Enter     ", Style::default().fg(theme.text())),
             Span::raw("Open details (Blocks: popup, Performance: drill-down, Peers: popup)"),
@@ -1255,9 +1676,12 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
             Span::raw("Return from drill-down view"),
         ])),
         ListItem::new(Line::from("")),
-        ListItem::new(Line::from(vec![
-            Span::styled("  Options:", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
-        ])),
+        ListItem::new(Line::from(vec![Span::styled(
+            "  Options:",
+            Style::default()
+                .fg(theme.primary())
+                .add_modifier(Modifier::BOLD),
+        )])),
         ListItem::new(Line::from(vec![
             Span::styled("    f / F     ", Style::default().fg(theme.text())),
             Span::raw("Toggle 'ours only' filter (Validators/Performance views)"),
@@ -1267,9 +1691,12 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
             Span::raw("Toggle theme (Midnight ⟷ Midday)"),
         ])),
         ListItem::new(Line::from("")),
-        ListItem::new(Line::from(vec![
-            Span::styled("  Quit:", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
-        ])),
+        ListItem::new(Line::from(vec![Span::styled(
+            "  Quit:",
+            Style::default()
+                .fg(theme.primary())
+                .add_modifier(Modifier::BOLD),
+        )])),
         ListItem::new(Line::from(vec![
             Span::styled("    q / Esc   ", Style::default().fg(theme.text())),
             Span::raw("Quit application"),
@@ -1279,9 +1706,12 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
             Span::raw("Quit application"),
         ])),
         ListItem::new(Line::from("")),
-        ListItem::new(Line::from(vec![
-            Span::styled("  Views:", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
-        ])),
+        ListItem::new(Line::from(vec![Span::styled(
+            "  Views:",
+            Style::default()
+                .fg(theme.primary())
+                .add_modifier(Modifier::BOLD),
+        )])),
         ListItem::new(Line::from(vec![
             Span::styled("    [1] Dashboard   ", Style::default().fg(theme.text())),
             Span::raw("Network status, validator info, recent blocks"),
@@ -1303,13 +1733,19 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
             Span::raw("Connected peers with sync status and IPs"),
         ])),
         ListItem::new(Line::from("")),
-        ListItem::new(Line::from(vec![
-            Span::styled("Reference", Style::default().fg(theme.title()).add_modifier(Modifier::BOLD)),
-        ])),
+        ListItem::new(Line::from(vec![Span::styled(
+            "Reference",
+            Style::default()
+                .fg(theme.title())
+                .add_modifier(Modifier::BOLD),
+        )])),
         ListItem::new(Line::from("")),
-        ListItem::new(Line::from(vec![
-            Span::styled("  Symbols:", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
-        ])),
+        ListItem::new(Line::from(vec![Span::styled(
+            "  Symbols:",
+            Style::default()
+                .fg(theme.primary())
+                .add_modifier(Modifier::BOLD),
+        )])),
         ListItem::new(Line::from(vec![
             Span::styled("    ★  ", Style::default().fg(theme.ours())),
             Span::raw("Our validator (from keystore)"),
@@ -1327,9 +1763,12 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
             Span::raw("Connected to node"),
         ])),
         ListItem::new(Line::from("")),
-        ListItem::new(Line::from(vec![
-            Span::styled("  Dashboard Fields:", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
-        ])),
+        ListItem::new(Line::from(vec![Span::styled(
+            "  Dashboard Fields:",
+            Style::default()
+                .fg(theme.primary())
+                .add_modifier(Modifier::BOLD),
+        )])),
         ListItem::new(Line::from(vec![
             Span::styled("    Sidechain epoch  ", Style::default().fg(theme.text())),
             Span::raw("Committee election cycle (2h preview, TBD mainnet)"),
@@ -1347,9 +1786,12 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
             Span::raw("Blocks produced in current sidechain epoch"),
         ])),
         ListItem::new(Line::from("")),
-        ListItem::new(Line::from(vec![
-            Span::styled("  Glossary:", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD)),
-        ])),
+        ListItem::new(Line::from(vec![Span::styled(
+            "  Glossary:",
+            Style::default()
+                .fg(theme.primary())
+                .add_modifier(Modifier::BOLD),
+        )])),
         ListItem::new(Line::from(vec![
             Span::styled("    Extrinsics       ", Style::default().fg(theme.text())),
             Span::raw("Transactions or calls submitted to the blockchain"),
@@ -1395,11 +1837,23 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
     let item_count = help_items.len();
 
     let help_list = List::new(help_items)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled("Help - Use j/k/J/K or ↑/↓ to scroll", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))))
-        .highlight_style(Style::default().bg(theme.highlight()).add_modifier(Modifier::BOLD).fg(theme.text()));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.border()))
+                .title(Span::styled(
+                    "Help - Use j/k/J/K or ↑/↓ to scroll",
+                    Style::default()
+                        .fg(theme.primary())
+                        .add_modifier(Modifier::BOLD),
+                )),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(theme.highlight())
+                .add_modifier(Modifier::BOLD)
+                .fg(theme.text()),
+        );
 
     let mut list_state = ListState::default();
     list_state.select(Some(app.selected_index()));
@@ -1410,8 +1864,7 @@ fn render_help(f: &mut Frame, app: &App, area: Rect) {
         .begin_symbol(Some("↑"))
         .end_symbol(Some("↓"));
 
-    let mut scrollbar_state = ScrollbarState::new(item_count)
-        .position(app.selected_index());
+    let mut scrollbar_state = ScrollbarState::new(item_count).position(app.selected_index());
 
     // Render scrollbar in the same area (it will appear on the right edge)
     f.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
@@ -1481,11 +1934,33 @@ fn render_popup(f: &mut Frame, app: &App, popup: &PopupContent) {
     match popup {
         PopupContent::BlockDetail { block } => render_block_detail_popup(f, app, block),
         PopupContent::PeerDetail { peer } => render_peer_detail_popup(f, app, peer),
-        PopupContent::ValidatorDetail { validator, epoch_history, scroll_index } => {
+        PopupContent::ValidatorDetail {
+            validator,
+            epoch_history,
+            scroll_index,
+        } => {
             render_validator_detail_popup(f, app, validator, epoch_history, *scroll_index);
         }
-        PopupContent::ValidatorIdentity { validator, aura_key, current_epoch_seats, committee_size, blocks_this_epoch, stake_display, selection_stats } => {
-            render_validator_identity_popup(f, app, validator, aura_key.as_deref(), *current_epoch_seats, *committee_size, *blocks_this_epoch, stake_display.as_deref(), selection_stats.as_ref());
+        PopupContent::ValidatorIdentity {
+            validator,
+            aura_key,
+            current_epoch_seats,
+            committee_size,
+            blocks_this_epoch,
+            stake_display,
+            selection_stats,
+        } => {
+            render_validator_identity_popup(
+                f,
+                app,
+                validator,
+                aura_key.as_deref(),
+                *current_epoch_seats,
+                *committee_size,
+                *blocks_this_epoch,
+                stake_display.as_deref(),
+                selection_stats.as_ref(),
+            );
         }
     }
 }
@@ -1508,7 +1983,9 @@ fn centered_popup(min_width: u16, percent_x: u16, percent_y: u16, area: Rect) ->
 
     // Horizontal: use min_width with margins on narrow screens, percentage on wide
     let percent_width = (area.width as u32 * percent_x as u32 / 100) as u16;
-    let popup_width = percent_width.max(min_width).min(area.width.saturating_sub(4));
+    let popup_width = percent_width
+        .max(min_width)
+        .min(area.width.saturating_sub(4));
     let margin = area.width.saturating_sub(popup_width) / 2;
 
     Layout::default()
@@ -1534,7 +2011,10 @@ fn render_block_detail_popup(f: &mut Frame, app: &App, block: &crate::db::BlockR
     // Format author key with label if known
     let author_display = if let Some(ref key) = block.author_key {
         // Check if this validator has a label
-        let label = app.state.validators.iter()
+        let label = app
+            .state
+            .validators
+            .iter()
             .find(|v| v.sidechain_key == *key)
             .and_then(|v| v.label.as_ref())
             .map(|l| format!(" ({})", l))
@@ -1549,7 +2029,12 @@ fn render_block_detail_popup(f: &mut Frame, app: &App, block: &crate::db::BlockR
         Line::from(""),
         Line::from(vec![
             Span::styled(" Block Number:     ", Style::default().fg(theme.muted())),
-            Span::styled(format!("#{}", block.block_number), Style::default().fg(theme.block_number()).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("#{}", block.block_number),
+                Style::default()
+                    .fg(theme.block_number())
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
         Line::from(vec![
             Span::styled(" Block Hash:       ", Style::default().fg(theme.muted())),
@@ -1571,20 +2056,32 @@ fn render_block_detail_popup(f: &mut Frame, app: &App, block: &crate::db::BlockR
         Line::from(""),
         Line::from(vec![
             Span::styled(" Slot Number:      ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{}", block.slot_number), Style::default().fg(theme.text())),
+            Span::styled(
+                format!("{}", block.slot_number),
+                Style::default().fg(theme.text()),
+            ),
         ]),
         Line::from(vec![
             Span::styled(" Sidechain Epoch:  ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{}", block.sidechain_epoch), Style::default().fg(theme.epoch())),
+            Span::styled(
+                format!("{}", block.sidechain_epoch),
+                Style::default().fg(theme.epoch()),
+            ),
         ]),
         Line::from(vec![
             Span::styled(" Mainchain Epoch:  ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{}", block.epoch), Style::default().fg(theme.epoch())),
+            Span::styled(
+                format!("{}", block.epoch),
+                Style::default().fg(theme.epoch()),
+            ),
         ]),
         Line::from(""),
         Line::from(vec![
             Span::styled(" Timestamp:        ", Style::default().fg(theme.muted())),
-            Span::styled(format_timestamp(block.timestamp), Style::default().fg(theme.text())),
+            Span::styled(
+                format_timestamp(block.timestamp),
+                Style::default().fg(theme.text()),
+            ),
         ]),
         Line::from(vec![
             Span::styled(" Author:           ", Style::default().fg(theme.muted())),
@@ -1593,13 +2090,20 @@ fn render_block_detail_popup(f: &mut Frame, app: &App, block: &crate::db::BlockR
         Line::from(""),
         Line::from(vec![
             Span::styled(" Extrinsics:       ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{}", block.extrinsics_count), Style::default().fg(theme.text())),
+            Span::styled(
+                format!("{}", block.extrinsics_count),
+                Style::default().fg(theme.text()),
+            ),
         ]),
         Line::from(vec![
             Span::styled(" Finalized:        ", Style::default().fg(theme.muted())),
             Span::styled(
                 if block.is_finalized { "Yes ✓" } else { "No" },
-                Style::default().fg(if block.is_finalized { theme.success() } else { theme.warning() }),
+                Style::default().fg(if block.is_finalized {
+                    theme.success()
+                } else {
+                    theme.warning()
+                }),
             ),
         ]),
         Line::from(""),
@@ -1610,14 +2114,17 @@ fn render_block_detail_popup(f: &mut Frame, app: &App, block: &crate::db::BlockR
         ]),
     ];
 
-    let popup = Paragraph::new(content)
-        .block(Block::default()
+    let popup = Paragraph::new(content).block(
+        Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(theme.primary()))
             .title(Span::styled(
                 format!(" Block #{} ", block.block_number),
-                Style::default().fg(theme.title()).add_modifier(Modifier::BOLD),
-            )));
+                Style::default()
+                    .fg(theme.title())
+                    .add_modifier(Modifier::BOLD),
+            )),
+    );
 
     f.render_widget(popup, area);
 }
@@ -1644,9 +2151,7 @@ fn render_peer_detail_popup(f: &mut Frame, app: &App, peer: &crate::tui::app::Pe
     let blocks_behind = app.state.chain_tip.saturating_sub(peer.best_number);
 
     // Build popup content
-    let address_display = peer.address.as_ref()
-        .map(|a| a.as_str())
-        .unwrap_or("Unknown");
+    let address_display = peer.address.as_deref().unwrap_or("Unknown");
 
     let content = vec![
         Line::from(""),
@@ -1662,7 +2167,10 @@ fn render_peer_detail_popup(f: &mut Frame, app: &App, peer: &crate::tui::app::Pe
         Line::from(""),
         Line::from(vec![
             Span::styled(" Best Block:       ", Style::default().fg(theme.muted())),
-            Span::styled(format!("#{}", peer.best_number), Style::default().fg(theme.block_number())),
+            Span::styled(
+                format!("#{}", peer.best_number),
+                Style::default().fg(theme.block_number()),
+            ),
         ]),
         Line::from(vec![
             Span::styled(" Best Hash:        ", Style::default().fg(theme.muted())),
@@ -1672,8 +2180,16 @@ fn render_peer_detail_popup(f: &mut Frame, app: &App, peer: &crate::tui::app::Pe
         Line::from(vec![
             Span::styled(" Connection:       ", Style::default().fg(theme.muted())),
             Span::styled(
-                if peer.is_outbound { "Outbound (we dialed)" } else { "Inbound (they dialed)" },
-                Style::default().fg(if peer.is_outbound { theme.muted() } else { theme.success() }),
+                if peer.is_outbound {
+                    "Outbound (we dialed)"
+                } else {
+                    "Inbound (they dialed)"
+                },
+                Style::default().fg(if peer.is_outbound {
+                    theme.muted()
+                } else {
+                    theme.success()
+                }),
             ),
         ]),
         Line::from(""),
@@ -1681,7 +2197,10 @@ fn render_peer_detail_popup(f: &mut Frame, app: &App, peer: &crate::tui::app::Pe
             Span::styled(" Sync Status:      ", Style::default().fg(theme.muted())),
             Span::styled(sync_status, Style::default().fg(sync_color)),
             if blocks_behind > 0 {
-                Span::styled(format!(" ({} blocks behind)", blocks_behind), Style::default().fg(theme.muted()))
+                Span::styled(
+                    format!(" ({} blocks behind)", blocks_behind),
+                    Style::default().fg(theme.muted()),
+                )
             } else {
                 Span::raw("")
             },
@@ -1694,19 +2213,23 @@ fn render_peer_detail_popup(f: &mut Frame, app: &App, peer: &crate::tui::app::Pe
         ]),
     ];
 
-    let popup = Paragraph::new(content)
-        .block(Block::default()
+    let popup = Paragraph::new(content).block(
+        Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(theme.primary()))
             .title(Span::styled(
                 " Peer Details ",
-                Style::default().fg(theme.title()).add_modifier(Modifier::BOLD),
-            )));
+                Style::default()
+                    .fg(theme.title())
+                    .add_modifier(Modifier::BOLD),
+            )),
+    );
 
     f.render_widget(popup, area);
 }
 
 /// Render validator identity card popup
+#[allow(clippy::too_many_arguments)]
 fn render_validator_identity_popup(
     f: &mut Frame,
     app: &App,
@@ -1727,12 +2250,17 @@ fn render_validator_identity_popup(
     f.render_widget(Clear, area);
 
     let ours_marker = if validator.is_ours { "★ " } else { "" };
-    let label_display = validator.label.as_ref()
+    let label_display = validator
+        .label
+        .as_ref()
         .map(|l| format!(" ({})", l))
         .unwrap_or_default();
 
     // Registration status
-    let reg_status = validator.registration_status.as_deref().unwrap_or("unknown");
+    let reg_status = validator
+        .registration_status
+        .as_deref()
+        .unwrap_or("unknown");
     let is_permissioned = reg_status.to_lowercase().contains("permissioned");
     let is_registered = reg_status.to_lowercase().contains("registered") || is_permissioned;
 
@@ -1756,8 +2284,16 @@ fn render_validator_identity_popup(
     let mut content = vec![
         Line::from(""),
         Line::from(vec![
-            Span::styled(format!(" {}", ours_marker), Style::default().fg(theme.ours())),
-            Span::styled(&validator.sidechain_key, Style::default().fg(theme.secondary()).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!(" {}", ours_marker),
+                Style::default().fg(theme.ours()),
+            ),
+            Span::styled(
+                &validator.sidechain_key,
+                Style::default()
+                    .fg(theme.secondary())
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(&label_display, Style::default().fg(theme.muted())),
         ]),
         Line::from(""),
@@ -1780,7 +2316,16 @@ fn render_validator_identity_popup(
     // Registration section
     content.push(Line::from(vec![
         Span::styled(" Registration:   ", Style::default().fg(theme.muted())),
-        Span::styled(reg_status, Style::default().fg(if is_permissioned { theme.warning() } else if is_registered { theme.success() } else { theme.muted() })),
+        Span::styled(
+            reg_status,
+            Style::default().fg(if is_permissioned {
+                theme.warning()
+            } else if is_registered {
+                theme.success()
+            } else {
+                theme.muted()
+            }),
+        ),
     ]));
 
     // Stake if available
@@ -1798,7 +2343,11 @@ fn render_validator_identity_popup(
         Span::styled(" Seats:          ", Style::default().fg(theme.muted())),
         Span::styled(
             format!("{}", current_epoch_seats),
-            Style::default().fg(if current_epoch_seats > 0 { theme.success() } else { theme.muted() }),
+            Style::default().fg(if current_epoch_seats > 0 {
+                theme.success()
+            } else {
+                theme.muted()
+            }),
         ),
         Span::styled(
             format!(" / {} ({:.2}%)", committee_size, committee_pct),
@@ -1830,9 +2379,12 @@ fn render_validator_identity_popup(
     // Committee selection statistics (if available)
     if let Some(stats) = selection_stats {
         content.push(Line::from(""));
-        content.push(Line::from(vec![
-            Span::styled(" ── Selection History ──", Style::default().fg(theme.secondary()).add_modifier(Modifier::BOLD)),
-        ]));
+        content.push(Line::from(vec![Span::styled(
+            " ── Selection History ──",
+            Style::default()
+                .fg(theme.secondary())
+                .add_modifier(Modifier::BOLD),
+        )]));
         content.push(Line::from(""));
 
         // Selection rate
@@ -1840,7 +2392,11 @@ fn render_validator_identity_popup(
             Span::styled(" Selected:       ", Style::default().fg(theme.muted())),
             Span::styled(
                 stats.selection_rate_display(),
-                Style::default().fg(if stats.times_selected > 0 { theme.success() } else { theme.warning() }),
+                Style::default().fg(if stats.times_selected > 0 {
+                    theme.success()
+                } else {
+                    theme.warning()
+                }),
             ),
         ]));
 
@@ -1852,7 +2408,10 @@ fn render_validator_identity_popup(
                 Style::default().fg(theme.text()),
             ),
             if let Some(avg) = stats.avg_seats_when_selected() {
-                Span::styled(format!(" ({:.1} avg when selected)", avg), Style::default().fg(theme.muted()))
+                Span::styled(
+                    format!(" ({:.1} avg when selected)", avg),
+                    Style::default().fg(theme.muted()),
+                )
             } else {
                 Span::raw("")
             },
@@ -1893,8 +2452,16 @@ fn render_validator_identity_popup(
         content.push(Line::from(vec![
             Span::styled(" Status:         ", Style::default().fg(theme.muted())),
             Span::styled(
-                if stats.currently_in_committee { "In Committee" } else { "Not Selected" },
-                Style::default().fg(if stats.currently_in_committee { theme.success() } else { theme.warning() }),
+                if stats.currently_in_committee {
+                    "In Committee"
+                } else {
+                    "Not Selected"
+                },
+                Style::default().fg(if stats.currently_in_committee {
+                    theme.success()
+                } else {
+                    theme.warning()
+                }),
             ),
         ]));
 
@@ -1904,7 +2471,10 @@ fn render_validator_identity_popup(
             content.push(Line::from(vec![
                 Span::styled(" Stake Rank:     ", Style::default().fg(theme.muted())),
                 Span::styled(
-                    format!("#{} of {} dynamic validators", rank, stats.total_dynamic_validators),
+                    format!(
+                        "#{} of {} dynamic validators",
+                        rank, stats.total_dynamic_validators
+                    ),
                     Style::default().fg(theme.text()),
                 ),
             ]));
@@ -1924,9 +2494,11 @@ fn render_validator_identity_popup(
             content.push(Line::from(vec![
                 Span::styled(" Committee:      ", Style::default().fg(theme.muted())),
                 Span::styled(
-                    format!("~{:.0}% permissioned, ~{:.0}% dynamic",
+                    format!(
+                        "~{:.0}% permissioned, ~{:.0}% dynamic",
                         stats.permissioned_seats_percent,
-                        100.0 - stats.permissioned_seats_percent),
+                        100.0 - stats.permissioned_seats_percent
+                    ),
                     Style::default().fg(theme.muted()),
                 ),
             ]));
@@ -1946,11 +2518,17 @@ fn render_validator_identity_popup(
         " Validator Identity "
     };
 
-    let popup = Paragraph::new(content)
-        .block(Block::default()
+    let popup = Paragraph::new(content).block(
+        Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(theme.primary()))
-            .title(Span::styled(title, Style::default().fg(theme.title()).add_modifier(Modifier::BOLD))));
+            .title(Span::styled(
+                title,
+                Style::default()
+                    .fg(theme.title())
+                    .add_modifier(Modifier::BOLD),
+            )),
+    );
 
     f.render_widget(popup, area);
 }
@@ -1979,10 +2557,15 @@ fn render_validator_detail_popup(
         .split(area);
 
     // Header with validator info
-    let label = validator.label.as_ref()
+    let label = validator
+        .label
+        .as_ref()
         .map(|l| format!(" ({})", l))
         .unwrap_or_default();
-    let status = validator.registration_status.as_deref().unwrap_or("unknown");
+    let status = validator
+        .registration_status
+        .as_deref()
+        .unwrap_or("unknown");
     let ours = if validator.is_ours { "★ " } else { "" };
 
     // Show full key if it fits, otherwise truncate
@@ -1990,22 +2573,39 @@ fn render_validator_detail_popup(
     let key_display = if validator.sidechain_key.len() <= available_width {
         validator.sidechain_key.clone()
     } else {
-        format!("{}...{}",
+        format!(
+            "{}...{}",
             &validator.sidechain_key[..10],
-            &validator.sidechain_key[validator.sidechain_key.len()-8..])
+            &validator.sidechain_key[validator.sidechain_key.len() - 8..]
+        )
     };
 
     let header_content = vec![
         Line::from(vec![
             Span::styled(ours, Style::default().fg(theme.ours())),
-            Span::styled(key_display, Style::default().fg(theme.secondary()).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                key_display,
+                Style::default()
+                    .fg(theme.secondary())
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(label, Style::default().fg(theme.muted())),
         ]),
         Line::from(vec![
             Span::styled("Status: ", Style::default().fg(theme.muted())),
-            Span::styled(status, Style::default().fg(if validator.is_ours { theme.success() } else { theme.text() })),
+            Span::styled(
+                status,
+                Style::default().fg(if validator.is_ours {
+                    theme.success()
+                } else {
+                    theme.text()
+                }),
+            ),
             Span::styled("  |  Total Blocks: ", Style::default().fg(theme.muted())),
-            Span::styled(format!("{}", validator.total_blocks), Style::default().fg(theme.success())),
+            Span::styled(
+                format!("{}", validator.total_blocks),
+                Style::default().fg(theme.success()),
+            ),
             Span::styled("  |  ", Style::default().fg(theme.muted())),
             Span::styled("j/k", Style::default().fg(theme.primary())),
             Span::styled(" scroll  ", Style::default().fg(theme.muted())),
@@ -2014,51 +2614,66 @@ fn render_validator_detail_popup(
         ]),
     ];
 
-    let header_widget = Paragraph::new(header_content)
-        .block(Block::default()
+    let header_widget = Paragraph::new(header_content).block(
+        Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(theme.primary()))
-            .title(Span::styled(" Validator Detail ", Style::default().fg(theme.title()).add_modifier(Modifier::BOLD))));
+            .title(Span::styled(
+                " Validator Detail ",
+                Style::default()
+                    .fg(theme.title())
+                    .add_modifier(Modifier::BOLD),
+            )),
+    );
     f.render_widget(header_widget, chunks[0]);
 
     // Build table rows
     // Slots per epoch varies by network (1200 preview, 6000 mainnet)
     let slots_per_epoch = app.chain_timing.blocks_per_sidechain_epoch() as f64;
-    let rows: Vec<Row> = epoch_history.iter().map(|record| {
-        let expected = if record.committee_size > 0 {
-            (record.seats as f64 / record.committee_size as f64) * slots_per_epoch
-        } else {
-            0.0
-        };
+    let rows: Vec<Row> = epoch_history
+        .iter()
+        .map(|record| {
+            let expected = if record.committee_size > 0 {
+                (record.seats as f64 / record.committee_size as f64) * slots_per_epoch
+            } else {
+                0.0
+            };
 
-        let ratio = if expected > 0.0 {
-            (record.blocks_produced as f64 / expected) * 100.0
-        } else if record.seats == 0 {
-            100.0
-        } else {
-            0.0
-        };
+            let ratio = if expected > 0.0 {
+                (record.blocks_produced as f64 / expected) * 100.0
+            } else if record.seats == 0 {
+                100.0
+            } else {
+                0.0
+            };
 
-        let ratio_color = if ratio >= 90.0 {
-            theme.success()
-        } else if ratio >= 70.0 {
-            theme.warning()
-        } else if record.seats == 0 {
-            theme.muted()
-        } else {
-            theme.error()
-        };
+            let ratio_color = if ratio >= 90.0 {
+                theme.success()
+            } else if ratio >= 70.0 {
+                theme.warning()
+            } else if record.seats == 0 {
+                theme.muted()
+            } else {
+                theme.error()
+            };
 
-        let seats_color = if record.seats > 0 { theme.success() } else { theme.muted() };
+            let seats_color = if record.seats > 0 {
+                theme.success()
+            } else {
+                theme.muted()
+            };
 
-        Row::new(vec![
-            Cell::from(format!("{:>6}", record.epoch)).style(Style::default().fg(theme.epoch())),
-            Cell::from(format!("{:>5}", record.seats)).style(Style::default().fg(seats_color)),
-            Cell::from(format!("{:>6}", record.blocks_produced)).style(Style::default().fg(theme.text())),
-            Cell::from(format!("{:>6.0}", expected)).style(Style::default().fg(theme.muted())),
-            Cell::from(format!("{:>6.1}%", ratio)).style(Style::default().fg(ratio_color)),
-        ])
-    }).collect();
+            Row::new(vec![
+                Cell::from(format!("{:>6}", record.epoch))
+                    .style(Style::default().fg(theme.epoch())),
+                Cell::from(format!("{:>5}", record.seats)).style(Style::default().fg(seats_color)),
+                Cell::from(format!("{:>6}", record.blocks_produced))
+                    .style(Style::default().fg(theme.text())),
+                Cell::from(format!("{:>6.0}", expected)).style(Style::default().fg(theme.muted())),
+                Cell::from(format!("{:>6.1}%", ratio)).style(Style::default().fg(ratio_color)),
+            ])
+        })
+        .collect();
 
     // Summary stats
     let total_epochs = epoch_history.len();
@@ -2071,14 +2686,18 @@ fn render_validator_detail_popup(
     );
 
     // Table header
-    let header_style = Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD);
+    let header_style = Style::default()
+        .fg(theme.primary())
+        .add_modifier(Modifier::BOLD);
     let header = Row::new(vec![
         Cell::from(format!("{:>6}", "Epoch")).style(header_style),
         Cell::from(format!("{:>5}", "Seats")).style(header_style),
         Cell::from(format!("{:>6}", "Blocks")).style(header_style),
         Cell::from(format!("{:>8}", "Expected")).style(header_style),
         Cell::from(format!("{:>7}", "Ratio")).style(header_style),
-    ]).height(1).bottom_margin(0);
+    ])
+    .height(1)
+    .bottom_margin(0);
 
     let widths = [
         Constraint::Length(8),
@@ -2090,11 +2709,23 @@ fn render_validator_detail_popup(
 
     let table = Table::new(rows, widths)
         .header(header)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled(title, Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))))
-        .highlight_style(Style::default().bg(theme.highlight()).add_modifier(Modifier::BOLD).fg(theme.text()))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.border()))
+                .title(Span::styled(
+                    title,
+                    Style::default()
+                        .fg(theme.primary())
+                        .add_modifier(Modifier::BOLD),
+                )),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(theme.highlight())
+                .add_modifier(Modifier::BOLD)
+                .fg(theme.text()),
+        )
         .highlight_symbol(" › ");
 
     let mut table_state = TableState::default();
@@ -2128,24 +2759,44 @@ fn render_validator_epoch_detail(f: &mut Frame, app: &App, area: Rect, layout: &
         } else {
             key_mode.format(&validator.sidechain_key)
         };
-        let label = validator.label.as_ref()
+        let label = validator
+            .label
+            .as_ref()
             .map(|l| format!(" ({})", l))
             .unwrap_or_default();
-        let status = validator.registration_status.as_deref().unwrap_or("unknown");
+        let status = validator
+            .registration_status
+            .as_deref()
+            .unwrap_or("unknown");
         let ours = if validator.is_ours { "★ " } else { "" };
 
         vec![
             Line::from(vec![
                 Span::styled(ours, Style::default().fg(theme.ours())),
                 Span::styled("Validator: ", Style::default().fg(theme.muted())),
-                Span::styled(key_display, Style::default().fg(theme.secondary()).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    key_display,
+                    Style::default()
+                        .fg(theme.secondary())
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(label, Style::default().fg(theme.muted())),
             ]),
             Line::from(vec![
                 Span::styled("  Status: ", Style::default().fg(theme.muted())),
-                Span::styled(status, Style::default().fg(if validator.is_ours { theme.success() } else { theme.text() })),
+                Span::styled(
+                    status,
+                    Style::default().fg(if validator.is_ours {
+                        theme.success()
+                    } else {
+                        theme.text()
+                    }),
+                ),
                 Span::styled("  |  Total Blocks: ", Style::default().fg(theme.muted())),
-                Span::styled(format!("{}", validator.total_blocks), Style::default().fg(theme.success())),
+                Span::styled(
+                    format!("{}", validator.total_blocks),
+                    Style::default().fg(theme.success()),
+                ),
             ]),
             Line::from(""),
             Line::from(vec![
@@ -2157,60 +2808,87 @@ fn render_validator_epoch_detail(f: &mut Frame, app: &App, area: Rect, layout: &
             ]),
         ]
     } else {
-        vec![Line::from(Span::styled("Loading...", Style::default().fg(theme.muted())))]
+        vec![Line::from(Span::styled(
+            "Loading...",
+            Style::default().fg(theme.muted()),
+        ))]
     };
 
-    let header_widget = Paragraph::new(header_content)
-        .block(Block::default()
+    let header_widget = Paragraph::new(header_content).block(
+        Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled("Validator Detail", Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))));
+            .title(Span::styled(
+                "Validator Detail",
+                Style::default()
+                    .fg(theme.primary())
+                    .add_modifier(Modifier::BOLD),
+            )),
+    );
     f.render_widget(header_widget, chunks[0]);
 
     // Build table rows
     // Slots per epoch varies by network (1200 preview, 6000 mainnet)
     let slots_per_epoch = app.chain_timing.blocks_per_sidechain_epoch() as f64;
-    let rows: Vec<Row> = app.validator_epoch_history.iter().map(|record| {
-        // Calculate expected blocks: (seats / committee_size) * slots_per_epoch
-        let expected = if record.committee_size > 0 {
-            (record.seats as f64 / record.committee_size as f64) * slots_per_epoch
-        } else {
-            0.0
-        };
+    let rows: Vec<Row> = app
+        .validator_epoch_history
+        .iter()
+        .map(|record| {
+            // Calculate expected blocks: (seats / committee_size) * slots_per_epoch
+            let expected = if record.committee_size > 0 {
+                (record.seats as f64 / record.committee_size as f64) * slots_per_epoch
+            } else {
+                0.0
+            };
 
-        let ratio = if expected > 0.0 {
-            (record.blocks_produced as f64 / expected) * 100.0
-        } else if record.seats == 0 {
-            100.0  // No seats = no expected blocks = 100%
-        } else {
-            0.0
-        };
+            let ratio = if expected > 0.0 {
+                (record.blocks_produced as f64 / expected) * 100.0
+            } else if record.seats == 0 {
+                100.0 // No seats = no expected blocks = 100%
+            } else {
+                0.0
+            };
 
-        let ratio_color = if ratio >= 90.0 {
-            theme.success()
-        } else if ratio >= 70.0 {
-            theme.warning()
-        } else if record.seats == 0 {
-            theme.muted()
-        } else {
-            theme.error()
-        };
+            let ratio_color = if ratio >= 90.0 {
+                theme.success()
+            } else if ratio >= 70.0 {
+                theme.warning()
+            } else if record.seats == 0 {
+                theme.muted()
+            } else {
+                theme.error()
+            };
 
-        let seats_color = if record.seats > 0 { theme.success() } else { theme.muted() };
+            let seats_color = if record.seats > 0 {
+                theme.success()
+            } else {
+                theme.muted()
+            };
 
-        Row::new(vec![
-            Cell::from(format!("{:>6}", record.epoch)).style(Style::default().fg(theme.epoch())),
-            Cell::from(format!("{:>5}", record.seats)).style(Style::default().fg(seats_color)),
-            Cell::from(format!("{:>6}", record.blocks_produced)).style(Style::default().fg(theme.text())),
-            Cell::from(format!("{:>6.0}", expected)).style(Style::default().fg(theme.muted())),
-            Cell::from(format!("{:>6.1}%", ratio)).style(Style::default().fg(ratio_color)),
-        ])
-    }).collect();
+            Row::new(vec![
+                Cell::from(format!("{:>6}", record.epoch))
+                    .style(Style::default().fg(theme.epoch())),
+                Cell::from(format!("{:>5}", record.seats)).style(Style::default().fg(seats_color)),
+                Cell::from(format!("{:>6}", record.blocks_produced))
+                    .style(Style::default().fg(theme.text())),
+                Cell::from(format!("{:>6.0}", expected)).style(Style::default().fg(theme.muted())),
+                Cell::from(format!("{:>6.1}%", ratio)).style(Style::default().fg(ratio_color)),
+            ])
+        })
+        .collect();
 
     // Calculate summary stats
     let total_epochs = app.validator_epoch_history.len();
-    let total_blocks: u64 = app.validator_epoch_history.iter().map(|r| r.blocks_produced).sum();
-    let epochs_with_seats = app.validator_epoch_history.iter().filter(|r| r.seats > 0).count();
+    let total_blocks: u64 = app
+        .validator_epoch_history
+        .iter()
+        .map(|r| r.blocks_produced)
+        .sum();
+    let epochs_with_seats = app
+        .validator_epoch_history
+        .iter()
+        .filter(|r| r.seats > 0)
+        .count();
 
     let title = format!(
         "Epoch History ({} epochs, {} with seats, {} total blocks)",
@@ -2218,31 +2896,47 @@ fn render_validator_epoch_detail(f: &mut Frame, app: &App, area: Rect, layout: &
     );
 
     // Table header - right-aligned to match data columns
-    let header_style = Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD);
+    let header_style = Style::default()
+        .fg(theme.primary())
+        .add_modifier(Modifier::BOLD);
     let header = Row::new(vec![
         Cell::from(format!("{:>6}", "Epoch")).style(header_style),
         Cell::from(format!("{:>5}", "Seats")).style(header_style),
         Cell::from(format!("{:>6}", "Blocks")).style(header_style),
         Cell::from(format!("{:>8}", "Expected")).style(header_style),
         Cell::from(format!("{:>7}", "Ratio")).style(header_style),
-    ]).height(1).bottom_margin(0);
+    ])
+    .height(1)
+    .bottom_margin(0);
 
     // Column widths - match header format widths
     let widths = [
-        Constraint::Length(8),   // Epoch (6 + padding)
-        Constraint::Length(7),   // Seats (5 + padding)
-        Constraint::Length(8),   // Blocks (6 + padding)
-        Constraint::Length(10),  // Expected (8 + padding)
-        Constraint::Length(9),   // Ratio (7 + padding)
+        Constraint::Length(8),  // Epoch (6 + padding)
+        Constraint::Length(7),  // Seats (5 + padding)
+        Constraint::Length(8),  // Blocks (6 + padding)
+        Constraint::Length(10), // Expected (8 + padding)
+        Constraint::Length(9),  // Ratio (7 + padding)
     ];
 
     let table = Table::new(rows, widths)
         .header(header)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme.border()))
-            .title(Span::styled(title, Style::default().fg(theme.primary()).add_modifier(Modifier::BOLD))))
-        .highlight_style(Style::default().bg(theme.highlight()).add_modifier(Modifier::BOLD).fg(theme.text()))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.border()))
+                .title(Span::styled(
+                    title,
+                    Style::default()
+                        .fg(theme.primary())
+                        .add_modifier(Modifier::BOLD),
+                )),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(theme.highlight())
+                .add_modifier(Modifier::BOLD)
+                .fg(theme.text()),
+        )
         .highlight_symbol(" › ");
 
     let mut table_state = TableState::default();
@@ -2254,8 +2948,8 @@ fn render_validator_epoch_detail(f: &mut Frame, app: &App, area: Rect, layout: &
         .begin_symbol(Some("↑"))
         .end_symbol(Some("↓"));
 
-    let mut scrollbar_state = ScrollbarState::new(app.validator_epoch_history.len())
-        .position(app.selected_index());
+    let mut scrollbar_state =
+        ScrollbarState::new(app.validator_epoch_history.len()).position(app.selected_index());
 
     f.render_stateful_widget(scrollbar, chunks[1], &mut scrollbar_state);
 }

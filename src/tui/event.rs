@@ -45,7 +45,7 @@ impl EventHandler {
 /// Parse keyboard event and return whether to continue running
 /// The `db` parameter is optional - if not provided, validator detail won't work
 pub fn handle_key_event(key: KeyEvent, app: &mut crate::tui::App, db: Option<&Database>) -> bool {
-    use crate::tui::{ViewMode, PopupContent};
+    use crate::tui::{PopupContent, ViewMode};
 
     // Handle popup-specific keys first
     if app.has_popup() {

@@ -75,7 +75,9 @@ pub async fn run(args: QueryArgs) -> Result<()> {
     let config = crate::config::Config::load()?;
 
     // Use args or fall back to config
-    let db_path = args.db_path.unwrap_or_else(|| std::path::PathBuf::from(&config.database.path));
+    let db_path = args
+        .db_path
+        .unwrap_or_else(|| std::path::PathBuf::from(&config.database.path));
 
     let db = Database::open(&db_path)?;
 
@@ -110,11 +112,15 @@ fn run_stats(db: &Database) -> Result<()> {
     }
 
     if let Some(max_block) = db.get_max_block_number()? {
-        if let Some(min_block) = db.get_blocks_in_range(max_block.saturating_sub(1000), max_block, Some(1))?
+        if let Some(min_block) = db
+            .get_blocks_in_range(max_block.saturating_sub(1000), max_block, Some(1))?
             .first()
         {
             info!("─────────────────────────────────────────");
-            info!("Block range:      {} - {}", min_block.block_number, max_block);
+            info!(
+                "Block range:      {} - {}",
+                min_block.block_number, max_block
+            );
         }
     }
 
@@ -138,14 +144,18 @@ fn run_stats(db: &Database) -> Result<()> {
         }
 
         // Show blocks with author attribution
-        let blocks_with_authors = db.get_blocks_in_range(0, u64::MAX, None)?
+        let blocks_with_authors = db
+            .get_blocks_in_range(0, u64::MAX, None)?
             .iter()
             .filter(|b| b.author_key.is_some())
             .count();
 
         if blocks_with_authors > 0 {
             let attribution_pct = (blocks_with_authors as f64 / total_blocks as f64) * 100.0;
-            info!("  Blocks with author: {} ({:.1}%)", blocks_with_authors, attribution_pct);
+            info!(
+                "  Blocks with author: {} ({:.1}%)",
+                blocks_with_authors, attribution_pct
+            );
         }
     }
 
@@ -258,15 +268,13 @@ fn run_validators(db: &Database, ours_only: bool, limit: u64) -> Result<()> {
 
     info!("{}", title);
     info!("─────────────────────────────────────────────────────────────────────────────────────");
-    info!(
-        "{:>68} {:>15} {:>12}",
-        "Sidechain Key", "Status", "Blocks"
-    );
+    info!("{:>68} {:>15} {:>12}", "Sidechain Key", "Status", "Blocks");
     info!("─────────────────────────────────────────────────────────────────────────────────────");
 
     for validator in validators.iter().take(limit as usize) {
         let status = validator
-            .registration_status.as_deref()
+            .registration_status
+            .as_deref()
             .unwrap_or("unknown");
         let ours_marker = if validator.is_ours { " *" } else { "" };
 
@@ -278,7 +286,10 @@ fn run_validators(db: &Database, ours_only: bool, limit: u64) -> Result<()> {
 
     if validators.len() > limit as usize {
         info!("");
-        info!("... and {} more (use --limit to show more)", validators.len() - limit as usize);
+        info!(
+            "... and {} more (use --limit to show more)",
+            validators.len() - limit as usize
+        );
     }
 
     if !ours_only && validators.iter().any(|v| v.is_ours) {
@@ -313,7 +324,12 @@ fn run_validator(db: &Database, key: &str) -> Result<()> {
             if let Some(label) = &v.label {
                 info!("Label:          {}", label);
             }
-            info!("Status:         {}", v.registration_status.as_ref().unwrap_or(&"unknown".to_string()));
+            info!(
+                "Status:         {}",
+                v.registration_status
+                    .as_ref()
+                    .unwrap_or(&"unknown".to_string())
+            );
             info!("Is Ours:        {}", if v.is_ours { "Yes" } else { "No" });
             if let Some(epoch) = v.first_seen_epoch {
                 info!("First Seen:     Epoch {}", epoch);
@@ -332,7 +348,8 @@ fn run_validator(db: &Database, key: &str) -> Result<()> {
                 let validator_blocks: Vec<_> = blocks
                     .iter()
                     .filter(|b| {
-                        b.author_key.as_ref()
+                        b.author_key
+                            .as_ref()
                             .map(|k| k == &v.sidechain_key)
                             .unwrap_or(false)
                     })
@@ -378,10 +395,7 @@ fn run_performance(db: &Database, ours_only: bool, limit: u64) -> Result<()> {
     }
 
     // Filter validators with at least 1 block
-    let active_validators: Vec<_> = validators
-        .iter()
-        .filter(|v| v.total_blocks > 0)
-        .collect();
+    let active_validators: Vec<_> = validators.iter().filter(|v| v.total_blocks > 0).collect();
 
     if active_validators.is_empty() {
         info!("No validators have produced blocks yet.");
@@ -433,7 +447,10 @@ fn run_performance(db: &Database, ours_only: bool, limit: u64) -> Result<()> {
 
     if active_validators.len() > limit as usize {
         info!("");
-        info!("... and {} more (use --limit to show more)", active_validators.len() - limit as usize);
+        info!(
+            "... and {} more (use --limit to show more)",
+            active_validators.len() - limit as usize
+        );
     }
 
     if !ours_only && validators.iter().any(|v| v.is_ours) {

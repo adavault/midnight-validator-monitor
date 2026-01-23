@@ -3,8 +3,7 @@
 use ratatui::style::Color;
 
 /// Theme for the TUI
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum Theme {
     #[default]
     Midnight,
@@ -63,16 +62,16 @@ impl Theme {
     /// Highlight color for selected items
     pub fn highlight(&self) -> Color {
         match self {
-            Theme::Midnight => Color::Rgb(60, 45, 90),    // Dark purple
-            Theme::Midday => Color::Rgb(210, 235, 255),   // Light sky blue
+            Theme::Midnight => Color::Rgb(60, 45, 90),  // Dark purple
+            Theme::Midday => Color::Rgb(210, 235, 255), // Light sky blue
         }
     }
 
     /// Border color
     pub fn border(&self) -> Color {
         match self {
-            Theme::Midnight => Color::Rgb(100, 80, 140),  // Purple-gray
-            Theme::Midday => Color::Rgb(140, 170, 200),   // Light steel blue
+            Theme::Midnight => Color::Rgb(100, 80, 140), // Purple-gray
+            Theme::Midday => Color::Rgb(140, 170, 200),  // Light steel blue
         }
     }
 
@@ -129,4 +128,3 @@ impl Theme {
         }
     }
 }
-

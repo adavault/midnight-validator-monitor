@@ -33,6 +33,7 @@ impl Network {
     }
 
     /// Get the display name for this network
+    #[allow(dead_code)]
     pub fn name(&self) -> &'static str {
         match self {
             Network::Preview => "preview",
@@ -46,6 +47,7 @@ impl Network {
 #[derive(Debug, Clone)]
 pub struct ChainTiming {
     /// Network this timing is for
+    #[allow(dead_code)]
     pub network: Network,
 
     /// Slot duration in milliseconds (6000ms = 6 seconds for all Midnight networks)
@@ -72,10 +74,10 @@ impl ChainTiming {
     pub fn preview() -> Self {
         Self {
             network: Network::Preview,
-            slot_duration_ms: 6_000,                      // 6 seconds
-            sidechain_epoch_ms: 2 * 60 * 60 * 1_000,     // 2 hours
-            mainchain_epoch_ms: 24 * 60 * 60 * 1_000,    // 24 hours
-            genesis_timestamp_ms: None,                   // TBD
+            slot_duration_ms: 6_000,                  // 6 seconds
+            sidechain_epoch_ms: 2 * 60 * 60 * 1_000,  // 2 hours
+            mainchain_epoch_ms: 24 * 60 * 60 * 1_000, // 24 hours
+            genesis_timestamp_ms: None,               // TBD
         }
     }
 
@@ -84,10 +86,10 @@ impl ChainTiming {
     pub fn preprod() -> Self {
         Self {
             network: Network::Preprod,
-            slot_duration_ms: 6_000,                      // 6 seconds
-            sidechain_epoch_ms: 2 * 60 * 60 * 1_000,     // 2 hours (TBD)
-            mainchain_epoch_ms: 24 * 60 * 60 * 1_000,    // 24 hours (TBD)
-            genesis_timestamp_ms: None,                   // TBD
+            slot_duration_ms: 6_000,                  // 6 seconds
+            sidechain_epoch_ms: 2 * 60 * 60 * 1_000,  // 2 hours (TBD)
+            mainchain_epoch_ms: 24 * 60 * 60 * 1_000, // 24 hours (TBD)
+            genesis_timestamp_ms: None,               // TBD
         }
     }
 
@@ -99,7 +101,7 @@ impl ChainTiming {
         Self {
             network: Network::Mainnet,
             slot_duration_ms: 6_000,                      // 6 seconds
-            sidechain_epoch_ms: 10 * 60 * 60 * 1_000,    // 10 hours
+            sidechain_epoch_ms: 10 * 60 * 60 * 1_000,     // 10 hours
             mainchain_epoch_ms: 5 * 24 * 60 * 60 * 1_000, // 5 days
             genesis_timestamp_ms: None,                   // TBD
         }
@@ -121,12 +123,14 @@ impl ChainTiming {
     }
 
     /// Blocks per mainchain epoch
+    #[allow(dead_code)]
     pub fn blocks_per_mainchain_epoch(&self) -> u64 {
         self.mainchain_epoch_ms / self.slot_duration_ms
     }
 
     /// Sidechain epochs per mainchain epoch
     /// This is 12 for all networks (by design)
+    #[allow(dead_code)]
     pub fn sidechain_epochs_per_mainchain(&self) -> u64 {
         self.mainchain_epoch_ms / self.sidechain_epoch_ms
     }

@@ -63,17 +63,15 @@ async fn run_validate() -> Result<()> {
             println!("Found config file: {}", path.display());
 
             match crate::config::Config::load() {
-                Ok(config) => {
-                    match config.validate() {
-                        Ok(_) => {
-                            println!("✓ Configuration is valid");
-                        }
-                        Err(e) => {
-                            println!("✗ Configuration validation failed: {}", e);
-                            return Err(e);
-                        }
+                Ok(config) => match config.validate() {
+                    Ok(_) => {
+                        println!("✓ Configuration is valid");
                     }
-                }
+                    Err(e) => {
+                        println!("✗ Configuration validation failed: {}", e);
+                        return Err(e);
+                    }
+                },
                 Err(e) => {
                     println!("✗ Failed to load configuration: {}", e);
                     return Err(e);
@@ -94,7 +92,8 @@ async fn run_validate() -> Result<()> {
 }
 
 async fn run_example() -> Result<()> {
-    println!(r#"# Midnight Validator Monitor (MVM) Configuration File
+    println!(
+        r#"# Midnight Validator Monitor (MVM) Configuration File
 #
 # Location priority (first found is used):
 #   1. ./mvm.toml (current directory)
@@ -165,7 +164,8 @@ network = "preview"
 # Override genesis timestamp (milliseconds since Unix epoch)
 # Normally auto-calculated from current slot; only set if you know the exact value
 # genesis_timestamp_ms = 1700000000000
-"#);
+"#
+    );
 
     Ok(())
 }

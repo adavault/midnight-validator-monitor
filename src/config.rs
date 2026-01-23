@@ -7,8 +7,7 @@ use std::fs;
 use std::path::PathBuf;
 
 /// Configuration structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     #[serde(default)]
     pub rpc: RpcConfig,
@@ -71,8 +70,7 @@ pub struct DatabaseConfig {
     pub path: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ValidatorConfig {
     #[serde(default)]
     pub keystore_path: Option<String>,
@@ -111,8 +109,7 @@ pub struct ViewConfig {
     pub expected_ip: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DaemonConfig {
     #[serde(default)]
     pub pid_file: Option<String>,
@@ -262,7 +259,6 @@ fn default_retry_max_delay() -> u64 {
     30000 // 30 seconds
 }
 
-
 impl Default for RpcConfig {
     fn default() -> Self {
         Self {
@@ -297,7 +293,6 @@ impl Default for DatabaseConfig {
     }
 }
 
-
 impl Default for SyncConfig {
     fn default() -> Self {
         Self {
@@ -317,7 +312,6 @@ impl Default for ViewConfig {
         }
     }
 }
-
 
 impl Config {
     /// Load configuration from file, environment, and defaults
@@ -448,7 +442,8 @@ impl Config {
     /// Get example configuration as TOML string (for programmatic access)
     #[allow(dead_code)]
     pub fn example_toml() -> String {
-        toml::to_string_pretty(&Config::default()).unwrap_or_else(|_| "# Error generating example".to_string())
+        toml::to_string_pretty(&Config::default())
+            .unwrap_or_else(|_| "# Error generating example".to_string())
     }
 }
 

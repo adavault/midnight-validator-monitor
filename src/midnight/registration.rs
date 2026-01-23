@@ -109,30 +109,32 @@ pub async fn get_key_status(
     keys: &ValidatorKeys,
     current_epoch: u64,
 ) -> KeyStatus {
-    let mut status = KeyStatus::default();
-
     // Check if keys are loaded in keystore
-    status.sidechain_loaded = check_key_loaded(rpc, &keys.sidechain_pub_key, "crch")
+    let sidechain_loaded = check_key_loaded(rpc, &keys.sidechain_pub_key, "crch")
         .await
         .ok();
 
-    status.aura_loaded = check_key_loaded(rpc, &keys.aura_pub_key, "aura")
-        .await
-        .ok();
+    let aura_loaded = check_key_loaded(rpc, &keys.aura_pub_key, "aura").await.ok();
 
-    status.grandpa_loaded = check_key_loaded(rpc, &keys.grandpa_pub_key, "gran")
+    let grandpa_loaded = check_key_loaded(rpc, &keys.grandpa_pub_key, "gran")
         .await
         .ok();
 
     // Check registration status
-    status.registration = check_registration(rpc, &keys.sidechain_pub_key, current_epoch)
+    let registration = check_registration(rpc, &keys.sidechain_pub_key, current_epoch)
         .await
         .ok();
 
     // Check committee status
-    status.committee_status = get_committee_status(rpc, keys, current_epoch).await.ok();
+    let committee_status = get_committee_status(rpc, keys, current_epoch).await.ok();
 
-    status
+    KeyStatus {
+        sidechain_loaded,
+        aura_loaded,
+        grandpa_loaded,
+        registration,
+        committee_status,
+    }
 }
 
 /// Get committee status for a validator
@@ -149,7 +151,8 @@ async fn get_committee_status(
     let aura_key_normalized = normalize_hex(&keys.aura_pub_key);
 
     // Count seats in the committee
-    let seat_count = committee.iter()
+    let seat_count = committee
+        .iter()
         .filter(|k| normalize_hex(k) == aura_key_normalized)
         .count() as u32;
 
@@ -163,7 +166,10 @@ async fn get_committee_status(
     };
 
     // Fetch stake from AriadneParameters
-    let stake_lovelace = get_validator_stake(rpc, &keys.sidechain_pub_key, current_epoch).await.ok().flatten();
+    let stake_lovelace = get_validator_stake(rpc, &keys.sidechain_pub_key, current_epoch)
+        .await
+        .ok()
+        .flatten();
 
     // Expected blocks per sidechain epoch (typically 1200 blocks on preview)
     // blocks_per_epoch * (seats / committee_size)

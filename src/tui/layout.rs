@@ -55,9 +55,9 @@ impl ResponsiveLayout {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Title bar
-                Constraint::Min(0),     // Content
-                Constraint::Length(3),  // Status bar
+                Constraint::Length(3), // Title bar
+                Constraint::Min(0),    // Content
+                Constraint::Length(3), // Status bar
             ])
             .split(area)
             .to_vec()
@@ -71,8 +71,8 @@ impl ResponsiveLayout {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(network_status_rows + 2), // Content rows + 2 for border
-                Constraint::Length(9),  // Our validator: 4 header + 3 keys + 2 border
-                Constraint::Min(0),     // Recent blocks: fills remaining space
+                Constraint::Length(9), // Our validator: 4 header + 3 keys + 2 border
+                Constraint::Min(0),    // Recent blocks: fills remaining space
             ])
             .split(area)
             .to_vec()
@@ -99,8 +99,8 @@ impl ResponsiveLayout {
     /// Determine if we should show the full key or truncated version
     pub fn key_display_length(&self) -> KeyDisplayMode {
         match self.size {
-            ScreenSize::Medium => KeyDisplayMode::Short,  // 12...8
-            ScreenSize::Large => KeyDisplayMode::Full,    // Full key
+            ScreenSize::Medium => KeyDisplayMode::Short, // 12...8
+            ScreenSize::Large => KeyDisplayMode::Full,   // Full key
         }
     }
 
@@ -161,7 +161,7 @@ impl KeyDisplayMode {
         match self {
             KeyDisplayMode::Short => {
                 if key.len() > 22 {
-                    format!("{}...{}", &key[..12], &key[key.len()-8..])
+                    format!("{}...{}", &key[..12], &key[key.len() - 8..])
                 } else {
                     key.to_string()
                 }

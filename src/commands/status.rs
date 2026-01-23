@@ -83,7 +83,13 @@ pub struct StatusMonitor {
 }
 
 impl StatusMonitor {
-    pub fn new(rpc_url: &str, metrics_url: &str, keys: Option<ValidatorKeys>, timeout_ms: u64, explain: bool) -> Self {
+    pub fn new(
+        rpc_url: &str,
+        metrics_url: &str,
+        keys: Option<ValidatorKeys>,
+        timeout_ms: u64,
+        explain: bool,
+    ) -> Self {
         Self {
             rpc: RpcClient::with_timeout(rpc_url, timeout_ms),
             metrics: MetricsClient::new(metrics_url),
@@ -97,7 +103,11 @@ impl StatusMonitor {
     }
 
     pub async fn get_sync_state(&self) -> Result<Option<SyncState>> {
-        match self.rpc.call::<_, SyncState>("system_syncState", Vec::<()>::new()).await {
+        match self
+            .rpc
+            .call::<_, SyncState>("system_syncState", Vec::<()>::new())
+            .await
+        {
             Ok(state) => Ok(Some(state)),
             Err(_) => Ok(None),
         }
@@ -108,7 +118,10 @@ impl StatusMonitor {
     }
 
     pub async fn get_finalized_block(&self) -> Result<u64> {
-        let hash: String = self.rpc.call("chain_getFinalizedHead", Vec::<()>::new()).await?;
+        let hash: String = self
+            .rpc
+            .call("chain_getFinalizedHead", Vec::<()>::new())
+            .await?;
         let header: BlockHeader = self.rpc.call("chain_getHeader", vec![&hash]).await?;
         Ok(header.block_number())
     }
@@ -169,7 +182,11 @@ impl StatusMonitor {
 
     pub fn display_status(&self, status: &ValidatorStatus) {
         let health_icon = if status.is_healthy() { "✓" } else { "✗" };
-        let sync_icon = if status.health.is_syncing { "⟳" } else { "✓" };
+        let sync_icon = if status.health.is_syncing {
+            "⟳"
+        } else {
+            "✓"
+        };
 
         info!("─────────────────────────────────────────");
         info!(
@@ -258,7 +275,8 @@ impl StatusMonitor {
         }
 
         // Show note if keys can't be verified
-        if ks.sidechain_loaded.is_none() && ks.aura_loaded.is_none() && ks.grandpa_loaded.is_none() {
+        if ks.sidechain_loaded.is_none() && ks.aura_loaded.is_none() && ks.grandpa_loaded.is_none()
+        {
             info!("Note: Key verification requires node started with --rpc-methods=unsafe");
         }
 
@@ -312,18 +330,24 @@ impl StatusMonitor {
                     committee.expected_blocks_per_epoch
                 );
                 if self.explain {
-                    info!("  → Based on your seat count and epoch duration (1200 blocks on preview)");
+                    info!(
+                        "  → Based on your seat count and epoch duration (1200 blocks on preview)"
+                    );
                 }
             } else {
                 warn!(
                     "Committee: ✗ NOT elected (committee size: {})",
                     committee.committee_size
                 );
-                warn!("Your validator is registered but was not selected for this epoch's committee.");
+                warn!(
+                    "Your validator is registered but was not selected for this epoch's committee."
+                );
                 warn!("Committee selection is stake-weighted random. Keep your node running and staked.");
                 if self.explain {
                     info!("  → Being registered does NOT guarantee committee selection");
-                    info!("  → Selection is stake-weighted random each sidechain epoch (2h preview)");
+                    info!(
+                        "  → Selection is stake-weighted random each sidechain epoch (2h preview)"
+                    );
                     info!("  → Higher stake = higher probability, but not guaranteed");
                     info!("  → This is NORMAL - wait for next epoch or increase stake");
                 }
@@ -401,7 +425,9 @@ pub async fn run(args: StatusArgs) -> Result<()> {
         }
     } else {
         // Try keystore from args or config
-        let keystore_path = args.keystore.or_else(|| config.validator.keystore_path.map(PathBuf::from));
+        let keystore_path = args
+            .keystore
+            .or_else(|| config.validator.keystore_path.map(PathBuf::from));
 
         if let Some(ref keystore_path) = keystore_path {
             match ValidatorKeys::from_keystore(keystore_path) {
@@ -427,7 +453,13 @@ pub async fn run(args: StatusArgs) -> Result<()> {
         }
     };
 
-    let monitor = StatusMonitor::new(&rpc_url, &metrics_url, keys, config.rpc.timeout_ms, args.explain);
+    let monitor = StatusMonitor::new(
+        &rpc_url,
+        &metrics_url,
+        keys,
+        config.rpc.timeout_ms,
+        args.explain,
+    );
 
     // Try to get version on startup
     match monitor.get_version().await {

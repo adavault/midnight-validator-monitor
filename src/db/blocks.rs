@@ -106,11 +106,8 @@ pub fn get_block(conn: &Connection, block_number: u64) -> Result<Option<BlockRec
 
 /// Get the highest block number in the database
 pub fn get_max_block_number(conn: &Connection) -> Result<Option<u64>> {
-    let result: Option<i64> = conn.query_row(
-        "SELECT MAX(block_number) FROM blocks",
-        [],
-        |row| row.get(0),
-    )?;
+    let result: Option<i64> =
+        conn.query_row("SELECT MAX(block_number) FROM blocks", [], |row| row.get(0))?;
     Ok(result.map(|n| n as u64))
 }
 
@@ -292,6 +289,7 @@ pub fn count_blocks_by_author_since(
 ///
 /// # Returns
 /// Vector of counts from oldest bucket to newest (left to right for sparkline)
+#[allow(dead_code)]
 pub fn get_block_counts_bucketed(
     conn: &Connection,
     author_keys: &[String],
@@ -500,11 +498,7 @@ pub fn get_seats_by_epoch(
 ///
 /// This stores the complete committee (all AURA keys in order) for a specific epoch.
 /// The committee is used for correct block author attribution.
-pub fn store_committee_snapshot(
-    conn: &Connection,
-    epoch: u64,
-    committee: &[String],
-) -> Result<()> {
+pub fn store_committee_snapshot(conn: &Connection, epoch: u64, committee: &[String]) -> Result<()> {
     // Delete existing snapshot for this epoch (if any)
     conn.execute(
         "DELETE FROM committee_snapshots WHERE epoch = ?1",
@@ -568,7 +562,8 @@ pub fn get_committee_size(conn: &Connection, epoch: u64) -> Result<Option<usize>
 /// List all epochs with stored committee snapshots
 #[allow(dead_code)]
 pub fn list_committee_epochs(conn: &Connection) -> Result<Vec<u64>> {
-    let mut stmt = conn.prepare("SELECT DISTINCT epoch FROM committee_snapshots ORDER BY epoch DESC")?;
+    let mut stmt =
+        conn.prepare("SELECT DISTINCT epoch FROM committee_snapshots ORDER BY epoch DESC")?;
 
     let rows = stmt.query_map([], |row| row.get::<_, i64>(0))?;
 
@@ -668,6 +663,7 @@ pub fn get_validators_for_epoch(
 }
 
 /// Get the latest validator epoch snapshot for each validator
+#[allow(dead_code)]
 pub fn get_latest_validator_epochs(conn: &Connection) -> Result<Vec<ValidatorEpochRecord>> {
     let mut stmt = conn.prepare(
         "SELECT ve.sidechain_epoch, ve.sidechain_key, ve.aura_key, ve.committee_seats,
@@ -794,10 +790,8 @@ pub fn get_total_seats_for_epochs(
     let mut stmt = conn.prepare(&query)?;
 
     // Build params: start_epoch, end_epoch, then all sidechain_keys
-    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![
-        Box::new(start_epoch as i64),
-        Box::new(end_epoch as i64),
-    ];
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> =
+        vec![Box::new(start_epoch as i64), Box::new(end_epoch as i64)];
     for key in sidechain_keys {
         params.push(Box::new(key.clone()));
     }
@@ -850,7 +844,8 @@ impl CommitteeSelectionStats {
 
     /// Calculate epochs since last selection
     pub fn epochs_since_selection(&self) -> Option<u64> {
-        self.last_selected_epoch.map(|last| self.current_epoch.saturating_sub(last))
+        self.last_selected_epoch
+            .map(|last| self.current_epoch.saturating_sub(last))
     }
 
     /// Calculate average seats per selected epoch
@@ -877,7 +872,7 @@ pub fn get_committee_selection_stats(
             COALESCE(SUM(committee_seats), 0) as total_seats,
             MAX(CASE WHEN committee_seats > 0 THEN sidechain_epoch ELSE NULL END) as last_selected
          FROM validator_epochs
-         WHERE sidechain_key = ?1"
+         WHERE sidechain_key = ?1",
     )?;
 
     let (epochs_tracked, times_selected, total_seats, last_selected): (i64, i64, i64, Option<i64>) =
@@ -886,15 +881,18 @@ pub fn get_committee_selection_stats(
         })?;
 
     // Check if currently in committee
-    let currently_in_committee: bool = conn.query_row(
-        "SELECT committee_seats > 0 FROM validator_epochs
+    let currently_in_committee: bool = conn
+        .query_row(
+            "SELECT committee_seats > 0 FROM validator_epochs
          WHERE sidechain_key = ?1 AND sidechain_epoch = ?2",
-        params![sidechain_key, current_epoch as i64],
-        |row| row.get(0)
-    ).unwrap_or(false);
+            params![sidechain_key, current_epoch as i64],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
 
     // Get stake rank and dynamic validator info
-    let (stake_rank, total_dynamic, stake_share) = get_stake_rank_info(conn, sidechain_key, current_epoch)?;
+    let (stake_rank, total_dynamic, stake_share) =
+        get_stake_rank_info(conn, sidechain_key, current_epoch)?;
 
     // Get committee structure (permissioned vs dynamic)
     let permissioned_percent = get_permissioned_seats_percent(conn, current_epoch)?;
@@ -920,30 +918,37 @@ fn get_stake_rank_info(
     current_epoch: u64,
 ) -> Result<(Option<u32>, u32, Option<f64>)> {
     // Get validator's stake
-    let validator_stake: Option<i64> = conn.query_row(
-        "SELECT stake_lovelace FROM validator_epochs
+    let validator_stake: Option<i64> = conn
+        .query_row(
+            "SELECT stake_lovelace FROM validator_epochs
          WHERE sidechain_key = ?1 AND sidechain_epoch = ?2 AND is_permissioned = 0",
-        params![sidechain_key, current_epoch as i64],
-        |row| row.get(0)
-    ).ok().flatten();
+            params![sidechain_key, current_epoch as i64],
+            |row| row.get(0),
+        )
+        .ok()
+        .flatten();
 
     // Get total dynamic validators and total stake
-    let (total_dynamic, total_stake): (i64, i64) = conn.query_row(
-        "SELECT COUNT(*), COALESCE(SUM(stake_lovelace), 0) FROM validator_epochs
+    let (total_dynamic, total_stake): (i64, i64) = conn
+        .query_row(
+            "SELECT COUNT(*), COALESCE(SUM(stake_lovelace), 0) FROM validator_epochs
          WHERE sidechain_epoch = ?1 AND is_permissioned = 0 AND stake_lovelace IS NOT NULL",
-        params![current_epoch as i64],
-        |row| Ok((row.get(0)?, row.get(1)?))
-    ).unwrap_or((0, 0));
+            params![current_epoch as i64],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap_or((0, 0));
 
     if let Some(stake) = validator_stake {
         // Calculate rank (how many have higher stake + 1)
-        let higher_count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM validator_epochs
+        let higher_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM validator_epochs
              WHERE sidechain_epoch = ?1 AND is_permissioned = 0
              AND stake_lovelace > ?2 AND stake_lovelace IS NOT NULL",
-            params![current_epoch as i64, stake],
-            |row| row.get(0)
-        ).unwrap_or(0);
+                params![current_epoch as i64, stake],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
 
         let rank = (higher_count + 1) as u32;
         let share = if total_stake > 0 {
@@ -960,15 +965,17 @@ fn get_stake_rank_info(
 
 /// Get percentage of committee seats held by permissioned validators
 fn get_permissioned_seats_percent(conn: &Connection, current_epoch: u64) -> Result<f64> {
-    let result: (i64, i64) = conn.query_row(
-        "SELECT
+    let result: (i64, i64) = conn
+        .query_row(
+            "SELECT
             COALESCE(SUM(CASE WHEN is_permissioned = 1 THEN committee_seats ELSE 0 END), 0),
             COALESCE(SUM(committee_seats), 0)
          FROM validator_epochs
          WHERE sidechain_epoch = ?1",
-        params![current_epoch as i64],
-        |row| Ok((row.get(0)?, row.get(1)?))
-    ).unwrap_or((0, 0));
+            params![current_epoch as i64],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap_or((0, 0));
 
     let (permissioned_seats, total_seats) = result;
     if total_seats > 0 {
@@ -1159,12 +1166,18 @@ mod tests {
         assert_eq!(latest.len(), 2);
 
         // validator1 should have epoch 101 data
-        let v1 = latest.iter().find(|v| v.sidechain_key == "0xsidechain1").unwrap();
+        let v1 = latest
+            .iter()
+            .find(|v| v.sidechain_key == "0xsidechain1")
+            .unwrap();
         assert_eq!(v1.sidechain_epoch, 101);
         assert_eq!(v1.committee_seats, 12);
 
         // validator2 should have epoch 100 data (latest for that validator)
-        let v2 = latest.iter().find(|v| v.sidechain_key == "0xsidechain2").unwrap();
+        let v2 = latest
+            .iter()
+            .find(|v| v.sidechain_key == "0xsidechain2")
+            .unwrap();
         assert_eq!(v2.sidechain_epoch, 100);
         assert_eq!(v2.committee_seats, 5);
     }
