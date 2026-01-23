@@ -19,6 +19,12 @@ See `docs/EXTERNAL_IP_RESEARCH.md` for detailed research findings.
 - [ ] **Lazy committee fetching**: Only fetch committee when on Dashboard or Validators view
 - [ ] **Cached block queries**: Consider caching recent blocks query results
 
+## v1.1 Planned
+
+- [ ] **Auto-install shell completions**: Add `mvm install --with-completions` flag that detects user's shell from `$SHELL`, installs completions to appropriate system path (`/etc/bash_completion.d/mvm` for bash, `~/.zsh/completions/_mvm` for zsh), and shows message about sourcing. Makes install experience smoother for new users.
+- [ ] **File permissions documentation** (Issue #17): Document recommended multi-user setup - `midnight` user owns data, operators in `midnight` group, directory mode `775`, file mode `664`.
+- [ ] **Troubleshooting guide** (Issue #18): Common issues and solutions.
+
 ## Feature Ideas
 
 - [x] **Alert thresholds**: Configurable alerts when block production falls below expected rate *(v0.9.3 - AlertManager infrastructure added, config section ready)*
