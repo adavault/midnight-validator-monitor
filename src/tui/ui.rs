@@ -85,8 +85,8 @@ fn sparkline_colored_spans<'a>(
 
 /// Render the UI with responsive layout
 pub fn render(f: &mut Frame, app: &App) {
-    let layout = ResponsiveLayout::new(f.size());
-    let chunks = layout.main_layout(f.size());
+    let layout = ResponsiveLayout::new(f.area());
+    let chunks = layout.main_layout(f.area());
 
     // Render title bar (compact for small screens)
     render_title_bar(f, app, chunks[0], &layout);
@@ -2003,7 +2003,7 @@ fn render_block_detail_popup(f: &mut Frame, app: &App, block: &crate::db::BlockR
     use ratatui::widgets::Clear;
 
     let theme = app.theme;
-    let area = centered_popup(90, 60, 65, f.size()); // min 90 cols for hash lines
+    let area = centered_popup(90, 60, 65, f.area()); // min 90 cols for hash lines
 
     // Clear the area behind the popup
     f.render_widget(Clear, area);
@@ -2134,7 +2134,7 @@ fn render_peer_detail_popup(f: &mut Frame, app: &App, peer: &crate::tui::app::Pe
     use ratatui::widgets::Clear;
 
     let theme = app.theme;
-    let area = centered_popup(76, 60, 50, f.size()); // min 76 cols for peer IDs
+    let area = centered_popup(76, 60, 50, f.area()); // min 76 cols for peer IDs
 
     // Clear the area behind the popup
     f.render_widget(Clear, area);
@@ -2244,7 +2244,7 @@ fn render_validator_identity_popup(
     use ratatui::widgets::Clear;
 
     let theme = app.theme;
-    let area = centered_popup(76, 60, 75, f.size());
+    let area = centered_popup(76, 60, 75, f.area());
 
     // Clear the area behind the popup
     f.render_widget(Clear, area);
@@ -2545,7 +2545,7 @@ fn render_validator_detail_popup(
     use ratatui::widgets::Clear;
 
     let theme = app.theme;
-    let area = centered_popup(76, 70, 80, f.size()); // 80% height for table
+    let area = centered_popup(76, 70, 80, f.area()); // 80% height for table
 
     // Clear the area behind the popup
     f.render_widget(Clear, area);
@@ -2720,7 +2720,7 @@ fn render_validator_detail_popup(
                         .add_modifier(Modifier::BOLD),
                 )),
         )
-        .highlight_style(
+        .row_highlight_style(
             Style::default()
                 .bg(theme.highlight())
                 .add_modifier(Modifier::BOLD)
@@ -2931,7 +2931,7 @@ fn render_validator_epoch_detail(f: &mut Frame, app: &App, area: Rect, layout: &
                         .add_modifier(Modifier::BOLD),
                 )),
         )
-        .highlight_style(
+        .row_highlight_style(
             Style::default()
                 .bg(theme.highlight())
                 .add_modifier(Modifier::BOLD)
