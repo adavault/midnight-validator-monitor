@@ -1,0 +1,257 @@
+# ============================================
+# Known Validators Registry
+# ============================================
+#
+# This file maps Midnight validator sidechain keys to Cardano stake pool
+# tickers. Labels are displayed in the MVM TUI to identify validators.
+#
+# WANT TO BE LISTED?
+# ==================
+#
+# Preview Testnet (current):
+#   1. Fork this repository
+#   2. Add your entry to the "Community Validators" section below:
+#      [[validators]]
+#      sidechain_key = "0x..."  # Your sidechain public key (from session keys)
+#      label = "TIKR"           # Your 5-char pool ticker
+#   3. Open a PR titled "Add validator: TIKR"
+#   4. We'll verify the key exists on-chain and merge
+#
+# PreProd / Mainnet (future):
+#   Listing will require Calidus signature verification to prove pool
+#   ownership. This uses CIP-88v2 signing with your pool cold key.
+#
+#   Tools: https://github.com/gitmachtl/cardano-signer
+#
+#   Your pool.json ticker will be used automatically once verified.
+#   Details will be published when PreProd launches.
+#
+# ============================================
+
+# ============================================
+# ADAvault Validators
+# ============================================
+
+[[validators]]
+sidechain_key = "0x037764d2d83c269030fef6df5aeb4419c48762ada2cf20b0e4e6ede596809f4700"
+label = "ADVPV"
+
+# ============================================
+# Permissioned Validators (IOG/Midnight Team)
+# ============================================
+
+[[validators]]
+sidechain_key = "0x0203ae55458c8b9123b37a61ddd7f2a334ff35a80385825a2265eb490688cdebc5"
+label = "IOG01"
+
+[[validators]]
+sidechain_key = "0x0224c6d324f865d8c1ec98623cb12e1ef7f832ce867459a651a05bec302ad025fc"
+label = "IOG02"
+
+[[validators]]
+sidechain_key = "0x022eaa9749b268a5e39c4a063dd59076854d8e4102338c12ff415d7a58ffb96f61"
+label = "IOG03"
+
+[[validators]]
+sidechain_key = "0x0250159344a81b11aa21d9b4d2b5f24000682a95eb6564caccfe67b96ade9e202a"
+label = "IOG04"
+
+[[validators]]
+sidechain_key = "0x027cdef218a74d6c5ceb0f7341ad4164ab28638412a3281bc518845833dbb77018"
+label = "IOG05"
+
+[[validators]]
+sidechain_key = "0x02c9303f3a61dddc8a320e33c5f49b960a5005a9f6d1d9bb7cf51996cd952a3b5b"
+label = "IOG06"
+
+[[validators]]
+sidechain_key = "0x03061e6543612512636a3018e8e3d0c0403ef08cc8afbff6fe2bcf88ce9a2b7ef9"
+label = "IOG07"
+
+[[validators]]
+sidechain_key = "0x0321009431b00dc9a9ba7b168c7297edd2c17de9cdee04b26a31b5d7746fd46344"
+label = "IOG08"
+
+[[validators]]
+sidechain_key = "0x03461f9f9a0a7502ce25337aa3fb3b4209b98005a8ab95ac3897b7a536aff3dbb0"
+label = "IOG09"
+
+[[validators]]
+sidechain_key = "0x0356dcb690685b6b159606ab16fae7417691e499f6ca205238d48515e9eaa3a8a0"
+label = "IOG10"
+
+[[validators]]
+sidechain_key = "0x03ba2fae521bc23a26620f082a961b5dd0f813f08e62d35f1a73507061777dcb01"
+label = "IOG11"
+
+[[validators]]
+sidechain_key = "0x03e2a245ba91ebc0af91842c117b4bf1efb97f862bf88399d53c9440349d3814ba"
+label = "IOG12"
+
+# ============================================
+# Community Validators (from Discord #pool-ids)
+# ============================================
+
+[[validators]]
+sidechain_key = "0x02df3906fb2e5c04d89df6f37509860f87a1a079f467c6c045a55f851c92ead004"
+label = "8BALL"
+
+[[validators]]
+sidechain_key = "0x03ac4ea01d7928fd5a9bd38caaae367e9ca3c735830992397348667c2d80d59789"
+label = "ADACT"
+
+[[validators]]
+sidechain_key = "0x03b357d552312397c259d5c77e4c3ba6053af7fe5e763da09e1f7cc4414e9309b9"
+label = "ALFA"
+
+[[validators]]
+sidechain_key = "0x024f9f6d5a7a174278e49c72ec04498ca7695d15abda75322c06f62ced053a489b"
+label = "ALLEY"
+
+[[validators]]
+sidechain_key = "0x03ab8777ac0db9137f3586275c4c5bc410d7b9eb16a64fe5ba3a282e25454baf85"
+label = "AMOON"
+
+[[validators]]
+sidechain_key = "0x0218af3c577f8fd80e47ce128024e4c375db029b9577c68786ba4f4bfa83b2dbcd"
+label = "ARTMS"
+
+[[validators]]
+sidechain_key = "0x03d7a94544d1e5ef46983016fa9082d2eab2cd2cf12294713bc41948d997fe8b62"
+label = "ATM"
+
+[[validators]]
+sidechain_key = "0x0287f486c3ef451e42b0d997c4e8c4ddca320369d4c37ea4f40fb5b1c1f226de9e"
+label = "BKV"
+
+[[validators]]
+sidechain_key = "0x021cc8a997885cbb9bf971e939453b5251510a72b59a042a1b65e2622e929302e0"
+label = "CARTS"
+
+[[validators]]
+sidechain_key = "0x02f1e126e61bbc0bd97f566c470c346a31550832fe1e1acd36111e7edd9993b29d"
+label = "CBROS"
+
+[[validators]]
+sidechain_key = "0x0397f2a19b9c5bc01fad1168fd76d9c8d2a0e9bc80d1fb6c6ec70b1f02df15eed4"
+label = "CCIO"
+
+[[validators]]
+sidechain_key = "0x03ee3347abc3ff4a2d1a89b884cdc5224f3cf92feecd09647f13eecb2ba55e29ad"
+label = "CHG"
+
+[[validators]]
+sidechain_key = "0x02a2ac8ae0aa0dfd64099c81ba8f0d191c8e21869e6734d441be65549b1cc1cb94"
+label = "COINZ"
+
+[[validators]]
+sidechain_key = "0x02aa64c702f7bcf74f3d3ddb53d7b729dfbea2a543e53b4138067a542eeda25bd1"
+label = "DINO"
+
+[[validators]]
+sidechain_key = "0x0207185b8870f4b603c5baf766be036b2d8e20951a5e596d1b43ab88561e74a694"
+label = "DOLCA"
+
+[[validators]]
+sidechain_key = "0x020599d9e87ab780a891bae549b6085f187278a7fee8673df619e45a4b001bca61"
+label = "EASY1"
+
+[[validators]]
+sidechain_key = "0x03c342001a6a0dd02007659dfea5e5083dec81dcc03f56aa56cdecc63e831507ee"
+label = "ENVY"
+
+[[validators]]
+sidechain_key = "0x0399ac409dd6421daaa7ac26161fac18ea8ef8c490e4a679a597ef2fb174f7e4b3"
+label = "FLUID"
+
+[[validators]]
+sidechain_key = "0x0372952d326b023e8ce0565547d49f063165b6f044ce0ac5b2295ed78e028ba89e"
+label = "HAMDA"
+
+[[validators]]
+sidechain_key = "0x03c7673e302df7d6e26c18099ed37f5c51e964c3e296f02c0577aa10271926619a"
+label = "HYPE"
+
+[[validators]]
+sidechain_key = "0x0396e12c45f679abe004f21d77a41142aeeff10e032624ee8871835873296bc442"
+label = "HYPER"
+
+[[validators]]
+sidechain_key = "0x03216432a94819eb776c0d0b9cc49c3eae7b849cc2a770977f9f40f689312cfffc"
+label = "JNGL"
+
+[[validators]]
+sidechain_key = "0x02622adad612c879bdb3eed365d5630cf795deeb769fda546476b28e22ed050c89"
+label = "KYSN"
+
+[[validators]]
+sidechain_key = "0x03208a0061eeea77720a786c59e387f455395b776c759540aa422b638f28bd7aae"
+label = "LACE"
+
+[[validators]]
+sidechain_key = "0x038d2582961a7ff6257d4c271f0abbf81597d914b85b01541c9d587ff010db1ce1"
+label = "LEAD"
+
+[[validators]]
+sidechain_key = "0x02c8210f21ed84d718fa278d67b522e484f822a2486fd0b77db4f66ec83dc9e412"
+label = "NAP"
+
+[[validators]]
+sidechain_key = "0x0329c16253cc0cd3275380d883ae393b8a6749acdcc06b2815a5d6d3926a83038b"
+label = "OCTAS"
+
+[[validators]]
+sidechain_key = "0x0331e75e9a9dfa6154435d5ee1d897a15aa6aea5622e6d85238bf97a5564bd560a"
+label = "OMNI"
+
+[[validators]]
+sidechain_key = "0x03b716294ea498c73d017fb902a338d81f676dcb0d05ef7b7d6b2be4399377eeb8"
+label = "ONE"
+
+[[validators]]
+sidechain_key = "0x03f13c494770b89f34aa40aad2ba53a0d9c4f71ec3ace5bb9d63edf7bfd25fbe1f"
+label = "ONYX"
+
+[[validators]]
+sidechain_key = "0x03392ddf5ffcd4bb69bb71c11b6ba6a8b2b703c4e78ad61378f9511c0558783131"
+label = "PLKOZ"
+
+[[validators]]
+sidechain_key = "0x027e93969c058a3a2791798957de9155f72bd7c42a5e203ebf560ab3856271b309"
+label = "PRIDE"
+
+[[validators]]
+sidechain_key = "0x03b8d47ca7bf13ebc8309a3ca0cb4162719653c41baac4d037016d3b0ec68e7901"
+label = "RCADA"
+
+[[validators]]
+sidechain_key = "0x038b0499e3b19ef9419dbce0c81b40dad765851924a41b9769fc3ba9909ddacf17"
+label = "SCUBE"
+
+[[validators]]
+sidechain_key = "0x0336343b1e38ceb5d317f72303ed50fe75ae5f0f8b148bffb93fd0c6ea25925aaf"
+label = "SECUR"
+
+[[validators]]
+sidechain_key = "0x02b8fda70aa0227c47b4a7790de2f946a6dfa4714d8cc3aac20c89192e29343eb1"
+label = "SMAUG"
+
+[[validators]]
+sidechain_key = "0x0367227e0f016fc9d6ba78822e5fa1d4669ca94b50e63e83de79c9fa1d580eda3f"
+label = "SVRN"
+
+[[validators]]
+sidechain_key = "0x0207ccc3fd24dea709e98094d3593387ce5e9c58e51b5a0b41ac871570bd43530d"
+label = "UPSTR"
+
+[[validators]]
+sidechain_key = "0x03936d81ccb3d40d2a8f3bf9f39ad61e37e8aee55d78bf84fe46411af46e5f9f9a"
+label = "VOLCY"
+
+[[validators]]
+sidechain_key = "0x0284fd04975a267a8052d9f8ed27a82d742536255e08adc0861394b3960bedfc76"
+label = "XSEC"
+
+[[validators]]
+sidechain_key = "0x02a1a9d021355566ebbfa7035053337063f41c1e7e56f464e28f33c27d601f9f02"
+label = "ZPCT"

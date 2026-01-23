@@ -82,7 +82,9 @@ async fn run_validate() -> Result<()> {
     }
 
     if !found {
-        println!("No configuration file found. Using defaults.");
+        println!("{}", crate::config::Config::config_not_found_help());
+        println!();
+        println!("Using defaults...");
         let config = crate::config::Config::default();
         config.validate()?;
         println!("✓ Default configuration is valid");
