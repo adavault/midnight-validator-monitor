@@ -61,3 +61,50 @@ jobs:
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  pii-check:
+    name: PII Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for leaked IPs in config files
+        run: |
+          # Look for real public IPs in tracked files (exclude RFC 5737 TEST-NET ranges)
+          # TEST-NET-1: 192.0.2.0/24, TEST-NET-2: 198.51.100.0/24, TEST-NET-3: 203.0.113.0/24
+          echo "Checking for potential IP leaks in config files..."
+
+          # Pattern matches IPv4 addresses but excludes:
+          # - localhost (127.x.x.x)
+          # - private ranges (10.x, 172.16-31.x, 192.168.x)
+          # - RFC 5737 documentation ranges (192.0.2.x, 198.51.100.x, 203.0.113.x)
+          # - docs/archive/ (historical investigation records)
+
+          if git ls-files '*.toml' '*.yml' '*.yaml' '*.json' '*.md' | \
+             grep -v 'docs/archive/' | \
+             xargs grep -Eon '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' 2>/dev/null | \
+             grep -Ev '127\.[0-9]+\.[0-9]+\.[0-9]+' | \
+             grep -Ev '10\.[0-9]+\.[0-9]+\.[0-9]+' | \
+             grep -Ev '172\.(1[6-9]|2[0-9]|3[01])\.[0-9]+\.[0-9]+' | \
+             grep -Ev '192\.168\.[0-9]+\.[0-9]+' | \
+             grep -Ev '192\.0\.2\.[0-9]+' | \
+             grep -Ev '198\.51\.100\.[0-9]+' | \
+             grep -Ev '203\.0\.113\.[0-9]+' | \
+             grep -Ev '0\.0\.0\.0' | \
+             grep -v 'node_exporter_url.*192\.' | \
+             grep -q .; then
+            echo "ERROR: Found potential public IP addresses in tracked files:"
+            git ls-files '*.toml' '*.yml' '*.yaml' '*.json' '*.md' | \
+              grep -v 'docs/archive/' | \
+              xargs grep -Eon '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' 2>/dev/null | \
+              grep -Ev '127\.[0-9]+\.[0-9]+\.[0-9]+' | \
+              grep -Ev '10\.[0-9]+\.[0-9]+\.[0-9]+' | \
+              grep -Ev '172\.(1[6-9]|2[0-9]|3[01])\.[0-9]+\.[0-9]+' | \
+              grep -Ev '192\.168\.[0-9]+\.[0-9]+' | \
+              grep -Ev '192\.0\.2\.[0-9]+' | \
+              grep -Ev '198\.51\.100\.[0-9]+' | \
+              grep -Ev '203\.0\.113\.[0-9]+' | \
+              grep -Ev '0\.0\.0\.0' | \
+              grep -v 'node_exporter_url.*192\.'
+            exit 1
+          fi
+          echo "No public IP leaks detected."

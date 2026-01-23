@@ -660,6 +660,10 @@ impl App {
                         public_ips.retain(|addr| addr.starts_with(expected));
                     }
 
+                    // Only keep first IP - API may return multiple and order can vary
+                    // between calls, so we truncate to avoid display cycling
+                    public_ips.truncate(1);
+
                     if !public_ips.is_empty() {
                         self.state.external_ips = public_ips;
                     }
