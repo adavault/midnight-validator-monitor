@@ -117,6 +117,10 @@ sidechain_key = "0x0218af3c577f8fd80e47ce128024e4c375db029b9577c68786ba4f4bfa83b
 label = "ARTMS"
 
 [[validators]]
+sidechain_key = "0x033f5a75d782248b1a035de99e93b4438cb15f29c5cf9b490b977bae5bc1d65aa2"
+label = "ATADA"
+
+[[validators]]
 sidechain_key = "0x03d7a94544d1e5ef46983016fa9082d2eab2cd2cf12294713bc41948d997fe8b62"
 label = "ATM"
 
