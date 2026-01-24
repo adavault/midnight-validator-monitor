@@ -1,6 +1,7 @@
 //! Query command - query stored block data
 
 use crate::db::Database;
+use crate::midnight::known_validators::KnownValidators;
 use anyhow::{bail, Result};
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
@@ -81,13 +82,20 @@ pub async fn run(args: QueryArgs) -> Result<()> {
 
     let db = Database::open(&db_path)?;
 
+    // Load known validators for labels
+    let known_validators = KnownValidators::load();
+
     match args.command {
         QueryCommands::Stats => run_stats(&db)?,
         QueryCommands::Blocks { from, to, limit } => run_blocks(&db, from, to, limit)?,
         QueryCommands::Gaps => run_gaps(&db)?,
-        QueryCommands::Validators { ours, limit } => run_validators(&db, ours, limit)?,
-        QueryCommands::Validator { key } => run_validator(&db, &key)?,
-        QueryCommands::Performance { ours, limit } => run_performance(&db, ours, limit)?,
+        QueryCommands::Validators { ours, limit } => {
+            run_validators(&db, ours, limit, &known_validators)?
+        }
+        QueryCommands::Validator { key } => run_validator(&db, &key, &known_validators)?,
+        QueryCommands::Performance { ours, limit } => {
+            run_performance(&db, ours, limit, &known_validators)?
+        }
     }
 
     Ok(())
@@ -242,7 +250,12 @@ fn run_gaps(db: &Database) -> Result<()> {
     Ok(())
 }
 
-fn run_validators(db: &Database, ours_only: bool, limit: u64) -> Result<()> {
+fn run_validators(
+    db: &Database,
+    ours_only: bool,
+    limit: u64,
+    known_validators: &KnownValidators,
+) -> Result<()> {
     let validators = if ours_only {
         db.get_our_validators()?
     } else {
@@ -267,9 +280,12 @@ fn run_validators(db: &Database, ours_only: bool, limit: u64) -> Result<()> {
     };
 
     info!("{}", title);
-    info!("─────────────────────────────────────────────────────────────────────────────────────");
-    info!("{:>68} {:>15} {:>12}", "Sidechain Key", "Status", "Blocks");
-    info!("─────────────────────────────────────────────────────────────────────────────────────");
+    info!("───────────────────────────────────────────────────────────────────────────────────────────────────");
+    info!(
+        "{:<16} {:>68} {:>12} {:>8}",
+        "Label", "Sidechain Key", "Status", "Blocks"
+    );
+    info!("───────────────────────────────────────────────────────────────────────────────────────────────────");
 
     for validator in validators.iter().take(limit as usize) {
         let status = validator
@@ -277,10 +293,13 @@ fn run_validators(db: &Database, ours_only: bool, limit: u64) -> Result<()> {
             .as_deref()
             .unwrap_or("unknown");
         let ours_marker = if validator.is_ours { " *" } else { "" };
+        let label = known_validators
+            .get_label(&validator.sidechain_key)
+            .unwrap_or("");
 
         info!(
-            "{:>68} {:>15} {:>12}{}",
-            validator.sidechain_key, status, validator.total_blocks, ours_marker
+            "{:<16} {:>68} {:>12} {:>8}{}",
+            label, validator.sidechain_key, status, validator.total_blocks, ours_marker
         );
     }
 
@@ -300,7 +319,7 @@ fn run_validators(db: &Database, ours_only: bool, limit: u64) -> Result<()> {
     Ok(())
 }
 
-fn run_validator(db: &Database, key: &str) -> Result<()> {
+fn run_validator(db: &Database, key: &str, known_validators: &KnownValidators) -> Result<()> {
     // Normalize the key
     let normalized_key = if key.starts_with("0x") {
         key.to_lowercase()
@@ -312,17 +331,23 @@ fn run_validator(db: &Database, key: &str) -> Result<()> {
 
     match validator {
         Some(v) => {
+            // Get label from known_validators or fall back to database label
+            let label = known_validators
+                .get_label(&v.sidechain_key)
+                .map(String::from)
+                .or_else(|| v.label.clone());
+
             info!("Validator Details");
             info!("─────────────────────────────────────────────────────────────────");
+            if let Some(l) = &label {
+                info!("Label:          {}", l);
+            }
             info!("Sidechain Key:  {}", v.sidechain_key);
             if let Some(aura) = &v.aura_key {
                 info!("AURA Key:       {}", aura);
             }
             if let Some(grandpa) = &v.grandpa_key {
                 info!("Grandpa Key:    {}", grandpa);
-            }
-            if let Some(label) = &v.label {
-                info!("Label:          {}", label);
             }
             info!(
                 "Status:         {}",
@@ -376,7 +401,12 @@ fn run_validator(db: &Database, key: &str) -> Result<()> {
     }
 }
 
-fn run_performance(db: &Database, ours_only: bool, limit: u64) -> Result<()> {
+fn run_performance(
+    db: &Database,
+    ours_only: bool,
+    limit: u64,
+    known_validators: &KnownValidators,
+) -> Result<()> {
     let validators = if ours_only {
         db.get_our_validators()?
     } else {
@@ -416,16 +446,16 @@ fn run_performance(db: &Database, ours_only: bool, limit: u64) -> Result<()> {
     };
 
     info!("{}", title);
-    info!("─────────────────────────────────────────────────────────────────────────────────────");
+    info!("─────────────────────────────────────────────────────────────────────────────────────────────────────────");
     info!("Active validators: {}", active_validators.len());
     info!("Total blocks:      {}", total_blocks);
     info!("Average blocks:    {:.2}", avg_blocks);
-    info!("─────────────────────────────────────────────────────────────────────────────────────");
+    info!("─────────────────────────────────────────────────────────────────────────────────────────────────────────");
     info!(
-        "{:>4} {:>68} {:>12} {:>8}",
-        "Rank", "Sidechain Key", "Blocks", "Share %"
+        "{:>4} {:<16} {:>68} {:>8} {:>8}",
+        "Rank", "Label", "Sidechain Key", "Blocks", "Share %"
     );
-    info!("─────────────────────────────────────────────────────────────────────────────────────");
+    info!("─────────────────────────────────────────────────────────────────────────────────────────────────────────");
 
     for (i, validator) in active_validators.iter().take(limit as usize).enumerate() {
         let share = if total_blocks > 0 {
@@ -434,10 +464,14 @@ fn run_performance(db: &Database, ours_only: bool, limit: u64) -> Result<()> {
             0.0
         };
         let ours_marker = if validator.is_ours { " *" } else { "" };
+        let label = known_validators
+            .get_label(&validator.sidechain_key)
+            .unwrap_or("");
 
         info!(
-            "{:>4} {:>68} {:>12} {:>7.2}%{}",
+            "{:>4} {:<16} {:>68} {:>8} {:>7.2}%{}",
             i + 1,
+            label,
             validator.sidechain_key,
             validator.total_blocks,
             share,
