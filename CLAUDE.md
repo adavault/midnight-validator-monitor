@@ -369,9 +369,18 @@ The `metrics.rs` module parses Prometheus-format metrics from the node's `/metri
 - Rust via rustup/ghcup
 
 ### Server Environment
-- **vdumdn57** - Ubuntu Linux x86_64 validator server
-- Midnight node running with `--rpc-methods=unsafe`
-- MVM installed at `/usr/local/bin/mvm`
+
+All servers use standardized access: `ssh midnight@<hostname>`
+
+| Server | Role | Architecture | Notes |
+|--------|------|--------------|-------|
+| **vdumdn57** | Development | x86_64 Ubuntu | Primary dev server, MVM source repo |
+| **vdumdn90** | Production validator | x86_64 Ubuntu | Midnight node with `--rpc-methods=unsafe`, MVM v1.0.0 systemd |
+
+- MVM installed at `/opt/midnight/mvm/bin/mvm` (symlinked to `/usr/local/bin/mvm`)
+- Systemd services: `mvm-sync.service`, `mvm-status.service`
+- Config: `/opt/midnight/mvm/config/config.toml`
+- Database: `/opt/midnight/mvm/data/mvm.db`
 
 ### Discord Context
 Export scripts in `scripts/discord-export.sh` pull from Midnight Discord channels:
