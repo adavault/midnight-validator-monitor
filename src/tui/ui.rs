@@ -1193,7 +1193,7 @@ fn render_validators(f: &mut Frame, app: &App, area: Rect, layout: &ResponsiveLa
                 .validator_epoch_data
                 .get(&v.sidechain_key)
                 .map(|epoch| format!("{:>3}", epoch.committee_seats))
-                .unwrap_or_else(|| "  -".to_string());
+                .unwrap_or_else(|| "  0".to_string());
 
             // Standard validator format (same for Medium and Large)
             // Fixed-width label column (5 chars for pool ticker)

@@ -284,7 +284,7 @@ impl StatusMonitor {
             Some(RegistrationStatus::Permissioned) => {
                 info!("Registration: ✓ Permissioned candidate");
                 if self.explain {
-                    info!("  → Permissioned = IOG/Midnight team validator, no stake required");
+                    info!("  → Permissioned = Midnight Foundation validator, no stake required");
                 }
             }
             Some(RegistrationStatus::RegisteredValid) => {

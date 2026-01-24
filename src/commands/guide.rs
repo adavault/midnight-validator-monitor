@@ -127,7 +127,7 @@ fn print_registration_guide() {
     println!("---------------------");
     println!();
     println!("1. 'Permissioned candidate'");
-    println!("   - IOG/Midnight team validator");
+    println!("   - Midnight Foundation validator");
     println!("   - No stake required");
     println!("   - Automatically in candidate pool");
     println!();

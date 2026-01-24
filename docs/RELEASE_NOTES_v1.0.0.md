@@ -94,7 +94,7 @@ sudo mvm install
 ### From Source
 
 ```bash
-git clone https://github.com/anthropics/midnight-validator-monitor.git
+git clone https://github.com/adavault/midnight-validator-monitor.git
 cd midnight-validator-monitor
 cargo build --release
 sudo cp target/release/mvm /usr/local/bin/
