@@ -74,9 +74,11 @@ For users upgrading from earlier versions, here's what's been added:
 ## System Requirements
 
 - **OS:** Linux (x86_64)
-- **Midnight Node:** v0.12.0 or later
+- **Midnight Node:** v0.12.0 or v0.12.1 with `CFG_PRESET=testnet-02`
 - **Disk:** ~100MB for database (grows with chain history)
 - **Memory:** ~50MB runtime
+
+> **Note:** Midnight node v0.18.0 uses a new `preview` network preset with undocumented bootnodes. MVM v1.0 is tested against v0.12.x which is what validators are currently running. See [COMPATIBILITY.md](COMPATIBILITY.md) for details on v0.18.0 support timeline.
 
 ## Installation
 
@@ -140,6 +142,7 @@ sudo systemctl restart mvm-sync
 See [ROADMAP.md](docs/ROADMAP.md) for the long-term vision.
 
 **v1.1 (planned):**
+- Midnight node v0.18.0 / `preview` network support (when bootnodes published)
 - File permissions documentation (Issue #17)
 - Troubleshooting guide (Issue #18)
 - macOS/ARM64 binary releases
