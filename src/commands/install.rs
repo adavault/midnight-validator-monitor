@@ -57,8 +57,8 @@ async fn run_install() -> Result<()> {
     println!("User: {}", real_user);
     println!();
 
-    // Stop existing services if running
-    stop_existing_services()?;
+    // Stop existing services if running (track which were running)
+    let was_running = stop_existing_services()?;
 
     // Create directories
     create_directories(&real_user)?;
@@ -72,8 +72,11 @@ async fn run_install() -> Result<()> {
     // Install systemd services
     install_systemd_services(&real_user)?;
 
+    // Restart services that were previously running
+    restart_services(&was_running)?;
+
     // Show completion message
-    show_completion(&real_user);
+    show_completion(&real_user, &was_running);
 
     Ok(())
 }
@@ -140,9 +143,19 @@ fn get_real_user() -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-fn stop_existing_services() -> Result<()> {
+/// Tracks which services were running before installation
+#[derive(Default)]
+struct RunningServices {
+    mvm_sync: bool,
+    mvm_status_timer: bool,
+}
+
+fn stop_existing_services() -> Result<RunningServices> {
+    let mut running = RunningServices::default();
+
     // Check and stop mvm-sync
     if is_service_active("mvm-sync") {
+        running.mvm_sync = true;
         println!("==> Stopping existing mvm-sync service");
         let _ = Command::new("systemctl")
             .args(["stop", "mvm-sync"])
@@ -151,10 +164,41 @@ fn stop_existing_services() -> Result<()> {
 
     // Check and stop mvm-status.timer
     if is_service_active("mvm-status.timer") {
+        running.mvm_status_timer = true;
         println!("==> Stopping existing mvm-status timer");
         let _ = Command::new("systemctl")
             .args(["stop", "mvm-status.timer"])
             .status();
+    }
+
+    Ok(running)
+}
+
+fn restart_services(running: &RunningServices) -> Result<()> {
+    if running.mvm_sync {
+        println!("==> Restarting mvm-sync service");
+        let status = Command::new("systemctl")
+            .args(["start", "mvm-sync"])
+            .status()
+            .context("Failed to start mvm-sync")?;
+        if status.success() {
+            println!("    mvm-sync started successfully");
+        } else {
+            println!("    Warning: mvm-sync may not have started correctly");
+        }
+    }
+
+    if running.mvm_status_timer {
+        println!("==> Restarting mvm-status timer");
+        let status = Command::new("systemctl")
+            .args(["start", "mvm-status.timer"])
+            .status()
+            .context("Failed to start mvm-status.timer")?;
+        if status.success() {
+            println!("    mvm-status.timer started successfully");
+        } else {
+            println!("    Warning: mvm-status.timer may not have started correctly");
+        }
     }
 
     Ok(())
@@ -413,7 +457,7 @@ fn set_ownership(path: &str, user: &str) -> Result<()> {
     Ok(())
 }
 
-fn show_completion(user: &str) {
+fn show_completion(user: &str, was_running: &RunningServices) {
     println!();
     println!("========================================");
     println!("Installation Complete!");
@@ -426,22 +470,39 @@ fn show_completion(user: &str) {
     println!("  Database:  {}/mvm.db", DATA_DIR);
     println!();
     println!("Running as user: {}", user);
-    println!();
-    println!("Next steps:");
-    println!();
-    println!("  1. Start the sync daemon:");
-    println!("       sudo systemctl start mvm-sync");
-    println!();
-    println!("  2. Enable auto-start on boot:");
-    println!("       sudo systemctl enable mvm-sync");
-    println!();
-    println!("  3. (Optional) Enable periodic health checks:");
-    println!("       sudo systemctl enable --now mvm-status.timer");
-    println!();
-    println!("  4. View logs:");
-    println!("       sudo journalctl -u mvm-sync -f");
-    println!();
-    println!("  5. Interactive TUI:");
-    println!("       mvm view");
+
+    // If services were restarted, show status
+    if was_running.mvm_sync || was_running.mvm_status_timer {
+        println!();
+        println!("Services restarted:");
+        if was_running.mvm_sync {
+            println!("  - mvm-sync (was running, now restarted)");
+        }
+        if was_running.mvm_status_timer {
+            println!("  - mvm-status.timer (was running, now restarted)");
+        }
+        println!();
+        println!("To view logs:");
+        println!("       sudo journalctl -u mvm-sync -f");
+    } else {
+        // Fresh install - show full next steps
+        println!();
+        println!("Next steps:");
+        println!();
+        println!("  1. Start the sync daemon:");
+        println!("       sudo systemctl start mvm-sync");
+        println!();
+        println!("  2. Enable auto-start on boot:");
+        println!("       sudo systemctl enable mvm-sync");
+        println!();
+        println!("  3. (Optional) Enable periodic health checks:");
+        println!("       sudo systemctl enable --now mvm-status.timer");
+        println!();
+        println!("  4. View logs:");
+        println!("       sudo journalctl -u mvm-sync -f");
+        println!();
+        println!("  5. Interactive TUI:");
+        println!("       mvm view");
+    }
     println!();
 }
