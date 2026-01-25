@@ -13,7 +13,7 @@ This guide assumes you have:
 # Stop and remove old containers
 cd ~/midnight-node-docker 2>/dev/null && docker compose down --remove-orphans || true
 
-# Remove old data (keeps your backed up keys safe elsewhere!)
+# Remove old data (make sure you have backed up your keys safely OUTSIDE this directory first!)
 cd ~ && rm -rf midnight-node-docker
 ```
 
