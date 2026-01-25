@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Current Status
 
-**Version:** v1.0.2 (Released 2026-01-25) ✓ Production
+**Version:** v1.0.3 (Released 2026-01-25) ✓ Production
 **Branch:** master (GitHub default)
 **Status:** Active development, R1.1 planning complete
 **Next Milestone:** v1.1 (UX improvements, documentation)
@@ -15,6 +15,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 - v1.0.0: Initial production release with 24h stability verification
 - v1.0.1: Fixed shell completions broken by log output (#25)
 - v1.0.2: Fixed GLIBC 2.39 compatibility - now builds on Ubuntu 22.04 for broader compatibility (#33)
+- v1.0.3: Fixed `mvm install` to auto-restart services after upgrade (#34)
 - Created fresh-install-guide.md for newer operators
 - Strategic planning: Decentralized Datahub vision documented
 - Martin Lang (ATADA) testing, Calidus collaboration planned for v2.0+
