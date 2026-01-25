@@ -15,8 +15,10 @@ jobs:
     strategy:
       matrix:
         include:
+          # Use ubuntu-22.04 for broader GLIBC compatibility (2.35)
+          # ubuntu-latest is 24.04 with GLIBC 2.39 which breaks on older systems
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-22.04
             artifact: mvm
           # ARM64 planned for v1.1 - requires vendored OpenSSL or cross tool
           # - target: aarch64-unknown-linux-gnu
