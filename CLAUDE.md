@@ -396,12 +396,18 @@ The `metrics.rs` module parses Prometheus-format metrics from the node's `/metri
 | **midnight@vdumdn57** | Build server + testnet-02 | Long-lived | `~/midnight-validator-monitor`, Rust toolchain, preserved DB |
 | **midnight@vdumdn90** | Test validator | Ephemeral | Binary only (no source), can be rebuilt |
 
-**Build Workflow:**
+**Development Workflow:**
 1. Code on `rezi@dooku:~/products/midnight-validator-monitor`
-2. Push to GitHub
-3. Build on vdumdn57: `ssh midnight@vdumdn57 "cd ~/midnight-validator-monitor && git pull && source ~/.cargo/env && cargo build --release"`
-4. Install on vdumdn57: `sudo ./target/release/mvm install` (preserves data)
-5. Deploy binary to vdumdn90: `scp` binary then `sudo mvm install`
+2. Build/test on vdumdn57: `ssh midnight@vdumdn57 "cd ~/midnight-validator-monitor && git pull && source ~/.cargo/env && cargo build --release && cargo test"`
+3. Local smoke test on vdumdn57 if needed
+
+**Release Workflow:**
+1. Push to GitHub, tag release
+2. GitHub Actions builds official binaries
+3. Deploy to vdumdn90 (ephemeral): download release binary, `sudo mvm install`, smoke test
+4. Deploy to vdumdn57 (long-lived): download release binary, `sudo mvm install` (preserves data)
+
+*Note: Full CI/CD (auto-deploy on tag) planned for later maturity.*
 
 **Data Preservation (vdumdn57):**
 - Keep `/opt/midnight/mvm/data/mvm.db` intact - needed for smoke tests with historical data
@@ -437,16 +443,22 @@ git pull
 # Code editing only - no cargo on dooku
 ```
 
-**Build and test cycle:**
+**Development build (on vdumdn57):**
 ```bash
-# From dooku, build on vdumdn57
+# Build and test locally during development
 ssh midnight@vdumdn57 "cd ~/midnight-validator-monitor && git pull && source ~/.cargo/env && cargo build --release && cargo test && cargo clippy && cargo fmt --check"
 
-# Install on vdumdn57 (long-lived testnet-02, preserves data)
+# Optional: local install for testing (preserves data)
 ssh midnight@vdumdn57 "cd ~/midnight-validator-monitor && sudo ./target/release/mvm install"
+```
 
-# Deploy to vdumdn90 (ephemeral, binary only - no source repo)
-scp midnight@vdumdn57:~/midnight-validator-monitor/target/release/mvm /tmp/ && scp /tmp/mvm midnight@vdumdn90:/tmp/ && ssh midnight@vdumdn90 "sudo /tmp/mvm install"
+**Release deploy (from GitHub releases):**
+```bash
+# Deploy to vdumdn90 first (ephemeral, smoke test)
+ssh midnight@vdumdn90 "curl -LO https://github.com/adavault/midnight-validator-monitor/releases/latest/download/mvm-linux-x86_64 && chmod +x mvm-linux-x86_64 && sudo ./mvm-linux-x86_64 install"
+
+# After smoke test passes, deploy to vdumdn57 (long-lived, preserves data)
+ssh midnight@vdumdn57 "curl -LO https://github.com/adavault/midnight-validator-monitor/releases/latest/download/mvm-linux-x86_64 && chmod +x mvm-linux-x86_64 && sudo ./mvm-linux-x86_64 install"
 ```
 
 **Testing on validators:**
@@ -459,13 +471,14 @@ ssh midnight@vdumdn90 "mvm status --once && mvm query stats && journalctl -u mvm
 ```
 
 **Release process:**
-1. Test on vdumdn57 (long-lived testnet-02, 24h stability for major versions)
-2. Verify on vdumdn90 (ephemeral, fresh install test)
-3. Update RELEASE_NOTES.md
-4. CxO reviews commits
-5. CEO cuts tag: `git tag v1.x.x && git push --tags`
-6. GitHub Actions builds binaries
-7. Post announcement (Forum + Discord #block-producers)
+1. Dev testing on vdumdn57 (24h stability for major versions)
+2. Update RELEASE_NOTES.md
+3. CxO reviews commits
+4. CEO cuts tag: `git tag v1.x.x && git push --tags`
+5. GitHub Actions builds binaries
+6. Deploy to vdumdn90 (ephemeral) → smoke test
+7. Deploy to vdumdn57 (long-lived) → verify with historical data
+8. Post announcement (Forum + Discord #block-producers)
 
 ### Known Issues & Gotchas
 
