@@ -8,19 +8,32 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Version:** v1.0.0 (Released 2026-01-24) ✓ Production
 **Branch:** master (GitHub default)
-**Status:** Active development, post-v1.0 improvements
-**Next Milestone:** v1.1 (ARM64 binaries, guide improvements)
+**Status:** Active development, R1.1 planning complete
+**Next Milestone:** v1.1 (UX improvements, documentation)
 
 **Recent Achievements:**
 - v1.0.0 shipped with 24h stability verification
 - Release announced on Forum and Discord
-- Martin Lang (ATADA) testing, potential Calidus collaboration
+- Martin Lang (ATADA) testing, Calidus collaboration planned for v1.2+
 - 316 unique cloners in 9 days (strong adoption)
 
-**Current Focus:**
-- Monitor v1.0 feedback
-- Plan v1.1 features (Issue #23: help screen pagination, #17: permission docs)
-- Track Preview network (v0.18.0) readiness
+**R1.1 Scope (Issues #23, #17, #27-31):**
+- Better error messages for RPC/metrics connection failures (#27)
+- Sync progress reassurance for 0 peers state (#28)
+- Document multiple IPs in Identity line (#29)
+- Clarify "all-time" block count terminology (#30)
+- Document validators.toml fetch strategy (#31)
+- Help screen pagination (#23), permission docs (#17)
+
+**v1.2+ Planned:**
+- Calidus signature verification for mainnet identity (#32)
+
+**Midnight Network Transition (from Stev, 2026-01-24):**
+- Testnet: Phase out target Feb 28, 2026
+- Preview: Temporarily closed to validators, NOT stable Q1
+- Preprod: Coming soon as "stable" Federated Testnet
+- Mainnet: Federated first, then ITN
+- MVM currently supports v0.12.x only
 
 ---
 
