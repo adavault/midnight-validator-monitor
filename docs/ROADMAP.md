@@ -4,7 +4,13 @@ This document outlines the long-term vision for the Midnight Validator Monitor.
 
 ## Vision
 
-MVM aims to be the essential toolkit for the Midnight ecosystem - starting with node operators, expanding to developers, and ultimately providing infrastructure for the broader ecosystem.
+MVM aims to be the essential toolkit for the Midnight ecosystem - starting with node operators, building community-owned data infrastructure, and ultimately providing developer tooling for the broader ecosystem.
+
+## Strategic Principle
+
+> **"Our competitive edge will come in other ways, not by hoarding central control points."**
+
+Cardano's ethos is true decentralization. MVM embodies this - designed for community ownership, resilience, and neutrality from the start. ADAvault leads development but doesn't control the infrastructure.
 
 ## Version Strategy
 
@@ -36,80 +42,63 @@ MVM aims to be the essential toolkit for the Midnight ecosystem - starting with 
 
 ---
 
-### v2.x - Protocol Understanding (Developer Focus)
+### v2.x - Decentralized Datahub (Community Infrastructure)
+
+**Target Users:** SPOs, ecosystem builders, data consumers
+
+**Theme:** "Community-owned network data"
+
+**Goal:** Build decentralized data infrastructure for Midnight - a koios-style indexer owned and operated by the validator community, not a single entity.
+
+**Key Features:**
+
+- **Decentralized Registry (v2.0)**:
+  - Calidus-verified pool ticker registry
+  - Multi-source fetch with fallback (GitHub + SPO mirrors)
+  - GPG-signed registry files
+  - Cryptographic proof of pool ownership
+
+- **API Nodes (v2.1)**:
+  - `mvm serve` command for SPOs to run API endpoints
+  - Local chain data: blocks, validators, performance
+  - Bootstrap discovery from community-maintained list
+  - No single point of failure
+
+- **Data Aggregation (v2.2+)**:
+  - Network-wide health metrics
+  - Cross-node validator statistics
+  - Historical performance data
+  - Block and transaction indexing
+
+**Incentive Model:**
+- Visibility: Contributing SPOs listed in TUI, docs, dashboards
+- Intrinsic: SPOs want healthy ecosystem
+- Access: Contributors get premium features (future)
+- Fees/Tokens: Query fees distributed to operators (long-term goal)
+
+**Design Goals:**
+1. Resilience - No single point of failure
+2. Neutrality - Community-owned, not ADAvault-dependent
+3. Cost sharing - Distributed hosting across SPOs
+4. Decentralization ethos - Aligned with Cardano values
+
+---
+
+### v3.x - Developer Tooling (Protocol Understanding)
 
 **Target Users:** dApp developers, protocol researchers, integration builders
 
 **Theme:** "What's happening on-chain?"
 
-**Goal:** Transform MVM into a feature-rich monitor that understands the Midnight protocol. Inspired by classic machine monitors that allowed breakpoints and debugging, v2 helps developers observe and understand on-chain activity.
+**Goal:** Transform MVM into a feature-rich monitor that understands the Midnight protocol. Deferred from original v2.x to prioritize community infrastructure.
 
 **Key Features:**
 - **Extrinsic Decoder**: Human-readable transaction details
-  - Decode SCALE-encoded extrinsics
-  - Show method calls, parameters, signers
-  - Display events emitted by transactions
+- **Transaction Watching**: Filter and alert on tx patterns
+- **Block Explorer Features**: Detailed inspection, event logs
+- **Developer Debugging**: Breakpoints, tracing, error analysis
 
-- **Transaction Watching**:
-  - Filter transactions by type, sender, method
-  - Set alerts on specific transaction patterns
-  - Watch specific addresses for activity
-
-- **Block Explorer Features**:
-  - Detailed block inspection in TUI
-  - Event log viewer
-  - State changes per block
-
-- **Developer Debugging**:
-  - "Breakpoint" style alerts (pause and inspect when condition met)
-  - Transaction tracing
-  - Error analysis and decoding
-
-**Technical Requirements:**
-- Midnight-specific SCALE type definitions
-- Metadata parsing for runtime calls
-- Enhanced database schema for events/extrinsics
-- More sophisticated query language
-
----
-
-### v3.x - Ecosystem Integration (Platform Focus)
-
-**Target Users:** Service builders, dashboard creators, bot developers, ecosystem tooling
-
-**Theme:** "Programmatic access to everything"
-
-**Goal:** Expose MVM's rich dataset via APIs and webhooks, becoming a swiss army knife for the Midnight ecosystem. Enable other tools and services to build on top of MVM's data.
-
-**Key Features:**
-- **REST API**:
-  - Query blocks, transactions, validators
-  - Performance statistics endpoints
-  - Node health status
-  - OpenAPI/Swagger documentation
-
-- **WebSocket API**:
-  - Real-time block notifications
-  - Transaction stream with filters
-  - Validator status changes
-  - Peer connectivity events
-
-- **Webhook System**:
-  - Configurable alert triggers
-  - HTTP callbacks for events
-  - Integration with notification services (Slack, Discord, PagerDuty)
-
-- **Data Export**:
-  - CSV/JSON export for analysis
-  - Prometheus metrics endpoint (for Grafana dashboards)
-  - Time-series data for historical analysis
-
-**Use Cases Enabled:**
-- Custom monitoring dashboards
-- Alerting bots (Telegram, Discord)
-- Analytics platforms
-- Portfolio trackers
-- Automated failover systems
+**Note:** This was originally v2.x scope. Deferred to allow focus on decentralized datahub, which has a window of opportunity in the Midnight ecosystem.
 
 ---
 
@@ -285,9 +274,23 @@ Throughout all versions, MVM adheres to these principles:
 
 **Latest Release:** v1.0.0
 
-**Next Up:** v1.1 (Shell completion auto-install, documentation improvements)
+**Next Up:**
+- v1.1 - UX improvements, documentation (Issues #17, #23, #27-31)
+- v2.0 - Decentralized registry MVP (Calidus verification, multi-source fetch)
 
 See [BACKLOG.md](BACKLOG.md) for detailed feature planning.
+
+---
+
+## Implementation Phases
+
+| Phase | Version | Focus | Key Deliverables |
+|-------|---------|-------|------------------|
+| Current | v1.x | SPO Operations | Node health, block production, TUI |
+| Next | v2.0 | Registry | Calidus verification, multi-source fetch, signed files |
+| Then | v2.1 | API | `mvm serve` command, REST endpoints, discovery |
+| Later | v2.2 | Data | Block/tx endpoints, performance history, aggregation |
+| Future | v3.0 | Developer | Extrinsic decoder, tx watching |
 
 ---
 

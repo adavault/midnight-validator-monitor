@@ -25,8 +25,12 @@ This file provides guidance to Claude Code when working with code in this reposi
 - Document validators.toml fetch strategy (#31)
 - Help screen pagination (#23), permission docs (#17)
 
-**v1.2+ Planned:**
-- Calidus signature verification for mainnet identity (#32)
+**v2.x Planned (Decentralized Datahub):**
+- v2.0: Calidus verification, multi-source registry, signed files (#32)
+- v2.1: `mvm serve` API endpoints, SPO-hosted nodes
+- v2.2: Block/tx indexing, aggregation layer
+
+**Strategic Shift:** Developer tooling (originally v2.x) deferred to v3.x. Priority is community-owned data infrastructure.
 
 **Midnight Network Transition (from Stev, 2026-01-24):**
 - Testnet: Phase out target Feb 28, 2026
@@ -67,6 +71,12 @@ If something is wrong, say so. Challenge assumptions when they seem flawed. Disa
 ### 2. Quality is Non-Negotiable
 
 We ship products we can stand behind. No cutting corners. Security is a red line. v1.0 means production-ready, not "good enough".
+
+### 3. Decentralization First
+
+> **"Our competitive edge will come in other ways, not by hoarding central control points."**
+
+Cardano's ethos is true decentralization. MVM embodies this - designed for community ownership, resilience, and neutrality. ADAvault leads development but doesn't control infrastructure. No single points of failure. Community can fork, mirror, and operate independently.
 
 ## Decision Authority
 

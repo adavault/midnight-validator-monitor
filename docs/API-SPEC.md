@@ -1,32 +1,95 @@
 # MVM API Specification
 
-**Status:** Draft
+**Status:** Draft (Updated for Decentralized Model)
 **Author:** CxO
-**Date:** 2026-01-24
-**Target:** v1.1.0 or next testnet (whichever comes first)
+**Date:** 2026-01-25
+**Target:** v2.0 (Registry), v2.1 (API Nodes)
+
+---
+
+## Strategic Context
+
+> **"Our competitive edge will come in other ways, not by hoarding central control points."**
+
+This spec has been updated to reflect a **decentralized architecture**. Instead of a central ADAvault API, MVM enables a network of SPO-operated nodes that collectively provide data infrastructure.
 
 ---
 
 ## Overview
 
-This spec defines a central API that MVM can optionally connect to, providing:
+MVM provides decentralized data infrastructure through:
 
-1. **Pool ticker registry** — replaces local `validators.toml`
-2. **Node stats telemetry** — optional push of validator health data
-3. **Network dashboard** — aggregate view of all opted-in validators
+1. **Pool ticker registry** — Calidus-verified, multi-source, community-maintained
+2. **API nodes** — SPO-operated endpoints serving local chain data
+3. **Network aggregation** — Cross-node queries for network-wide statistics
 
 ### Design Principles
 
-- **Opt-in by default** — new installs connect to API for better UX
-- **Opt-out available** — privacy-conscious users can run fully local
-- **Transparent** — users know exactly what's shared
-- **Minimal data** — collect only what adds value
+- **Decentralization first** — No single point of failure or control
+- **Community-owned** — SPOs operate infrastructure, not ADAvault
+- **Opt-in participation** — SPOs choose to run API nodes
+- **Progressive enhancement** — Start simple (registry), add complexity (API, aggregation)
+- **Transparent** — Open source, auditable, forkable
+
+---
+
+## Architecture
+
+### Phase 1: Git-based Registry (v2.0)
+
+```
+┌──────────────────────────────────────────────────┐
+│              GitHub Repository                    │
+│  ┌────────────────────────────────────────────┐  │
+│  │  known_validators.toml (GPG-signed)        │  │
+│  │  + Calidus proofs per entry                │  │
+│  └────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────┘
+                        │
+        ┌───────────────┼───────────────┐
+        ▼               ▼               ▼
+   GitHub Raw      Mirror 1        Mirror 2
+   (primary)      (SPO-hosted)   (SPO-hosted)
+        │               │               │
+        └───────────────┼───────────────┘
+                        ▼
+              ┌─────────────────┐
+              │    MVM Client   │
+              │ (fetches from   │
+              │  multiple URLs) │
+              └─────────────────┘
+```
+
+### Phase 2: API Nodes (v2.1)
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   Client Apps                        │
+│         (MVM TUI, dashboards, bots, dApps)          │
+└─────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────┐
+│              Bootstrap Endpoint List                 │
+│   [node1.example.com, node2.example.com, ...]       │
+└─────────────────────────────────────────────────────┘
+                          │
+          ┌───────────────┼───────────────┐
+          ▼               ▼               ▼
+    ┌──────────┐    ┌──────────┐    ┌──────────┐
+    │ MVM Node │    │ MVM Node │    │ MVM Node │
+    │  (ADV)   │    │  (ATADA) │    │  (APEX)  │
+    │ mvm serve│    │ mvm serve│    │ mvm serve│
+    └──────────┘    └──────────┘    └──────────┘
+```
 
 ---
 
 ## API Endpoints
 
-Base URL: `https://api.adavault.com/v1/midnight`
+Each API node exposes the same endpoints. Clients can use any node.
+
+Base URL: `http://<any-api-node>:8080/v1`
 
 ### 1. Pool Tickers
 
@@ -206,41 +269,49 @@ Your pool ticker (optional):
 
 ## Implementation Phases
 
-### Phase 1: Read-only (v1.1.0)
+### Phase 1: Decentralized Registry (v2.0)
 
-- `GET /tickers` endpoint live
-- MVM fetches tickers from API
-- No stats push yet
-- Validates the integration pattern
+- Calidus-verified entries in known_validators.toml
+- Multi-source fetch (GitHub + SPO mirrors)
+- GPG-signed registry files
+- MVM verifies signatures and proofs
 
-### Phase 2: Telemetry (v1.2.0)
+### Phase 2: API Nodes (v2.1)
 
-- `POST /stats` endpoint live
-- MVM pushes node health
-- `GET /network` returns aggregates
-- Dashboard on adavault.com
+- `mvm serve` command exposes REST API
+- SPOs run alongside their Midnight nodes
+- Bootstrap list in config (community-maintained)
+- Local chain data + registry data
 
-### Phase 3: Enhanced (v1.3.0+)
+### Phase 3: Aggregation (v2.2+)
 
-- Historical data / trends
-- Alerting integration
-- Validator leaderboards (opt-in)
-- API keys for rate limiting if needed
+- Cross-node queries for network statistics
+- Client-side or coordinator-based aggregation
+- Historical data and trends
+- Full chain indexer capability
+
+### Future: Fee-based Sustainability
+
+- Query fees distributed to node operators
+- Integration with Midnight native tokens
+- Long-term goal, not v2.x scope
 
 ---
 
 ## API Infrastructure
 
-**Hosting:** On-prem Express API (aligns with R1.1 website roadmap)
+**Hosting:** Decentralized - each SPO runs their own node
 
-**Stack:**
-- Express.js (Node)
-- SQLite for storage (consistent with MVM philosophy)
-- Reverse proxy via existing infrastructure
+**Stack per node:**
+- MVM binary with `serve` command
+- SQLite for local storage
+- Optional reverse proxy (nginx, caddy)
 
-**Rate limits:**
-- `GET` endpoints: 60 req/min per IP
-- `POST /stats`: 1 req/min per IP (expected: 1 per 5 min)
+**No central infrastructure required.**
+
+**Rate limits (per node, configurable):**
+- `GET` endpoints: 60 req/min per IP (default)
+- Node operators can adjust based on their resources
 
 ---
 
@@ -256,19 +327,30 @@ Your pool ticker (optional):
 
 ## Open Questions
 
-1. **Ticker registry population** — manual curation or self-registration?
-2. **Mainnet vs testnet** — same API with network param, or separate endpoints?
-3. **Rate limiting strategy** — API keys for heavy users, or IP-based sufficient?
-4. **Data retention** — how long to keep historical stats?
+1. **Calidus key rotation** — How to handle expired proofs when SPO rotates keys?
+2. **Mirror discovery** — How do new nodes find existing mirrors?
+3. **Data consistency** — How to handle nodes with different sync states?
+4. **Incentive bootstrap** — How to recruit first 5 mirror operators?
 
 ---
 
 ## Next Steps
 
-1. CxO to review with CEO ✓
-2. MVM team to assess integration complexity
-3. Web team to scaffold API endpoints (R1.1 alignment)
-4. Target Phase 1 for next testnet or v1.1.0
+1. ✅ Strategic direction validated (decentralized model)
+2. Design Calidus verification flow (coordinate with Martin/ATADA)
+3. Implement multi-source registry fetch
+4. Create mirror hosting documentation
+5. Recruit initial mirror operators
+6. Implement `mvm serve` command (v2.1)
+
+---
+
+## Success Metrics
+
+- 5+ SPOs hosting registry mirrors by v2.0 launch
+- 90%+ of registered validators Calidus-verified
+- Zero single points of failure for registry access
+- Community contributions (not just ADAvault merging PRs)
 
 ---
 
