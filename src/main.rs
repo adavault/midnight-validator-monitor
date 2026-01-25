@@ -66,11 +66,14 @@ enum Commands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Check if running TUI - skip console logging for TUI mode
-    let is_tui = matches!(cli.command, Some(Commands::View(_)));
+    // Skip console logging for TUI and completions (completions must output clean shell script)
+    let skip_logging = matches!(
+        cli.command,
+        Some(Commands::View(_)) | Some(Commands::Completions { .. })
+    );
 
-    // Initialize logging (skip for TUI which manages its own display)
-    if !is_tui {
+    // Initialize logging (skip for TUI and completions)
+    if !skip_logging {
         let log_level = if cli.verbose {
             Level::DEBUG
         } else {
