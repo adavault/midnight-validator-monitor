@@ -4,6 +4,26 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ---
 
+## Current Status
+
+**Version:** v1.0.0 (Released 2026-01-24) ✓ Production
+**Branch:** master (GitHub default)
+**Status:** Active development, post-v1.0 improvements
+**Next Milestone:** v1.1 (ARM64 binaries, guide improvements)
+
+**Recent Achievements:**
+- v1.0.0 shipped with 24h stability verification
+- Release announced on Forum and Discord
+- Martin Lang (ATADA) testing, potential Calidus collaboration
+- 316 unique cloners in 9 days (strong adoption)
+
+**Current Focus:**
+- Monitor v1.0 feedback
+- Plan v1.1 features (Issue #23: help screen pagination, #17: permission docs)
+- Track Preview network (v0.18.0) readiness
+
+---
+
 ## Team Identity
 
 **Team:** MVM Development Team (Employee #3)
@@ -370,11 +390,15 @@ The `metrics.rs` module parses Prometheus-format metrics from the node's `/metri
 
 ### Server Environment
 
-All servers use standardized access: `ssh midnight@<hostname>`
+**Development Server:**
+- **dooku** - `rezi@dooku:~/products/midnight-validator-monitor`
+- Working directory: `/home/rezi/products/midnight-validator-monitor`
+- All dev work happens here
+
+**Production Servers:**
 
 | Server | Role | Architecture | Notes |
 |--------|------|--------------|-------|
-| **vdumdn57** | Development | x86_64 Ubuntu | Primary dev server, MVM source repo |
 | **vdumdn90** | Production validator | x86_64 Ubuntu | Midnight node with `--rpc-methods=unsafe`, MVM v1.0.0 systemd |
 
 - MVM installed at `/opt/midnight/mvm/bin/mvm` (symlinked to `/usr/local/bin/mvm`)
@@ -383,9 +407,88 @@ All servers use standardized access: `ssh midnight@<hostname>`
 - Database: `/opt/midnight/mvm/data/mvm.db`
 
 ### Discord Context
-Export scripts in `scripts/discord-export.sh` pull from Midnight Discord channels:
+Export scripts in `/Users/russellwing/virtual-cXo/scripts/discord-export.sh` pull from Midnight Discord channels:
 - `#block-producers` (1328720589548032032)
 - `#dev-chat` (1209887476290682910)
 - `#pool-ids` (1328721931343499345)
+- DM channels (2 additional channels)
 
-Exports stored in `discord-context/` (JSON files gitignored for privacy).
+Exports stored in `/Users/russellwing/virtual-cXo/intel/discord/midnight/` (JSON files).
+
+---
+
+## Quick Reference
+
+### Common Development Workflows
+
+**Start a session:**
+```bash
+# On local Mac
+cd /Users/russellwing/virtual-cXo/midnight-validator-monitor
+git pull
+cargo build
+
+# On dev server
+ssh rezi@dooku
+cd ~/products/midnight-validator-monitor
+git pull
+cargo build
+```
+
+**Before any commit:**
+```bash
+cargo test
+cargo clippy
+cargo fmt --check
+```
+
+**Testing on validator:**
+```bash
+ssh rezi@dooku
+ssh midnight@vdumdn90
+mvm status --once
+mvm query stats
+journalctl -u mvm-sync -f
+```
+
+**Release process:**
+1. Test on vdumdn90 (24h stability for major versions)
+2. Update RELEASE_NOTES.md
+3. CxO reviews commits
+4. CEO cuts tag: `git tag v1.x.x && git push --tags`
+5. GitHub Actions builds binaries
+6. Post announcement (Forum + Discord #block-producers)
+
+### Known Issues & Gotchas
+
+- **v0.18.0 Preview network**: Not operational as of Jan 2026, MVM only supports v0.12.x
+- **State pruning**: Non-archive nodes can't attribute historical blocks accurately
+- **--rpc-methods=unsafe**: Required for `author_hasKey` verification
+- **Sidechain vs mainchain epochs**: Committee rotates on 2h sidechain epochs, not 24h mainchain
+- **Branch name**: Uses `master` not `main` (GitHub default)
+
+### File Locations (Production)
+
+| Path | Purpose |
+|------|---------|
+| `/opt/midnight/mvm/bin/mvm` | Installed binary (symlinked to /usr/local/bin/mvm) |
+| `/opt/midnight/mvm/config/config.toml` | Production config |
+| `/opt/midnight/mvm/data/mvm.db` | SQLite database |
+| `/opt/midnight/mvm/data/mvm-sync.pid` | Sync daemon PID |
+
+### Useful Commands
+
+```bash
+# GitHub stats (requires gh CLI)
+gh api repos/adavault/midnight-validator-monitor/traffic/clones
+gh api repos/adavault/midnight-validator-monitor/traffic/views
+gh issue list -R adavault/midnight-validator-monitor
+
+# Check production daemon
+systemctl status mvm-sync
+systemctl status mvm-status.timer
+
+# Database queries
+sqlite3 /opt/midnight/mvm/data/mvm.db "SELECT COUNT(*) FROM blocks"
+sqlite3 /opt/midnight/mvm/data/mvm.db "SELECT * FROM sync_status"
+```
