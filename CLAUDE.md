@@ -6,15 +6,18 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Current Status
 
-**Version:** v1.0.0 (Released 2026-01-24) ✓ Production
+**Version:** v1.0.2 (Released 2026-01-25) ✓ Production
 **Branch:** master (GitHub default)
 **Status:** Active development, R1.1 planning complete
 **Next Milestone:** v1.1 (UX improvements, documentation)
 
-**Recent Achievements:**
-- v1.0.0 shipped with 24h stability verification
-- Release announced on Forum and Discord
-- Martin Lang (ATADA) testing, Calidus collaboration planned for v1.2+
+**Recent Achievements (v1.0.x):**
+- v1.0.0: Initial production release with 24h stability verification
+- v1.0.1: Fixed shell completions broken by log output (#25)
+- v1.0.2: Fixed GLIBC 2.39 compatibility - now builds on Ubuntu 22.04 for broader compatibility (#33)
+- Created fresh-install-guide.md for newer operators
+- Strategic planning: Decentralized Datahub vision documented
+- Martin Lang (ATADA) testing, Calidus collaboration planned for v2.0+
 - 316 unique cloners in 9 days (strong adoption)
 
 **R1.1 Scope (Issues #23, #17, #27-31):**
@@ -478,10 +481,10 @@ ssh midnight@vdumdn57 "cd ~/midnight-validator-monitor && sudo ./target/release/
 **Release deploy (from GitHub releases):**
 ```bash
 # Deploy to vdumdn90 first (ephemeral, smoke test)
-ssh midnight@vdumdn90 "curl -LO https://github.com/adavault/midnight-validator-monitor/releases/latest/download/mvm-linux-x86_64 && chmod +x mvm-linux-x86_64 && sudo ./mvm-linux-x86_64 install"
+ssh midnight@vdumdn90 "curl -LO https://github.com/adavault/midnight-validator-monitor/releases/latest/download/mvm-x86_64-unknown-linux-gnu.tar.gz && tar xzf mvm-x86_64-unknown-linux-gnu.tar.gz && chmod +x mvm && sudo ./mvm install"
 
 # After smoke test passes, deploy to vdumdn57 (long-lived, preserves data)
-ssh midnight@vdumdn57 "curl -LO https://github.com/adavault/midnight-validator-monitor/releases/latest/download/mvm-linux-x86_64 && chmod +x mvm-linux-x86_64 && sudo ./mvm-linux-x86_64 install"
+ssh midnight@vdumdn57 "curl -LO https://github.com/adavault/midnight-validator-monitor/releases/latest/download/mvm-x86_64-unknown-linux-gnu.tar.gz && tar xzf mvm-x86_64-unknown-linux-gnu.tar.gz && chmod +x mvm && sudo ./mvm install"
 ```
 
 **Testing on validators:**
@@ -510,6 +513,7 @@ ssh midnight@vdumdn90 "mvm status --once && mvm query stats && journalctl -u mvm
 - **--rpc-methods=unsafe**: Required for `author_hasKey` verification
 - **Sidechain vs mainchain epochs**: Committee rotates on 2h sidechain epochs, not 24h mainchain
 - **Branch name**: Uses `master` not `main` (GitHub default)
+- **Peer count during sync**: Expect higher peer count (~40) while syncing blocks; normalizes to ~20-25 once synced
 
 ### File Locations (Production)
 
