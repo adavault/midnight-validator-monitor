@@ -390,21 +390,30 @@ The `metrics.rs` module parses Prometheus-format metrics from the node's `/metri
 
 ### Server Environment
 
-**Development Server:**
-- **dooku** - `rezi@dooku:~/products/midnight-validator-monitor`
-- Working directory: `/home/rezi/products/midnight-validator-monitor`
-- All dev work happens here
+| Server | Role | Persistence | Notes |
+|--------|------|-------------|-------|
+| **rezi@dooku** | Development (code, git) | Persistent | `~/products/midnight-validator-monitor`, no Rust |
+| **midnight@vdumdn57** | Build server + testnet-02 | Long-lived | `~/midnight-validator-monitor`, Rust toolchain, preserved DB |
+| **midnight@vdumdn90** | Test validator | Ephemeral | Binary only (no source), can be rebuilt |
 
-**Production Servers:**
+**Build Workflow:**
+1. Code on `rezi@dooku:~/products/midnight-validator-monitor`
+2. Push to GitHub
+3. Build on vdumdn57: `ssh midnight@vdumdn57 "cd ~/midnight-validator-monitor && git pull && source ~/.cargo/env && cargo build --release"`
+4. Install on vdumdn57: `sudo ./target/release/mvm install` (preserves data)
+5. Deploy binary to vdumdn90: `scp` binary then `sudo mvm install`
 
-| Server | Role | Architecture | Notes |
-|--------|------|--------------|-------|
-| **vdumdn90** | Production validator | x86_64 Ubuntu | Midnight node with `--rpc-methods=unsafe`, MVM v1.0.0 systemd |
+**Data Preservation (vdumdn57):**
+- Keep `/opt/midnight/mvm/data/mvm.db` intact - needed for smoke tests with historical data
+- `mvm install` preserves existing data by default
+- Only `mvm install uninstall --delete-data` removes data (use with caution)
 
-- MVM installed at `/opt/midnight/mvm/bin/mvm` (symlinked to `/usr/local/bin/mvm`)
-- Systemd services: `mvm-sync.service`, `mvm-status.service`
+**Standard Paths (both servers):**
+- Binary: `/opt/midnight/mvm/bin/mvm` (symlinked to `/usr/local/bin/mvm`)
 - Config: `/opt/midnight/mvm/config/config.toml`
 - Database: `/opt/midnight/mvm/data/mvm.db`
+- PID file: `/opt/midnight/mvm/data/mvm-sync.pid`
+- Systemd: `mvm-sync.service`, `mvm-status.service`
 
 ### Discord Context
 Export scripts in `/Users/russellwing/virtual-cXo/scripts/discord-export.sh` pull from Midnight Discord channels:
@@ -421,43 +430,42 @@ Exports stored in `/Users/russellwing/virtual-cXo/intel/discord/midnight/` (JSON
 
 ### Common Development Workflows
 
-**Start a session:**
+**Start a session (on dooku):**
 ```bash
-# On local Mac
-cd /Users/russellwing/virtual-cXo/midnight-validator-monitor
-git pull
-cargo build
-
-# On dev server
-ssh rezi@dooku
 cd ~/products/midnight-validator-monitor
 git pull
-cargo build
+# Code editing only - no cargo on dooku
 ```
 
-**Before any commit:**
+**Build and test cycle:**
 ```bash
-cargo test
-cargo clippy
-cargo fmt --check
+# From dooku, build on vdumdn57
+ssh midnight@vdumdn57 "cd ~/midnight-validator-monitor && git pull && source ~/.cargo/env && cargo build --release && cargo test && cargo clippy && cargo fmt --check"
+
+# Install on vdumdn57 (long-lived testnet-02, preserves data)
+ssh midnight@vdumdn57 "cd ~/midnight-validator-monitor && sudo ./target/release/mvm install"
+
+# Deploy to vdumdn90 (ephemeral, binary only - no source repo)
+scp midnight@vdumdn57:~/midnight-validator-monitor/target/release/mvm /tmp/ && scp /tmp/mvm midnight@vdumdn90:/tmp/ && ssh midnight@vdumdn90 "sudo /tmp/mvm install"
 ```
 
-**Testing on validator:**
+**Testing on validators:**
 ```bash
-ssh rezi@dooku
-ssh midnight@vdumdn90
-mvm status --once
-mvm query stats
-journalctl -u mvm-sync -f
+# vdumdn57 (testnet-02, long-lived with history)
+ssh midnight@vdumdn57 "mvm status --once && mvm query stats"
+
+# vdumdn90 (ephemeral test)
+ssh midnight@vdumdn90 "mvm status --once && mvm query stats && journalctl -u mvm-sync -n 50"
 ```
 
 **Release process:**
-1. Test on vdumdn90 (24h stability for major versions)
-2. Update RELEASE_NOTES.md
-3. CxO reviews commits
-4. CEO cuts tag: `git tag v1.x.x && git push --tags`
-5. GitHub Actions builds binaries
-6. Post announcement (Forum + Discord #block-producers)
+1. Test on vdumdn57 (long-lived testnet-02, 24h stability for major versions)
+2. Verify on vdumdn90 (ephemeral, fresh install test)
+3. Update RELEASE_NOTES.md
+4. CxO reviews commits
+5. CEO cuts tag: `git tag v1.x.x && git push --tags`
+6. GitHub Actions builds binaries
+7. Post announcement (Forum + Discord #block-producers)
 
 ### Known Issues & Gotchas
 
@@ -484,11 +492,14 @@ gh api repos/adavault/midnight-validator-monitor/traffic/clones
 gh api repos/adavault/midnight-validator-monitor/traffic/views
 gh issue list -R adavault/midnight-validator-monitor
 
-# Check production daemon
-systemctl status mvm-sync
-systemctl status mvm-status.timer
+# Check daemon status (run on vdumdn57 or vdumdn90)
+ssh midnight@vdumdn57 "systemctl status mvm-sync && mvm query stats"
+ssh midnight@vdumdn90 "systemctl status mvm-sync && mvm query stats"
 
-# Database queries
-sqlite3 /opt/midnight/mvm/data/mvm.db "SELECT COUNT(*) FROM blocks"
-sqlite3 /opt/midnight/mvm/data/mvm.db "SELECT * FROM sync_status"
+# Database queries (vdumdn57 has longer history for smoke tests)
+ssh midnight@vdumdn57 "sqlite3 /opt/midnight/mvm/data/mvm.db 'SELECT COUNT(*) FROM blocks'"
+ssh midnight@vdumdn57 "sqlite3 /opt/midnight/mvm/data/mvm.db 'SELECT * FROM sync_status'"
+
+# Build on vdumdn57
+ssh midnight@vdumdn57 "cd ~/midnight-validator-monitor && source ~/.cargo/env && cargo build --release"
 ```
