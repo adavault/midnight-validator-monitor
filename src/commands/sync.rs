@@ -94,14 +94,47 @@ pub async fn run(args: SyncArgs) -> Result<()> {
     let rpc = RpcClient::with_config(&rpc_url, config.rpc.timeout_ms, config.rpc.retry_config());
 
     // Get current chain state
-    let chain_tip = get_chain_tip(&rpc).await.context(format!(
-        "Failed to connect to node at {}.
+    // In daemon mode, retry with backoff until node is available
+    // In non-daemon mode, exit immediately on failure with helpful tip
+    let chain_tip = if args.daemon {
+        let mut delay_secs = 10u64;
+        loop {
+            match get_chain_tip(&rpc).await {
+                Ok(tip) => {
+                    info!("Connected to node at {}", rpc_url);
+                    break tip;
+                }
+                Err(e) => {
+                    warn!(
+                        "Node not available at {} ({}), retrying in {}s...",
+                        rpc_url, e, delay_secs
+                    );
+                    select! {
+                        _ = time::sleep(Duration::from_secs(delay_secs)) => {}
+                        Some(signal) = signals.next() => {
+                            match signal {
+                                SIGTERM | SIGINT | SIGQUIT => {
+                                    info!("Received signal {}, shutting down before node connection", signal);
+                                    return Ok(());
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    delay_secs = (delay_secs * 2).min(60);
+                }
+            }
+        }
+    } else {
+        get_chain_tip(&rpc).await.context(format!(
+            "Failed to connect to node at {}.
 
 Tip: Make sure your Midnight node is running and RPC is enabled.
      Check the RPC URL is correct: {}
      Default port is 9944 for HTTP RPC.",
-        rpc_url, rpc_url
-    ))?;
+            rpc_url, rpc_url
+        ))?
+    };
     let finalized = get_finalized_block(&rpc).await?;
     let sidechain_status = get_sidechain_status(&rpc).await.ok();
     let mainchain_epoch = sidechain_status
