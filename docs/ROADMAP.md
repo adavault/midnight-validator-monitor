@@ -272,7 +272,7 @@ Throughout all versions, MVM adheres to these principles:
 
 ## Current Status
 
-**Latest Release:** v1.0.0
+**Latest Release:** v1.0.5
 
 **Next Up:**
 - v1.1 - UX improvements, documentation (Issues #17, #23, #27-31)
